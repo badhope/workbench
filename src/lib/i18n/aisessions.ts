@@ -63,6 +63,8 @@ export const dict = {
     "ai.lastMessage": "Latest message",
     "ai.toolDistTitle": "Tool usage distribution",
     "ai.localSessionRecords": "Local session records ({count})",
+    "ai.sessionFilesFailed": "Could not load session files",
+    "ai.retry": "Retry",
     "ai.noLocalSessions":
       "No session records found under ~/.claude/projects or ~/.codex/sessions",
     "ai.table.tool": "Tool",
@@ -139,6 +141,8 @@ export const dict = {
     "ai.lastMessage": "最近消息",
     "ai.toolDistTitle": "工具使用分布",
     "ai.localSessionRecords": "本机会话记录（{count}）",
+    "ai.sessionFilesFailed": "读取会话文件失败",
+    "ai.retry": "重试",
     "ai.noLocalSessions": "没有找到 ~/.claude/projects 或 ~/.codex/sessions 下的会话记录",
     "ai.table.tool": "工具",
     "ai.table.project": "项目",
@@ -217,6 +221,8 @@ export const dict = {
     "ai.lastMessage": "最新のメッセージ",
     "ai.toolDistTitle": "ツール使用分布",
     "ai.localSessionRecords": "ローカルセッション履歴（{count}）",
+    "ai.sessionFilesFailed": "セッションファイルの読み込みに失敗しました",
+    "ai.retry": "再試行",
     "ai.noLocalSessions":
       "~/.claude/projects または ~/.codex/sessions 配下にセッション履歴が見つかりません",
     "ai.table.tool": "ツール",

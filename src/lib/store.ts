@@ -123,6 +123,7 @@ interface RuntimeState {
   opencodePort: number;
   sessionsErr: string;
   sessionFiles: SessionFilePreview[];
+  sessionFilesErr: string;
   sessionDetail: SessionDetail | null;
   sessionDetailLoading: boolean;
   sysinfo: SystemInfo | null;
@@ -182,7 +183,7 @@ interface Store extends UiState, RuntimeState {
   deleteProject: (id: string) => void;
   persistData: (next: WorkbenchData) => void;
   // ── 成本计量 ──
-  loadCostOverview: () => Promise<void>;
+  loadCostOverview: () => Promise<string | undefined>;
   scanCosts: () => Promise<void>;
   loadCostSettings: () => Promise<void>;
   updateCostSettings: (s: CostSettings) => Promise<boolean>;
@@ -202,6 +203,7 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let inflightRefresh: Promise<void> | null = null;
 // 在途期间又有新请求时置位，当前刷新结束后补跑一次
 let refreshAgain = false;
+let aiRefreshId = 0;
 
 export const useStore = create<Store>()(
   persist(
@@ -228,6 +230,7 @@ export const useStore = create<Store>()(
       opencodePort: 4096,
       sessionsErr: "",
       sessionFiles: [],
+      sessionFilesErr: "",
       sessionDetail: null,
       sessionDetailLoading: false,
       sysinfo: null,
@@ -440,19 +443,20 @@ export const useStore = create<Store>()(
 
       refreshAi: async () => {
         if (!isTauri()) return;
-        try {
-          const [result, sessionFiles] = await Promise.all([
-            opencodeSessions().catch((e) => {
-              set({ sessionsErr: String(e) });
-              return { port: get().opencodePort, sessions: [] as OpencodeSession[] };
-            }),
-            recentSessions().catch(() => [] as SessionFilePreview[]),
-          ]);
-          if (result.sessions.length) set({ sessionsErr: "" });
-          set({ sessions: result.sessions, opencodePort: result.port, sessionFiles });
-        } catch (e) {
-          set({ sessionsErr: String(e) });
-        }
+        const requestId = ++aiRefreshId;
+        const [online, files] = await Promise.allSettled([
+          opencodeSessions(),
+          recentSessions(),
+        ]);
+        if (requestId !== aiRefreshId) return;
+        set((state) => ({
+          sessions: online.status === "fulfilled" ? online.value.sessions : [],
+          opencodePort:
+            online.status === "fulfilled" ? online.value.port : state.opencodePort,
+          sessionsErr: online.status === "rejected" ? String(online.reason) : "",
+          sessionFiles: files.status === "fulfilled" ? files.value : state.sessionFiles,
+          sessionFilesErr: files.status === "rejected" ? "failed" : "",
+        }));
       },
 
       loadSessionDetail: async (port, id) => {
@@ -619,17 +623,22 @@ export const useStore = create<Store>()(
         if (errors.length) {
           // 多个接口同时失败时只显示第一条，但把总数带出来，避免「只坏了一个」的错觉
           const first = errors[0];
-          set({
-            toast: t("store.costReadFailed", {
-              err: errors.length > 1 ? `${first} (+${errors.length - 1})` : first,
-            }),
+          const message = t("store.costReadFailed", {
+            err: errors.length > 1 ? `${first} (+${errors.length - 1})` : first,
           });
+          set({ toast: message });
+          get().checkBudgetAlert();
+          return message;
         }
         get().checkBudgetAlert();
       },
 
       scanCosts: async () => {
         if (!isTauri()) return;
+        // 全量扫描是长任务，价格保存后还会自动触发一次重算。用户再点「扫描」
+        // 不能叠出第二条并发扫描：两次 IPC 的结果会互相覆盖，且后到的旧价
+        // 快照可能把新价算出来的账单盖回去。
+        if (get().costLoading) return;
         set({ costLoading: true });
         const startedAt = Date.now();
         try {
@@ -648,7 +657,18 @@ export const useStore = create<Store>()(
           });
           get().checkBudgetAlert();
         } catch (e) {
-          set({ costLoading: false, toast: t("store.scanFailed", { err: String(e) }) });
+          const scanError = t("store.scanFailed", { err: String(e) });
+          set({ toast: scanError });
+          try {
+            const readError = await get().loadCostOverview();
+            set({ toast: readError ? `${scanError} · ${readError}` : scanError });
+          } catch (readError) {
+            set({
+              toast: `${scanError} · ${t("store.costReadFailed", { err: String(readError) })}`,
+            });
+          } finally {
+            set({ costLoading: false });
+          }
         }
       },
 

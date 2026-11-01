@@ -335,17 +335,21 @@ fn insert_records(conn: &Connection, records: &[CostRecord]) -> Result<(), Strin
         )
         .map_err(|e| format!("准备写入语句失败: {e}"))?;
     for r in records {
+        let checked = |name: &str, value: u64| {
+            i64::try_from(value)
+                .map_err(|_| format!("成本记录 {name} 超出数据库范围: {}", r.file_path))
+        };
         stmt.execute(params![
             r.file_path,
-            r.file_mtime as i64,
-            r.file_size as i64,
+            checked("file_mtime", r.file_mtime)?,
+            checked("file_size", r.file_size)?,
             r.tool,
             r.project,
             r.model,
-            r.input_tokens as i64,
-            r.output_tokens as i64,
-            r.cache_read_tokens as i64,
-            r.cache_creation_tokens as i64,
+            checked("input_tokens", r.input_tokens)?,
+            checked("output_tokens", r.output_tokens)?,
+            checked("cache_read_tokens", r.cache_read_tokens)?,
+            checked("cache_creation_tokens", r.cache_creation_tokens)?,
             r.cost_input,
             r.cost_output,
             r.cost_total,
@@ -517,7 +521,22 @@ pub fn import_records(app: &AppHandle, new_records: &[CostRecord]) -> Result<usi
 
 /// 事务内：删除同一文件的旧记录 → 插入新记录 → 返回净增量。
 fn replace_by_file(conn: &Connection, new_records: &[CostRecord]) -> Result<usize, String> {
-    let touched: HashSet<&str> = new_records.iter().map(|r| r.file_path.as_str()).collect();
+    let paths: Vec<String> = new_records.iter().map(|r| r.file_path.clone()).collect();
+    replace_scanned_files(conn, new_records, &paths)
+}
+
+fn replace_scanned_files(
+    conn: &Connection,
+    new_records: &[CostRecord],
+    paths: &[String],
+) -> Result<usize, String> {
+    let touched: HashSet<&str> = paths.iter().map(String::as_str).collect();
+    if new_records
+        .iter()
+        .any(|r| !touched.contains(r.file_path.as_str()))
+    {
+        return Err("扫描记录包含未完成的文件".to_string());
+    }
     let mut removed = 0usize;
     for path in touched {
         removed += conn
@@ -554,6 +573,7 @@ pub struct ScanOutcome {
 pub fn import_and_aggregate(
     app: &AppHandle,
     records: &[CostRecord],
+    scanned_paths: &[String],
     trend_days: usize,
 ) -> Result<ScanOutcome, String> {
     let _guard = lock();
@@ -562,7 +582,7 @@ pub fn import_and_aggregate(
     let tx = conn
         .transaction()
         .map_err(|e| format!("开启事务失败: {e}"))?;
-    let net_new = replace_by_file(&tx, records)?;
+    let net_new = replace_scanned_files(&tx, records, scanned_paths)?;
     let settings = read_settings(&tx)?;
     let overview = overview_sql(&tx, &settings)?;
     let trend = trend_sql(&tx, trend_days, settings.include_estimated)?;
@@ -862,6 +882,67 @@ mod tests {
     }
 
     #[test]
+    fn regression_out_of_range_record_rolls_back_all_replacements() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        init_schema(&conn).unwrap();
+        insert(
+            &conn,
+            &[
+                record("a", "2026-10-01", "measured", "m", 1.0),
+                record("b", "2026-10-01", "measured", "m", 2.0),
+            ],
+        );
+        for field in 0..6 {
+            let mut invalid = record("b", "2026-10-01", "measured", "m", 4.0);
+            match field {
+                0 => invalid.input_tokens = i64::MAX as u64 + 1,
+                1 => invalid.output_tokens = i64::MAX as u64 + 1,
+                2 => invalid.cache_read_tokens = i64::MAX as u64 + 1,
+                3 => invalid.cache_creation_tokens = i64::MAX as u64 + 1,
+                4 => invalid.file_mtime = i64::MAX as u64 + 1,
+                _ => invalid.file_size = i64::MAX as u64 + 1,
+            }
+            {
+                let tx = conn.transaction().unwrap();
+                assert!(replace_scanned_files(
+                    &tx,
+                    &[record("a", "2026-10-01", "measured", "m", 3.0), invalid],
+                    &["a".into(), "b".into()]
+                )
+                .is_err());
+            }
+            let total: f64 = conn
+                .query_row("SELECT SUM(cost_total) FROM records", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(total, 3.0);
+        }
+    }
+
+    #[test]
+    fn regression_sql_sum_overflow_rolls_back_replacements() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        init_schema(&conn).unwrap();
+        insert(
+            &conn,
+            &[
+                record("a", "2026-10-01", "measured", "m", 1.0),
+                record("b", "2026-10-01", "measured", "m", 2.0),
+            ],
+        );
+        let mut large = record("a", "2026-10-01", "measured", "m", 3.0);
+        large.input_tokens = i64::MAX as u64;
+        {
+            let tx = conn.transaction().unwrap();
+            replace_scanned_files(&tx, &[large], &["a".into()]).unwrap();
+            assert!(overview_sql(&tx, &CostSettings::default()).is_err());
+        }
+        let total: f64 = conn
+            .query_row("SELECT SUM(cost_total) FROM records", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(total, 3.0);
+    }
+
+    #[test]
     fn settings_roundtrip_and_default_when_absent() {
         let (dir, db) = temp_db("settings");
         let conn = open_at(&db).unwrap();
@@ -876,6 +957,50 @@ mod tests {
         save_settings_row(&conn, &custom).unwrap();
         assert_eq!(read_settings(&conn).unwrap(), custom);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn empty_success_removes_only_scanned_file_and_failure_rolls_back() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE records (file_path TEXT NOT NULL, file_mtime INTEGER NOT NULL, file_size INTEGER NOT NULL, tool TEXT NOT NULL, project TEXT NOT NULL, model TEXT NOT NULL, input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL, cache_read_tokens INTEGER NOT NULL, cache_creation_tokens INTEGER NOT NULL, cost_input REAL NOT NULL, cost_output REAL NOT NULL, cost_total REAL NOT NULL, cost_source TEXT NOT NULL, day TEXT NOT NULL)").unwrap();
+        insert(
+            &conn,
+            &[
+                record("a", "2026-10-01", "measured", "m", 1.0),
+                record("b", "2026-10-01", "measured", "m", 2.0),
+            ],
+        );
+        {
+            let tx = conn.transaction().unwrap();
+            replace_scanned_files(&tx, &[], &["a".into()]).unwrap();
+            tx.commit().unwrap();
+        }
+        let paths: Vec<String> = conn
+            .prepare("SELECT file_path FROM records")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(paths, vec!["b"]);
+        {
+            let tx = conn.transaction().unwrap();
+            tx.execute_batch("CREATE TRIGGER reject_insert BEFORE INSERT ON records BEGIN SELECT RAISE(ABORT, 'injected'); END;").unwrap();
+            assert!(replace_scanned_files(
+                &tx,
+                &[record("b", "2026-10-01", "measured", "m", 3.0)],
+                &["b".into()]
+            )
+            .is_err());
+        }
+        let cost: f64 = conn
+            .query_row(
+                "SELECT cost_total FROM records WHERE file_path='b'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(cost, 2.0);
     }
 
     #[test]

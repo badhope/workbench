@@ -5,7 +5,18 @@ import { chartGapColor, seriesColors } from "../../lib/chartTheme";
 import { useStore } from "../../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { useT } from "../../lib/i18n";
-import { Badge, Btn, Card, Empty, Modal, SectionTitle, Table, Td, Tr } from "../../ui";
+import {
+  Badge,
+  Btn,
+  Card,
+  Empty,
+  ErrorState,
+  Modal,
+  SectionTitle,
+  Table,
+  Td,
+  Tr,
+} from "../../ui";
 import { formatBytes, fromNow } from "../../lib/util";
 import { isPieWorthRendering, toolDistribution } from "../../lib/aggregate";
 import type { SessionFilePreview } from "../../types";
@@ -14,10 +25,12 @@ import { InfoChip } from "./AiProcessPanel";
 /** 本地会话文件表 + 工具分布 + 文件预览弹窗。 */
 export function SessionFilesPanel() {
   const t = useT();
-  const { theme, sessionFiles, setToast } = useStore(
+  const { theme, sessionFiles, sessionFilesErr, refreshAi, setToast } = useStore(
     useShallow((s) => ({
       theme: s.theme,
       sessionFiles: s.sessionFiles,
+      sessionFilesErr: s.sessionFilesErr,
+      refreshAi: s.refreshAi,
       setToast: s.setToast,
     }))
   );
@@ -57,7 +70,11 @@ export function SessionFilesPanel() {
           <SectionTitle>
             {t("ai.localSessionRecords", { count: sessionFiles.length })}
           </SectionTitle>
-          {sessionFiles.length === 0 ? (
+          {sessionFilesErr ? (
+            <ErrorState onRetry={() => void refreshAi()} retryLabel={t("ai.retry")}>
+              {t("ai.sessionFilesFailed")}
+            </ErrorState>
+          ) : sessionFiles.length === 0 ? (
             <Empty>{t("ai.noLocalSessions")}</Empty>
           ) : (
             <Table
@@ -115,7 +132,7 @@ export function SessionFilesPanel() {
 
         <Card className="">
           <SectionTitle>{t("ai.toolDist")}</SectionTitle>
-          {toolCounts.length > 0 ? (
+          {sessionFilesErr ? null : toolCounts.length > 0 ? (
             <>
               {isPieWorthRendering(toolCounts) && (
                 <EChart option={sessionToolChart} style={{ height: 160 }} lazyUpdate />

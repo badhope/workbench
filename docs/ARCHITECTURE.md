@@ -57,23 +57,21 @@
 
 | Item | Requirement |
 |------|-------------|
-| OS | Windows 10 / 11 (x64); Linux (deb) |
-| Runtime | Windows needs WebView2 (preinstalled on Windows 11); Linux needs WebKitGTK 4.1 |
-| Disk | ~35 MB installed; portable single file ~15 MB |
+| OS | Windows, Linux and macOS have CI jobs; platform-specific verification varies |
+| Runtime | Windows needs WebView2 (preinstalled on Windows 11); Linux needs WebKitGTK 4.1; macOS uses the system webview |
+| Disk | Depends on the platform and bundle |
 | Privileges | No admin required; killing a process needs same-or-higher privileges. If a normal kill fails, it can be retried with one click through UAC elevation (Windows only) |
 | Network | None required. The only optional probe is the local opencode service when you open the AI sessions page |
 
-### Install from Releases (recommended)
+### Install from Releases
 
-1. Grab `Workbench_<version>_x64-setup.exe` from the
-   [latest release](https://github.com/X33834/workbench/releases/latest)
-2. If SmartScreen appears: **More info → Run anyway**
-3. Launch "Workbench" from the Start menu
+Check the [latest release](https://github.com/X33834/workbench/releases/latest)
+for available assets. Availability and signing status have not been verified here.
 
 ### Build from source
 
-Requires [Node.js](https://nodejs.org/) ≥ 20,
-[Rust](https://www.rust-lang.org/tools/install) ≥ 1.77, WebView2.
+Requires [Node.js](https://nodejs.org/) `^22.22.2 || ^24.15.0 || >=26.0.0` for the locked frontend dependencies,
+[Rust](https://www.rust-lang.org/tools/install) ≥ 1.90, and the platform webview runtime.
 
 ```bash
 npm install
@@ -257,8 +255,8 @@ toggles visibility anytime.
 <details>
 <summary>Windows says "Unknown publisher" — what do I do?</summary>
 
-The installer is not code-signed (certificates cost money), so SmartScreen
-steps in. Choose **More info → Run anyway**, or grab the portable exe instead.
+Check the publisher and signing status of the downloaded file before deciding
+whether to run it. Release asset availability and signing have not been verified here.
 </details>
 
 ## Roadmap
@@ -272,8 +270,7 @@ Done and planned. Vote or propose new ideas in the Issues.
 - [x] Three shells (rail / top dock / zen) and seven overview layouts
 - [x] Draggable, hideable overview widgets
 - [x] Multilingual UI (English / 简体中文 / 日本語)
-- [x] Cross-platform (Windows and Linux built and verified; macOS built by the
-      `Backend (macOS)` CI job)
+- [x] Cross-platform CI jobs defined for Windows, Linux and macOS
 - [ ] Installer code signing (needs a paid certificate)
 - [x] Model pricing editor (edit / add / reset overrides from the UI)
 - [x] Data backup and restore (timestamped snapshots, one-click rollback)
@@ -296,17 +293,14 @@ Done and planned. Vote or propose new ideas in the Issues.
 ## Known limitations
 
 - Port collection runs `netstat -ano` on Windows and `ss -tulpn` on Linux
-  (falling back to `netstat`). The Linux backend is tested and the `deb`
-  package has been built and started successfully (Ubuntu 24.04 via
-  container + Xvfb); it has not been tried on a physical desktop yet.
-  AppImage is not produced because the bundler fetches `linuxdeploy` from
-  GitHub at build time
+  (falling back to `netstat`). CI defines Linux backend checks and a `deb`
+  build; platform and release-asset verification must be assessed separately.
 - Interaction paths are covered by Playwright (structure and WCAG AA across 10 pages × 8 themes), a structural feature suite for the command palette / process tree / port jump / CSV export, plus a packaged-exe desktop E2E over real IPC
 - The cost ledger is a SQLite database (`cost.db`, `rusqlite` bundled) with
   indexes on day / model / file. Aggregation runs inside SQL, so 100k records
   aggregate in ~250 ms instead of re-parsing a whole JSON file per query.
   The old `cost_data.json` is imported once and renamed `.migrated` (never deleted)
-- The installer is unsigned; first launch may trigger a SmartScreen prompt
+- Signing status and availability of release installers have not been verified here
 - The tray menu text is bilingual Chinese/English and does not follow the UI
   language switch (it is built once at startup)
 - No plugin API, no HTTP API and no remote monitoring — by design, see

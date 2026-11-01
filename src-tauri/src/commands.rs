@@ -357,7 +357,7 @@ pub async fn opencode_session_detail(
 pub async fn recent_sessions_preview() -> Result<Vec<SessionFilePreview>, String> {
     tauri::async_runtime::spawn_blocking(|| {
         let home = dirs_home().ok_or_else(|| "无法定位用户主目录".to_string())?;
-        Ok(ai::scan_session_files_with_preview(&home))
+        ai::scan_session_files_with_preview(&home).map_err(str::to_string)
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
@@ -547,6 +547,7 @@ pub async fn save_data(
     dirs: tauri::State<'_, KnownDirs>,
     data: WorkbenchData,
 ) -> Result<(), String> {
+    let generation = DATA_RESTORE_GENERATION.load(std::sync::atomic::Ordering::Acquire);
     log::debug!(
         "持久化数据: {} 项目 {} 任务",
         data.projects.len(),
@@ -559,9 +560,13 @@ pub async fn save_data(
     let accepted = dirs.record_validated_blocking(paths).await?;
     log::debug!("save_data 登记 {accepted} 个项目目录");
     let app2 = app.clone();
-    tauri::async_runtime::spawn_blocking(move || data::save_to_disk(&app2, &data))
-        .await
-        .map_err(|e| format!("任务执行失败: {e}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = lock_ledger_operation()?;
+        ensure_restore_generation(generation, &DATA_RESTORE_GENERATION)?;
+        data::save_to_disk(&app2, &data)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 // ── 日志读取 ──────────────────────────────────────────────
@@ -580,13 +585,61 @@ pub fn clear_logs(app: AppHandle) -> Result<(), String> {
 // 成本计量相关 IPC 命令
 // ════════════════════════════════════════════════════════════
 
+static SCAN_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static DATA_RESTORE_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn ensure_restore_generation(
+    generation: u64,
+    current: &std::sync::atomic::AtomicU64,
+) -> Result<(), String> {
+    if current.load(std::sync::atomic::Ordering::Acquire) != generation {
+        return Err("数据已恢复，请重新加载后再保存".to_string());
+    }
+    Ok(())
+}
+
+fn lock_ledger_operation() -> Result<std::sync::MutexGuard<'static, ()>, String> {
+    SCAN_LOCK.lock().map_err(|e| format!("扫描锁失败: {e}"))
+}
+
+fn read_pricing_overrides_at(path: &std::path::Path) -> Result<cost_store::OverrideRead, String> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(cost_store::OverrideRead::default())
+        }
+        Err(e) => return Err(format!("读取 {} 失败: {e}", path.display())),
+    };
+    let raw: HashMap<String, (f64, f64)> = serde_json::from_str(&text).map_err(|e| {
+        format!(
+            "{} 内容已损坏: {e}（原文件保留，请修复或重置定价）",
+            path.display()
+        )
+    })?;
+    let mut result = cost_store::OverrideRead::default();
+    for (model, (input, output)) in raw {
+        match PricingTable::validate_override(&model, input, output) {
+            Ok((key, pair)) => {
+                result.overrides.insert(key, pair);
+            }
+            Err(e) => result.problems.push(format!("{model}: {e}")),
+        }
+    }
+    Ok(result)
+}
+
+fn read_pricing_overrides(app: &AppHandle) -> Result<cost_store::OverrideRead, String> {
+    read_pricing_overrides_at(&cost_store::cost_data_path_overrides(app)?)
+}
+
 /// 扫描 session JSONL 文件 → 提取 usage → 计算成本 → 写入 SQLite 成本库
 /// 注意：成本计量必须全量扫描（不受 UI 预览的 10 条上限影响）。
 #[tauri::command(async)]
 pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        let _scan_guard = lock_ledger_operation()?;
         let home = dirs_home().ok_or_else(|| "无法定位用户主目录".to_string())?;
-        let session_files = ai::collect_all_session_files(&home);
+        let session_files = ai::collect_all_session_files(&home).map_err(str::to_string)?;
 
         let entries: Vec<SessionFileEntry> = session_files
             .iter()
@@ -599,16 +652,48 @@ pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String
             })
             .collect();
 
-        // 已有记录快照仅用于跳过未变化的文件（纯加速，不影响正确性：
-        // 入库按 file_path 整组替换，重复扫描同一文件不会叠加）。
-        let existing_keys = cost_store::existing_keys(&app)?;
-        let pricing_table = build_pricing_table(&app);
-        let records =
-            session_meter::scan_sessions_to_records(&entries, &pricing_table, &existing_keys);
+        let overrides = read_pricing_overrides(&app)?;
+        if !overrides.problems.is_empty() {
+            return Err(format!("定价覆盖无效: {}", overrides.problems.join("; ")));
+        }
+        let pricing_table = PricingTable {
+            overrides: overrides.overrides,
+        };
+        let mut records = Vec::new();
+        let mut scanned_paths = Vec::new();
+        let mut errors = Vec::new();
+        // 单文件上限之外的兜底：一次扫描最多读 256 MiB。否则 10,000 个文件
+        // 各 32 MiB 就是 312 GiB，长时间持锁且拖慢整个应用。到顶后剩余文件
+        // 按失败上报（保留旧账），不静默截断成"扫描成功"。
+        const SCAN_TOTAL_BYTES: u64 = 256 * 1024 * 1024;
+        let mut bytes_budget = SCAN_TOTAL_BYTES;
+        for entry in &entries {
+            if entry.size > bytes_budget {
+                errors.push(format!(
+                    "{}: 本次扫描总读取量已达上限，其余文件本次跳过",
+                    entry.project
+                ));
+                continue;
+            }
+            match session_meter::scan_complete_sessions(std::slice::from_ref(entry), &pricing_table)
+            {
+                Ok(file_records) => {
+                    bytes_budget = bytes_budget.saturating_sub(entry.size);
+                    records.extend(file_records);
+                    scanned_paths.push(entry.path.clone());
+                }
+                Err(err) => errors.push(err),
+            }
+        }
         let total_scanned = records.len();
-
-        // 落库 + 三个聚合视图在同一次加锁/读写下完成
-        let outcome = cost_store::import_and_aggregate(&app, &records, 14)?;
+        let outcome = cost_store::import_and_aggregate(&app, &records, &scanned_paths, 14)?;
+        if !errors.is_empty() {
+            return Err(format!(
+                "{} 个会话扫描失败，旧记录已保留；成功文件已更新: {}",
+                errors.len(),
+                errors.join("; ")
+            ));
+        }
 
         Ok(ScanCostResult {
             new_records: outcome.net_new,
@@ -629,48 +714,66 @@ pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String
 /// 获取成本总览（不重新扫描）
 #[tauri::command(async)]
 pub async fn get_cost_overview(app: AppHandle) -> Result<CostOverview, String> {
-    tauri::async_runtime::spawn_blocking(move || cost_store::build_overview(&app))
-        .await
-        .map_err(|e| format!("任务执行失败: {e}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let _scan_guard = lock_ledger_operation()?;
+        cost_store::build_overview(&app)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 获取成本趋势
 #[tauri::command(async)]
 pub async fn get_cost_trend(app: AppHandle, days: usize) -> Result<Vec<CostTrendRow>, String> {
-    tauri::async_runtime::spawn_blocking(move || cost_store::build_trend(&app, days))
-        .await
-        .map_err(|e| format!("任务执行失败: {e}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let _scan_guard = lock_ledger_operation()?;
+        cost_store::build_trend(&app, days)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 按模型分解成本
 #[tauri::command(async)]
 pub async fn get_model_breakdown(app: AppHandle) -> Result<Vec<ModelBreakdownRow>, String> {
-    tauri::async_runtime::spawn_blocking(move || cost_store::build_model_breakdown(&app))
-        .await
-        .map_err(|e| format!("任务执行失败: {e}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let _scan_guard = lock_ledger_operation()?;
+        cost_store::build_model_breakdown(&app)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 获取 / 保存成本设置（预算 / 告警阈值 / 是否计入估算）
 #[tauri::command(async)]
 pub async fn get_cost_settings_cmd(app: AppHandle) -> Result<CostSettings, String> {
-    tauri::async_runtime::spawn_blocking(move || cost_store::get_cost_settings(&app))
-        .await
-        .map_err(|e| format!("任务执行失败: {e}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let _scan_guard = lock_ledger_operation()?;
+        cost_store::get_cost_settings(&app)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 #[tauri::command(async)]
 pub async fn save_cost_settings_cmd(app: AppHandle, settings: CostSettings) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || cost_store::save_cost_settings(&app, settings))
-        .await
-        .map_err(|e| format!("任务执行失败: {e}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let _scan_guard = lock_ledger_operation()?;
+        cost_store::save_cost_settings(&app, settings)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 清空全部成本记录
 #[tauri::command(async)]
 pub async fn clear_cost_records(app: AppHandle) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || cost_store::clear_records(&app))
-        .await
-        .map_err(|e| format!("任务执行失败: {e}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let _scan_guard = lock_ledger_operation()?;
+        cost_store::clear_records(&app)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 扫描结果回传
@@ -745,9 +848,12 @@ fn is_backup_id(id: &str) -> bool {
 /// 而备份的价值在于「一键且不丢」。固定目标也不会因为用户选到只读盘而失败。
 #[tauri::command(async)]
 pub async fn backup_data(app: AppHandle) -> Result<BackupResult, String> {
-    tauri::async_runtime::spawn_blocking(move || backup_now(&app))
-        .await
-        .map_err(|e| format!("任务执行失败: {e}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let _scan_guard = lock_ledger_operation()?;
+        backup_now(&app)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 同步版本：`restore_backup` 要在同一个阻塞线程里先备份再恢复。
@@ -894,9 +1000,12 @@ pub struct RestoreResult {
 /// 3. **先校验每份 JSON 可解析再落盘**：把损坏的备份写回去等于毁掉好数据。
 #[tauri::command(async)]
 pub async fn restore_backup(app: AppHandle, id: String) -> Result<RestoreResult, String> {
-    tauri::async_runtime::spawn_blocking(move || restore_now(&app, &id))
-        .await
-        .map_err(|e| format!("任务执行失败: {e}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let _scan_guard = lock_ledger_operation()?;
+        restore_now(&app, &id)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 fn restore_now(app: &AppHandle, id: &str) -> Result<RestoreResult, String> {
@@ -953,6 +1062,9 @@ fn restore_now(app: &AppHandle, id: &str) -> Result<RestoreResult, String> {
         let tmp = dest.with_extension("restore-tmp");
         std::fs::copy(&src, &tmp).map_err(|e| format!("复制 {name} 失败: {e}"))?;
         std::fs::rename(&tmp, &dest).map_err(|e| format!("替换 {name} 失败: {e}"))?;
+        if name == "data.json" {
+            DATA_RESTORE_GENERATION.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        }
         if name.ends_with(".db") {
             // 旧库的 -wal / -shm / -journal 若残留，SQLite 会把旧事务重放到
             // 新文件上，恢复出来的数据等于错的。
@@ -1005,8 +1117,9 @@ pub struct PricingView {
 #[tauri::command(async)]
 pub async fn get_pricing(app: AppHandle) -> Result<PricingView, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        let _scan_guard = lock_ledger_operation()?;
         let table = build_pricing_table(&app);
-        let problems = cost_store::read_pricing_overrides(&app)?.problems;
+        let problems = read_pricing_overrides(&app)?.problems;
         let path = cost_store::cost_data_path_overrides(&app)?
             .to_string_lossy()
             .to_string();
@@ -1043,6 +1156,7 @@ pub async fn save_pricing(
         if !problems.is_empty() {
             return Err(problems.join("；"));
         }
+        let _scan_guard = lock_ledger_operation()?;
         cost_store::save_pricing_overrides(&app, &clean)?;
         let table = build_pricing_table(&app);
         let path = cost_store::cost_data_path_overrides(&app)?
@@ -1065,7 +1179,7 @@ pub fn build_pricing_table(app: &AppHandle) -> PricingTable {
     let mut table = PricingTable::default();
     // 走与 get_pricing 相同的读取路径：坏条目被逐条拒绝并记日志，
     // 而不是整个文件被静默忽略（那会让用户以为改价生效了）。
-    match cost_store::read_pricing_overrides(app) {
+    match read_pricing_overrides(app) {
         Ok(read) => {
             if !read.problems.is_empty() {
                 log::warn!(
@@ -1084,6 +1198,105 @@ pub fn build_pricing_table(app: &AppHandle) -> PricingTable {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn corrupt_pricing_repeated_reads_fail_without_losing_source() {
+        let dir = std::env::temp_dir().join(format!("wb-pricing-retry-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("pricing_overrides.json");
+        std::fs::write(&path, "{broken").unwrap();
+        let first = read_pricing_overrides_at(&path);
+        let second = read_pricing_overrides_at(&path);
+        let source = std::fs::read_to_string(&path);
+        std::fs::write(&path, r#"{"example-model":[1.0,2.0]}"#).unwrap();
+        let repaired = read_pricing_overrides_at(&path).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        let missing = read_pricing_overrides_at(&path).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(first.is_err());
+        assert!(second.is_err(), "retry silently fell back to defaults");
+        assert_eq!(source.unwrap(), "{broken");
+        assert_eq!(repaired.overrides.get("example-model"), Some(&(1.0, 2.0)));
+        assert!(missing.overrides.is_empty());
+    }
+
+    #[test]
+    fn restore_rejects_save_started_before_restore() {
+        use std::sync::mpsc;
+        use std::sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc,
+        };
+
+        let version = Arc::new(AtomicU64::new(0));
+        let start = version.load(Ordering::Acquire);
+        let (tx, rx) = mpsc::channel();
+        let copy = version.clone();
+        let worker = std::thread::spawn(move || {
+            copy.fetch_add(1, Ordering::AcqRel);
+            tx.send(()).unwrap();
+        });
+        rx.recv().unwrap();
+        worker.join().unwrap();
+        assert!(ensure_restore_generation(start, &version).is_err());
+        assert!(ensure_restore_generation(1, &version).is_ok());
+    }
+
+    #[test]
+    fn save_data_shares_restore_operation_lock() {
+        let source = include_str!("commands.rs");
+        let body = source
+            .split_once("pub async fn save_data(")
+            .unwrap()
+            .1
+            .split_once("// ── 日志读取")
+            .unwrap()
+            .0;
+        assert!(body.contains("lock_ledger_operation()"));
+    }
+
+    #[test]
+    fn ledger_lock_serializes_concurrent_work() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let guard = lock_ledger_operation().unwrap();
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let (done_tx, done_rx) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            ready_tx.send(()).unwrap();
+            let _guard = lock_ledger_operation().unwrap();
+            done_tx.send(()).unwrap();
+        });
+        ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let blocked = done_rx.recv_timeout(Duration::from_millis(100));
+        drop(guard);
+        let completed = done_rx.recv_timeout(Duration::from_secs(5));
+        worker.join().unwrap();
+        assert!(matches!(blocked, Err(mpsc::RecvTimeoutError::Timeout)));
+        assert!(completed.is_ok());
+    }
+
+    #[test]
+    fn ledger_operations_share_scan_lock() {
+        let source = include_str!("commands.rs");
+        for (start, end) in [
+            ("pub async fn scan_session_costs(", "// 成本读取全部"),
+            ("pub async fn clear_cost_records(", "/// 扫描结果回传"),
+            ("pub async fn backup_data(", "/// 同步版本"),
+            ("pub async fn restore_backup(", "fn restore_now("),
+            ("pub async fn save_pricing(", "/// 构造当前定价表"),
+        ] {
+            let body = source
+                .split_once(start)
+                .unwrap()
+                .1
+                .split_once(end)
+                .unwrap()
+                .0;
+            assert!(body.contains("lock_ledger_operation()"), "{start}");
+        }
+    }
 
     /// 备份 id 是「恢复」的唯一定位符，必须能拒绝路径穿越。
     #[test]

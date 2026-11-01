@@ -11,7 +11,41 @@ permissions:
   contents: write
 
 jobs:
+  preflight:
+    name: Preflight (tag / version)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.2"
+
+      # 手动触发没有 tag，版本以 package.json 为准；打 tag 时必须三者一致，
+      # 否则产物文件名、应用内版本和 Release 标题会各说各话。
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          pkg_version="$(node -p "require('./package.json').version")"
+          conf_version="$(node -p "require('./src-tauri/tauri.conf.json').version || ''")"
+          if [ -z "$conf_version" ]; then
+            conf_version="$(awk '/^\[package\]/{inpkg=1;next} /^\[/{inpkg=0} inpkg && /^version[[:space:]]*=/{gsub(/["[:space:]]/,"",$3); print $3; exit}' src-tauri/Cargo.toml)"
+          fi
+          echo "tag=$tag package.json=$pkg_version tauri=$conf_version"
+          if [ "$tag" != "$pkg_version" ]; then
+            echo "::error::发布 tag 与 package.json version 不一致：tag=$tag package=$pkg_version"
+            exit 1
+          fi
+          if [ "$conf_version" != "$pkg_version" ]; then
+            echo "::error::构建版本与 package.json version 不一致：tauri/Cargo=$conf_version package=$pkg_version"
+            exit 1
+          fi
+
   build:
+    needs: preflight
     name: Build (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -32,7 +66,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.22.2"
           cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
@@ -69,6 +103,96 @@ jobs:
           fi
           ls -la release-assets
 
+      # 打包步骤退出 0 不代表产物真的落地：bundle 目标写错、产物被清理、
+      # 打包器改名都会留下空目录。这里按平台断言「恰好一份、非空、版本号
+      # 出现在文件名里」，失败即非 0。
+      - name: Verify assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          echo "package version: $version"
+
+          expect_one() {
+            local pattern="$1" label="$2"
+            shopt -s nullglob
+            local matches=( $pattern )
+            shopt -u nullglob
+            if [ "${#matches[@]}" -ne 1 ]; then
+              echo "::error::期望恰好 1 个 ${label}（$pattern），实际 ${#matches[@]} 个"
+              ls -la release-assets || true
+              exit 1
+            fi
+            FOUND="${matches[0]}"
+            local bytes
+            bytes=$(wc -c < "$FOUND" | tr -d ' ')
+            if [ "$bytes" -le 0 ]; then
+              echo "::error::${label} 是空文件：$FOUND"
+              exit 1
+            fi
+            echo "ok ${label}: $FOUND (${bytes} bytes)"
+          }
+
+          case "${{ matrix.bundle }}" in
+            nsis)
+              expect_one "release-assets/*-setup.exe" "NSIS 安装包"
+              case "$FOUND" in
+                *"$version"*) echo "ok 文件名包含版本号" ;;
+                *) echo "::error::NSIS 文件名不含版本 $version：$FOUND"; exit 1 ;;
+              esac
+              ;;
+            deb)
+              expect_one "release-assets/*.deb" "deb 包"
+              case "$FOUND" in
+                *"$version"*) echo "ok 文件名包含版本号" ;;
+                *) echo "::error::deb 文件名不含版本 $version：$FOUND"; exit 1 ;;
+              esac
+              ;;
+            app)
+              app="$(ls -d src-tauri/target/release/bundle/macos/*.app 2>/dev/null | head -1 || true)"
+              if [ -z "$app" ] || [ ! -d "$app" ]; then
+                echo "::error::.app 目录不存在"
+                ls -la src-tauri/target/release/bundle/macos 2>/dev/null || true
+                exit 1
+              fi
+              if [ ! -s "$app/Contents/Info.plist" ]; then
+                echo "::error::缺少 Info.plist：$app"
+                exit 1
+              fi
+              # 以 Info.plist 声明的 CFBundleExecutable 为准，确认主程序真的
+              # 存在且非空；只检查 .app 目录存在会把空壳当成功。
+              exe_name=$(awk '/<key>CFBundleExecutable<\/key>/{getline; gsub(/.*<string>|<\/string>.*/,""); print; exit}' "$app/Contents/Info.plist")
+              if [ -z "$exe_name" ]; then
+                echo "::error::Info.plist 缺少 CFBundleExecutable：$app"
+                exit 1
+              fi
+              if [ ! -s "$app/Contents/MacOS/$exe_name" ]; then
+                echo "::error::主程序缺失或为空：$app/Contents/MacOS/$exe_name"
+                ls -la "$app/Contents/MacOS" || true
+                exit 1
+              fi
+              echo "ok .app: $app（CFBundleExecutable=$exe_name）"
+              expect_one "release-assets/*.zip" "macOS zip"
+              unzip -l "$FOUND" | grep -q "Contents/MacOS/" || {
+                echo "::error::zip 内缺少 Contents/MacOS/：$FOUND"
+                exit 1
+              }
+              ;;
+            *)
+              echo "::error::未知 bundle 类型：${{ matrix.bundle }}"
+              exit 1
+              ;;
+          esac
+
+          # 收集目录里不允许出现 0 字节文件（上传后会变成看似正常的空包）。
+          for f in release-assets/*; do
+            [ -f "$f" ] || continue
+            if [ ! -s "$f" ]; then
+              echo "::error::空文件：$f"
+              exit 1
+            fi
+          done
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
@@ -86,11 +210,53 @@ jobs:
           path: release-assets
           merge-multiple: true
 
-      - name: Generate checksums
+      # 校验和只有在「条目数 = 产物数、每个产物都有条目、且能回溯校验」时
+      # 才有意义；否则一个漏条目的 SHA256SUMS.txt 会被当成完整清单发布。
+      - name: Generate and verify checksums
         run: |
+          set -euo pipefail
           cd release-assets
-          sha256sum * > SHA256SUMS.txt
+          rm -f SHA256SUMS.txt
+
+          shopt -s nullglob
+          assets=()
+          for f in *; do
+            [ -f "$f" ] || continue
+            [ "$f" = "SHA256SUMS.txt" ] && continue
+            assets+=("$f")
+          done
+          shopt -u nullglob
+
+          if [ "${#assets[@]}" -ne 3 ]; then
+            echo "::error::期望 3 个平台产物，实际 ${#assets[@]} 个：${assets[*]:-<无>}"
+            ls -la
+            exit 1
+          fi
+          for f in "${assets[@]}"; do
+            if [ ! -s "$f" ]; then
+              echo "::error::空产物：$f"
+              exit 1
+            fi
+          done
+
+          sha256sum "${assets[@]}" > SHA256SUMS.txt
           cat SHA256SUMS.txt
+
+          entries=$(wc -l < SHA256SUMS.txt | tr -d ' ')
+          if [ "$entries" -ne "${#assets[@]}" ]; then
+            echo "::error::SHA256SUMS 条目数 $entries 与产物数 ${#assets[@]} 不一致"
+            exit 1
+          fi
+          # Windows 版 sha256sum 会在文件名前加 `*`（二进制模式标记），
+          # Ubuntu 版不会；两种都要能解析出文件名。
+          listed=$(awk '{print $2}' SHA256SUMS.txt | sed 's/^\*//')
+          for f in "${assets[@]}"; do
+            if ! printf '%s\n' "$listed" | grep -Fxq "$f"; then
+              echo "::error::SHA256SUMS 缺少条目：$f"
+              exit 1
+            fi
+          done
+          sha256sum -c SHA256SUMS.txt
 
       - uses: softprops/action-gh-release@v2
         with:

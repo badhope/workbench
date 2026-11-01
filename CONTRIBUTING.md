@@ -7,9 +7,9 @@ local development, commit conventions, and the acceptance gates.
 
 | Dependency | Version | Notes |
 |------------|---------|-------|
-| Node.js | ≥ 20 (CI uses 22; any LTS is fine) | frontend build & tests |
-| Rust | ≥ 1.77 (`rust-version` in `src-tauri/Cargo.toml`) | backend & desktop shell |
-| Windows | 10 / 11 | **the only verified platform**, see "Platform scope" |
+| Node.js | `^22.22.2 \|\| ^24.15.0 \|\| >=26.0.0` | locked frontend dependencies; CI uses Node 22 |
+| Rust | ≥ 1.90 (`rust-version` in `src-tauri/Cargo.toml`) | backend & desktop shell |
+| Windows | 10 / 11 | Windows development; see "Platform scope" |
 | WebView2 Runtime | preinstalled on Windows 11 | Windows 10 needs a manual install |
 
 ```bash
@@ -52,7 +52,7 @@ fails if the Rust side changed without regenerating.
 
 ## Branches & commits
 
-- Branch off `main`, named `feat/xxx`, `fix/xxx`, …
+- Branch off `master`, named `feat/xxx`, `fix/xxx`, …
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/):
   `feat:` / `fix:` / `docs:` / `refactor:` / `test:` / `chore:` / `ci:`
 - One commit does one thing — easier to review and to revert
@@ -72,13 +72,10 @@ fails if the Rust side changed without regenerating.
 
 ## Platform scope
 
-Development, testing and packaging are Windows-only today:
-
-- Port collection shells out to `cmd /c netstat -ano` (the POSIX branch in
-  `ports.rs` exists but is never exercised)
-- Only the NSIS installer is produced
-- PRs adding macOS / Linux support are welcome, but must come with actual
-  verification notes for those platforms
+CI defines Windows, Linux and macOS jobs. The Linux and macOS jobs run backend
+checks and build `.deb` and `.app` bundles respectively; the release workflow
+also defines builds for all three platforms. Platform-specific changes should
+include verification notes for the platforms tested.
 
 ## Opening a PR
 

@@ -72,24 +72,15 @@ data appears in it). [Download the MP4](docs/screenshots/workbench-demo.mp4).
 | **CLI mode** | The same binary answers `workbench ps`, `workbench ports` and `workbench diag` (add `--json`) — read-only, scriptable, no window |
 | **Visual system** | 7 overview layouts × 8 themes × 3 shells, draggable & hideable widgets with per-widget widths, theme editor with share links |
 | **Trilingual UI** | 简体中文 (default) / English / 日本語 |
-| **Cross-platform** | Windows (NSIS + portable exe), Linux (`.deb`), macOS (`.app`, CI-built unsigned) |
+| **Cross-platform** | CI defines Windows, Linux and macOS jobs, including Linux `.deb` and macOS `.app` builds |
 
 ## Download
 
-**v0.3.0** — grab the installer for your platform:
+Check the release pages for available versions and assets. The release workflow
+is configured to build Windows NSIS, Linux `.deb` and macOS `.app` bundles;
+this does not establish that assets were published or verified on every platform.
 
-| Platform | File |
-|----------|------|
-| Windows 10/11 x64 | `Workbench_0.3.0_x64-setup.exe` (NSIS, ~5 MB) — attached to the GitHub / Gitee / GitCode release |
-| Linux x64 | no published asset yet — `npm run tauri build -- --bundles deb`, or take the `linux-deb` CI artifact |
-| macOS | no published asset yet — `npm run tauri build -- --bundles app`, or take the `macos-app` CI artifact (unsigned: right-click → Open) |
-
-> Not code-signed, so Windows SmartScreen may show an "Unknown publisher"
-> warning — choose **More info → Run anyway**. macOS builds are unsigned too;
-> right-click the app and choose Open the first time. Certificates cost money;
-> neither file is unsafe.
-
-Pick any mirror — identical code, each publishes its own releases:
+Release pages:
 
 | Mirror | Releases |
 |--------|----------|
@@ -99,7 +90,7 @@ Pick any mirror — identical code, each publishes its own releases:
 
 ## Build
 
-Requires Node.js ≥ 20 and Rust ≥ 1.90:
+Requires Node.js `^22.22.2 || ^24.15.0 || >=26.0.0` for the locked frontend dependencies and Rust ≥ 1.90:
 
 ```bash
 npm install

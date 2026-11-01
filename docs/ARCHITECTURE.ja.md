@@ -55,23 +55,21 @@
 
 | 項目 | 要件 |
 |------|------|
-| OS | Windows 10 / 11（x64）、Linux（deb） |
-| ランタイム | WebView2 Runtime（Windows 11 は同梱。最近の Windows 10 でも大半は同梱）。Linux は WebKitGTK 4.1 |
-| ディスク | インストール後約 35 MB。ポータブル版は単一ファイル約 15 MB |
+| OS | Windows / Linux / macOS の CI ジョブを定義。プラットフォームごとの検証状況は異なります |
+| ランタイム | Windows は WebView2（Windows 11 に同梱）、Linux は WebKitGTK 4.1、macOS はシステムの WebView を使用 |
+| ディスク | プラットフォームとバンドルによって異なります |
 | 権限 | 管理者権限は不要。プロセス終了には対象と同等以上の権限が必要。通常終了が失敗した場合は、UAC による昇格でワンクリック再試行できます（Windows のみ） |
 | ネットワーク | 不要。AI セッションページを開いたときにローカル opencode サービスを探知するだけ |
 
-### Release からインストール（推奨）
+### Release からインストール
 
-1. [最新リリース](https://github.com/X33834/workbench/releases/latest) から
-   `Workbench_<version>_x64-setup.exe` を入手
-2. SmartScreen が出たら **詳細情報 → 実行**
-3. スタートメニューから「Workbench」を起動
+[最新リリース](https://github.com/X33834/workbench/releases/latest) で利用可能なアセットを確認してください。
+アセットの提供状況と署名状態はここでは検証していません。
 
 ### ソースからビルド
 
-必要環境: [Node.js](https://nodejs.org/) ≥ 20、
-[Rust](https://www.rust-lang.org/tools/install) ≥ 1.77、WebView2。
+必要環境: 固定されたフロントエンド依存関係には [Node.js](https://nodejs.org/) `^22.22.2 || ^24.15.0 || >=26.0.0`、
+また [Rust](https://www.rust-lang.org/tools/install) ≥ 1.90 と各プラットフォームの WebView ランタイムが必要です。
 
 ```bash
 npm install
@@ -230,8 +228,8 @@ PID 再利用による誤爆を防ぎます。
 <details>
 <summary>Windows が「不明な発行元」と警告します</summary>
 
-インストーラーはコード署名されていません（証明書に費用がかかるため）。
-**詳細情報 → 実行** で続行するか、ポータブル版 exe をお使いください。
+実行するかどうかを決める前に、ダウンロードしたファイルの発行元と署名状態を確認してください。
+リリースアセットの提供状況と署名状態はここでは検証していません。
 </details>
 
 ## ロードマップ
@@ -241,7 +239,7 @@ PID 再利用による誤爆を防ぎます。
 - [x] プロジェクト & タスクカンバン
 - [x] ダーク / ライトテーマ、ログビューア
 - [x] 多言語 UI（English / 简体中文 / 日本語）
-- [x] クロスプラットフォーム（Windows / Linux はビルド・起動検証済み、macOS は CI の `Backend (macOS)` job）
+- [x] Windows / Linux / macOS 向けのクロスプラットフォーム CI ジョブを定義
 - [ ] インストーラーのコード署名（有料証明書が必要）
 - [x] `pricing_overrides.json` の UI エディタ
 - [x] SQLite コスト台帳（10 万件の集計が 246ms、シャーディング不要）
@@ -258,15 +256,15 @@ PID 再利用による誤爆を防ぎます。
 
 ## 既知の制限
 
-- Windows と Linux の両方でビルド・起動を検証済み。ポート取得は Windows が
-  `netstat -ano`、Linux が `ss -tulpn`（iproute2 が無い場合は `netstat`）
+- ポート取得は Windows が `netstat -ano`、Linux が `ss -tulpn`（`netstat` にフォールバック）。
+  CI に Linux バックエンドのチェックと `.deb` ビルドを定義していますが、プラットフォームとリリースアセットは別途検証が必要です
 - 操作パスは Playwright（10 ページ × 8 テーマの構造 / コントラスト回帰）、
   コマンドパレット / プロセスツリー / ポート移動 / CSV 書き出しの構造テスト、
   パッケージ版のデスクトップ E2E（実 IPC）でカバー
 - コスト台帳は SQLite（`cost.db`、rusqlite bundled）で、日付 / モデル / ファイルに
   索引を持ちます。集計は SQL 内で完了するため、10 万件でも約 250ms。
   旧 `cost_data.json` は初回起動時に取り込み、`.migrated` に改名します（削除しません）
-- インストーラーは未署名のため、初回起動時に SmartScreen が出ることがあります
+- リリースインストーラーの署名状態と提供状況はここでは検証していません
 - トレイメニューは中英併記で、UI の言語切替には追随しません（起動時に一度だけ構築）
 - プラグイン API、HTTP API、リモート監視はありません——意図的な割り切りで、
   代償は [COMPARISON.ja.md](COMPARISON.ja.md) に書いています

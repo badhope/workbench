@@ -66,6 +66,7 @@ function reset() {
     ais: [],
     sessions: [],
     sessionFiles: [],
+    sessionFilesErr: "",
     sessionDetail: null,
     sessionDetailLoading: false,
     sysinfo: null,
@@ -217,6 +218,105 @@ describe("loadAll", () => {
 });
 
 describe("refreshAi", () => {
+  it("并发请求乱序完成时只提交最新文件结果，错误与列表同时更新", async () => {
+    let resolveOld!: (files: { path: string }[]) => void;
+    let resolveNew!: (files: { path: string }[]) => void;
+    let resolveOldOnline!: (result: { port: number; sessions: never[] }) => void;
+    api.opencodeSessions
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveOldOnline = resolve;
+        })
+      )
+      .mockResolvedValueOnce({ port: 4096, sessions: [] });
+    api.recentSessions
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveOld = resolve;
+        })
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveNew = resolve;
+        })
+      );
+    useStore.setState({ sessionFilesErr: "previous failure" });
+    const first = useStore.getState().refreshAi();
+    const second = useStore.getState().refreshAi();
+    resolveNew([{ path: "new.jsonl" }]);
+    await second;
+    resolveOld([{ path: "old.jsonl" }]);
+    await Promise.resolve();
+    expect(useStore.getState().sessionFiles).toEqual([{ path: "new.jsonl" }]);
+    expect(useStore.getState().sessionFilesErr).toBe("");
+    resolveOldOnline({ port: 4096, sessions: [] });
+    await first;
+    expect(useStore.getState().sessionFiles).toEqual([{ path: "new.jsonl" }]);
+    expect(useStore.getState().sessionFilesErr).toBe("");
+  });
+
+  it("文件结果在在线请求未结束时不会提前改变错误或列表", async () => {
+    let resolveOnline!: (result: { port: number; sessions: never[] }) => void;
+    api.opencodeSessions.mockReturnValue(
+      new Promise((resolve) => {
+        resolveOnline = resolve;
+      })
+    );
+    api.recentSessions.mockResolvedValue([{ path: "new.jsonl" }]);
+    useStore.setState({
+      sessionFiles: [{ path: "saved.jsonl" }] as never,
+      sessionFilesErr: "failed",
+    });
+    const pending = useStore.getState().refreshAi();
+    await Promise.resolve();
+    expect(useStore.getState().sessionFiles).toEqual([{ path: "saved.jsonl" }]);
+    expect(useStore.getState().sessionFilesErr).toBe("failed");
+    resolveOnline({ port: 4096, sessions: [] });
+    await pending;
+    expect(useStore.getState().sessionFiles).toEqual([{ path: "new.jsonl" }]);
+    expect(useStore.getState().sessionFilesErr).toBe("");
+  });
+
+  it("旧请求失败不能覆盖新请求成功", async () => {
+    let rejectOld!: (error: Error) => void;
+    api.opencodeSessions.mockResolvedValue({ port: 4096, sessions: [] });
+    api.recentSessions
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectOld = reject;
+        })
+      )
+      .mockResolvedValueOnce([{ path: "new.jsonl" }]);
+    const first = useStore.getState().refreshAi();
+    await useStore.getState().refreshAi();
+    rejectOld(new Error("old failure"));
+    await first;
+    expect(useStore.getState().sessionFiles).toEqual([{ path: "new.jsonl" }]);
+    expect(useStore.getState().sessionFilesErr).toBe("");
+  });
+
+  it("文件失败保留已有列表，旧成功不能清除最新错误", async () => {
+    let resolveOld!: (files: { path: string }[]) => void;
+    api.opencodeSessions.mockResolvedValue({ port: 4096, sessions: [] });
+    api.recentSessions
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveOld = resolve;
+        })
+      )
+      .mockRejectedValueOnce(new Error("private path"));
+    useStore.setState({ sessionFiles: [{ path: "saved.jsonl" }] as never });
+    const first = useStore.getState().refreshAi();
+    await useStore.getState().refreshAi();
+    expect(useStore.getState().sessionFiles).toEqual([{ path: "saved.jsonl" }]);
+    expect(useStore.getState().sessionFilesErr).toBeTruthy();
+    expect(useStore.getState().sessionFilesErr).not.toContain("private path");
+    resolveOld([{ path: "old.jsonl" }]);
+    await first;
+    expect(useStore.getState().sessionFiles).toEqual([{ path: "saved.jsonl" }]);
+    expect(useStore.getState().sessionFilesErr).toBeTruthy();
+  });
+
   it("opencode 不可用时只记 sessionsErr，不影响本地会话文件", async () => {
     api.opencodeSessions.mockRejectedValue(new Error("ECONNREFUSED"));
     api.recentSessions.mockResolvedValue([{ path: "a.jsonl" }]);
@@ -329,11 +429,74 @@ describe("成本动作", () => {
     expect(s.toast).toBeTruthy();
   });
 
-  it("扫描失败结束 loading 并提示", async () => {
+  it("扫描进行中再次调用直接返回：不并发触发第二次 IPC，结束后可再扫描", async () => {
+    let resolveScan!: (v: unknown) => void;
+    api.scanSessionCosts.mockReturnValue(
+      new Promise((resolve) => {
+        resolveScan = resolve;
+      })
+    );
+
+    const first = useStore.getState().scanCosts();
+    expect(useStore.getState().costLoading).toBe(true);
+
+    // 价格保存后用户重复点「扫描」不应叠一次全量扫描
+    const second = useStore.getState().scanCosts();
+    expect(api.scanSessionCosts).toHaveBeenCalledTimes(1);
+    // 重入调用也不能提前把 loading 清掉（按钮会闪回可点状态）
+    expect(useStore.getState().costLoading).toBe(true);
+
+    resolveScan({
+      total_scanned: 1,
+      overview: { today_cost: 1 },
+      trend: [],
+      model_breakdown: [],
+    });
+    await Promise.all([first, second]);
+    expect(useStore.getState().costLoading).toBe(false);
+
+    // 防重入不是永久锁：上一次结束后新调用照常执行
+    api.scanSessionCosts.mockResolvedValue({
+      total_scanned: 0,
+      overview: { today_cost: 2 },
+      trend: [],
+      model_breakdown: [],
+    });
+    await useStore.getState().scanCosts();
+    expect(api.scanSessionCosts).toHaveBeenCalledTimes(2);
+    expect(useStore.getState().costOverview).toEqual({ today_cost: 2 });
+  });
+
+  it("扫描部分提交后失败时重新读取成本视图并保留扫描错误", async () => {
+    const overview = { today_cost: 7 };
+    const trend = [{ date: "2026-01-01", cost: 7 }];
+    const breakdown = [{ model: "test", cost: 7 }];
+    useStore.setState({ costOverview: { today_cost: 1 } as never });
+    api.scanSessionCosts.mockImplementation(async () => {
+      api.getCostOverview.mockResolvedValue(overview);
+      api.getCostTrend.mockResolvedValue(trend);
+      api.getModelBreakdown.mockResolvedValue(breakdown);
+      api.getCostSettings.mockResolvedValue(useStore.getState().costSettings);
+      throw new Error("scan boom");
+    });
+    await useStore.getState().scanCosts();
+    expect(useStore.getState().costOverview).toEqual(overview);
+    expect(useStore.getState().costTrend).toEqual(trend);
+    expect(useStore.getState().costModelBreakdown).toEqual(breakdown);
+    expect(useStore.getState().costLoading).toBe(false);
+    expect(useStore.getState().toast).toContain("scan boom");
+  });
+
+  it("扫描和重新读取都失败时保留可见的两种错误并结束 loading", async () => {
     api.scanSessionCosts.mockRejectedValue(new Error("scan boom"));
+    api.getCostOverview.mockRejectedValue(new Error("read boom"));
+    api.getCostTrend.mockResolvedValue([]);
+    api.getModelBreakdown.mockResolvedValue([]);
+    api.getCostSettings.mockResolvedValue(useStore.getState().costSettings);
     await useStore.getState().scanCosts();
     expect(useStore.getState().costLoading).toBe(false);
     expect(useStore.getState().toast).toContain("scan boom");
+    expect(useStore.getState().toast).toContain("read boom");
   });
 
   it("保存成本设置成功才更新内存态", async () => {

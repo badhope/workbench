@@ -14,6 +14,15 @@ export default defineConfig({
     coverage: {
       reporter: ["text", "lcov"],
       include: ["src/lib/**", "src/ui.tsx", "src/ErrorBoundary.tsx"],
+      // 阈值取 2026-11-02 实测值（stmts 92.56 / branch 87.61 / funcs 92.16
+      // / lines 93.79）的保守下沿：足以拦住覆盖率回退，又不会因为无关的
+      // 一两行新增代码就红。
+      thresholds: {
+        statements: 90,
+        branches: 85,
+        functions: 90,
+        lines: 90,
+      },
     },
   },
 });

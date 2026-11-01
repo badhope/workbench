@@ -149,7 +149,15 @@ export function CostDashboard() {
         }}
       />
 
-      <PricingEditor />
+      <PricingEditor
+        onChanged={() => {
+          // 价格改了，账本里已有记录仍按旧价算出：必须重算，否则界面总额
+          // 与用户刚保存的价格对不上。先刷「已覆盖 N 个型号」角标，再扫描；
+          // scanCosts 自带防重入，连点不会叠出并发扫描。
+          void pricing.refresh();
+          void scanCosts();
+        }}
+      />
     </div>
   );
 }

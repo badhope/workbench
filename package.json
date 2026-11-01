@@ -5,7 +5,7 @@
   "description": "Workbench - local-first desktop workbench (Tauri 2 + React 19): live process / port / dev-server visibility + AI session cost metering",
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "type": "module",
   "scripts": {

@@ -42,22 +42,21 @@
 
 | 项 | 要求 |
 |----|------|
-| 操作系统 | Windows 10 / 11（x64）；Linux（deb） |
-| 运行时 | WebView2 Runtime（Windows 11 预装；Windows 10 现代版本通常已含）；Linux 需 WebKitGTK 4.1 |
-| 磁盘 | 约 35 MB（安装后），免安装版单文件约 15 MB |
+| 操作系统 | CI 定义了 Windows、Linux 和 macOS 任务；各平台验证情况不同 |
+| 运行时 | Windows 需 WebView2（Windows 11 预装）；Linux 需 WebKitGTK 4.1；macOS 使用系统 WebView |
+| 磁盘 | 取决于平台和安装包 |
 | 权限 | 无需管理员权限；进程终止需与目标进程同级权限。普通结束失败后可一键经 UAC 提权重试（仅 Windows） |
 | 网络 | 不需联网。仅在你主动使用 AI 会话页时会探测本地 opencode 服务 |
 
-### 从 Release 安装（推荐）
+### 从 Release 安装
 
-1. 到 [Releases](https://github.com/X33834/workbench/releases/latest) 下载 `Workbench_<版本>_x64-setup.exe`
-2. 若 SmartScreen 拦截：点「更多信息」→「仍要运行」
-3. 安装后从开始菜单启动「工作台」
+请在 [最新 Release](https://github.com/X33834/workbench/releases/latest) 查看可用附件。
+此处未验证附件的可用性和签名状态。
 
 ### 从源码构建
 
-环境要求：[Node.js](https://nodejs.org/) ≥ 20、
-[Rust](https://www.rust-lang.org/tools/install) ≥ 1.77、WebView2。
+环境要求：锁定的前端依赖需要 [Node.js](https://nodejs.org/) `^22.22.2 || ^24.15.0 || >=26.0.0`，
+另需 [Rust](https://www.rust-lang.org/tools/install) ≥ 1.90 和对应平台的 WebView 运行时。
 
 ```bash
 npm install
@@ -208,8 +207,8 @@ Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×�
 <details>
 <summary>Windows 提示「未知发布者」怎么办？</summary>
 
-安装包未做代码签名（证书需付费），SmartScreen 因此会拦截。
-点「更多信息 → 仍要运行」即可，也可直接下载免安装 exe。
+请在决定是否运行之前检查下载文件的发布者和签名状态。
+此处未验证 Release 附件的可用性和签名状态。
 </details>
 
 ## Roadmap
@@ -223,7 +222,7 @@ Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×�
 - [x] 三种外壳（侧栏 / 顶部坞 / 专注）与七种概览版面
 - [x] 可拖拽、可隐藏的概览组件
 - [x] 多语言界面（English / 简体中文 / 日本語）
-- [x] 跨平台（Windows / Linux 已构建验证；macOS 由 CI 的 `Backend (macOS)` job 构建）
+- [x] 为 Windows、Linux 和 macOS 定义跨平台 CI 任务
 - [ ] 安装包代码签名（需付费证书）
 - [x] 模型价格编辑器（界面内改价 / 新增 / 恢复内置价）
 - [x] 数据备份与恢复（带时间戳快照，一键回滚）
@@ -242,10 +241,10 @@ Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×�
 
 ## 已知限制
 
-- Windows 与 Linux 均已构建并启动验证；端口采集 Windows 走 `netstat -ano`、Linux 走 `ss -tulpn`（缺 iproute2 时回退 `netstat`）
+- 端口采集在 Windows 使用 `netstat -ano`，在 Linux 使用 `ss -tulpn`（回退 `netstat`）。CI 定义了 Linux 后端检查与 `.deb` 构建；平台和发布附件仍需单独验证
 - 交互路径由 Playwright（10 页面 × 8 主题的结构/对比度回归）、命令面板/进程树/端口跳转/CSV 导出的结构化用例，以及打包版桌面 E2E（真实 IPC）覆盖
 - 成本账本使用 SQLite（`cost.db`，rusqlite bundled），按日 / 模型 / 文件建索引；聚合在 SQL 内完成，十万条记录约 250ms，而不是每次查询都重新解析整个 JSON。旧 `cost_data.json` 首次启动自动导入并改名为 `.migrated`（不删除）
-- 安装包未做代码签名，首次运行可能触发 SmartScreen 提示
+- 此处未验证 Release 安装包的签名状态和可用性
 - 托盘菜单文案为中英双语，且不跟随界面语言切换（启动时构建一次）
 - 没有插件 API、HTTP API 与远程监控——这是有意的取舍，代价写在
   [COMPARISON.zh-CN.md](COMPARISON.zh-CN.md) 里

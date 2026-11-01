@@ -70,23 +70,14 @@
 | **命令行模式** | 同一个可执行文件支持 `workbench ps` / `ports` / `diag`（加 `--json`），只读、可进脚本、不弹窗口 |
 | **视觉系统** | 7 种概览版面 × 8 套主题 × 3 种外壳，组件可拖拽 / 隐藏并单独设宽度，主题编辑器与分享链接 |
 | **三语界面** | 简体中文（默认）/ English / 日本語 |
-| **跨平台** | Windows（NSIS + 免安装 exe）、Linux（`.deb`）、macOS（`.app`，CI 构建未签名） |
+| **跨平台** | CI 定义了 Windows、Linux 和 macOS 的任务，包括 Linux `.deb` 与 macOS `.app` 构建 |
 
 ## 下载
 
-**v0.3.0** —— 按平台取安装包：
+请在 Release 页面查看可用版本和附件。发布工作流配置了 Windows NSIS、Linux `.deb`
+和 macOS `.app` 构建，但这并不代表各平台附件均已发布或验证。
 
-| 平台 | 文件 |
-|------|------|
-| Windows 10/11 x64 | `Workbench_0.3.0_x64-setup.exe`（NSIS，约 5 MB） |
-| Linux x64 | 暂未发布附件 —— 可 `npm run tauri build -- --bundles deb`，或取 CI 的 `linux-deb` artifact |
-| macOS | 暂未发布附件 —— 可 `npm run tauri build -- --bundles app`，或取 CI 的 `macos-app` artifact（未签名，首次右键打开） |
-
-> 安装包未做代码签名，Windows SmartScreen 可能提示「未知发布者」——
-> 点「更多信息 → 仍要运行」即可（证书需付费，文件没有风险）。macOS 同理，
-> 首次打开需右键 → 打开。
-
-任选镜像下载——代码完全一致，各自发布 Release：
+Release 页面：
 
 | 镜像 | Release 页 |
 |------|------------|
@@ -96,7 +87,7 @@
 
 ## 构建
 
-需要 Node.js ≥ 20 与 Rust ≥ 1.90：
+锁定的前端依赖需要 Node.js `^22.22.2 || ^24.15.0 || >=26.0.0`，并需要 Rust ≥ 1.90：
 
 ```bash
 npm install

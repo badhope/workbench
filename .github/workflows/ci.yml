@@ -15,7 +15,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.22.2"
           cache: npm
 
       - run: npm ci
@@ -32,13 +32,20 @@ jobs:
         run: npx tsc --noEmit
       - name: Lint
         run: npm run lint
+      # 供应链门禁：生产依赖出现 >= high 的已知漏洞即失败。
+      # 显式钉官方 registry：镜像（如 npmmirror）不实现 audit 接口，
+      # 会在“看起来跑过了”的情况下拿不到任何结论。
+      - name: Audit (prod deps)
+        run: npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org
       - name: Format check
         run: npm run format:check
       # 重复代码：阈值 3%（与审查红线一致）。jscpd 退出码非 0 即超阈值。
       - name: Duplication
         run: npm run dup
-      - name: Unit tests
-        run: npm test
+      # coverage 跑的就是单元测试；阈值写在 vitest.config.mts，只有带
+      # --coverage 时才生效，所以这里是唯一入口，不重复跑两遍测试。
+      - name: Unit tests + coverage
+        run: npm run coverage
       - name: Build
         run: npm run build
 
@@ -96,11 +103,20 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy --all-targets -- -D warnings
 
+      # Rust 供应链门禁：RUSTSEC 有已知漏洞即失败。cargo-audit 不随工具链
+      # 预装，钉版本避免上游更新让门禁行为漂移。
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked --version 0.21.2
+
+      - name: Audit (Rust deps)
+        working-directory: src-tauri
+        run: cargo audit
+
       # 打包验证：确保 deb 真的能产出。仅编译不打包时，
       # productName/包名/图标布局这类问题不会被发现。
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.22.2"
           cache: npm
 
       - run: npm ci
@@ -156,7 +172,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.22.2"
           cache: npm
 
       - run: npm ci
@@ -187,7 +203,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.22.2"
 
       - uses: dtolnay/rust-toolchain@stable
         with:

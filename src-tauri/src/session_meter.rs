@@ -15,8 +15,8 @@
 
 use serde::Serialize;
 use std::collections::HashMap;
+#[cfg(test)]
 use std::fs;
-use std::io::{BufRead, BufReader};
 
 use crate::cost_store::CostRecord;
 use crate::pricing::PricingTable;
@@ -46,16 +46,31 @@ pub struct ModelUsage {
 
 /// 从单个 JSONL 文件提取按 (模型, 日期) 聚合的用量。
 /// `mtime_day`：文件 mtime 对应日期，作为无行级时间戳时的兜底归属日。
+#[cfg(test)]
 pub fn extract_usage(path: &str, mtime_day: &str) -> Vec<ModelUsage> {
-    let Ok(file) = fs::File::open(path) else {
-        // 读不动的文件（被杀软锁住、OneDrive 未水合、超长路径）不产出记录：
-        // 原先会写一条 zero_pricing 并用真实 (path, mtime, size) 作为跳过键，
-        // 于是该文件被永久排除在后续扫描之外，即使后来可读也不会再计费。
-        log::debug!("跳过无法打开的会话文件: {path}");
-        return Vec::new();
-    };
+    extract_usage_inner(path, mtime_day, false).unwrap_or_default()
+}
 
-    let reader = BufReader::new(file);
+fn extract_usage_inner(
+    path: &str,
+    mtime_day: &str,
+    strict: bool,
+) -> Result<Vec<ModelUsage>, String> {
+    extract_usage_with_hook(path, mtime_day, strict, || {})
+}
+
+fn extract_usage_with_hook(
+    path: &str,
+    mtime_day: &str,
+    strict: bool,
+    after_open: impl FnOnce(),
+) -> Result<Vec<ModelUsage>, String> {
+    let file = crate::ai::open_session_file(std::path::Path::new(path)).map_err(str::to_string)?;
+    let before = file
+        .metadata()
+        .map_err(|_| "session file metadata error".to_string())?;
+    after_open();
+    let mut reader = crate::ai::SessionReader::new(file);
     // (day, model) -> 用量
     let mut by_day_model: HashMap<(String, String), UsageAgg> = HashMap::new();
     let mut chars_by_day: HashMap<String, usize> = HashMap::new();
@@ -64,25 +79,31 @@ pub fn extract_usage(path: &str, mtime_day: &str) -> Vec<ModelUsage> {
     let mut found_usage = false;
     let mut latest_day: Option<String> = None;
 
-    for line_result in reader.lines() {
-        let Ok(line) = line_result else { continue };
+    while let Some(line) = reader.next_line().map_err(str::to_string)? {
         if line.trim().is_empty() {
             continue;
         }
-        let parsed: Option<serde_json::Value> = serde_json::from_str(&line).ok();
+        let value: serde_json::Value = match serde_json::from_str(&line) {
+            Ok(value) => value,
+            Err(err) => {
+                if strict {
+                    return Err(format!("解析会话 JSON 失败: {err}"));
+                }
+                continue;
+            }
+        };
 
         // 归属日：行级 timestamp 优先；取不到就挂到已见到的最近一天，最后兜底 mtime 日。
-        let day = parsed
-            .as_ref()
-            .and_then(line_day)
+        let day = line_day(&value)
             .or_else(|| latest_day.clone())
             .unwrap_or_else(|| mtime_day.to_string());
         if latest_day.as_deref().is_none_or(|prev| day.as_str() > prev) {
             latest_day = Some(day.clone());
         }
-        *chars_by_day.entry(day.clone()).or_insert(0) += line.chars().count();
-
-        let Some(value) = parsed else { continue };
+        let chars = chars_by_day.entry(day.clone()).or_insert(0);
+        *chars = chars
+            .checked_add(line.chars().count())
+            .ok_or_else(|| "会话字符数溢出".to_string())?;
 
         // 行级模型：Claude Code 在 message.model，Codex 在 turn_context.payload.model
         let line_model = model_from_value(&value);
@@ -90,28 +111,34 @@ pub fn extract_usage(path: &str, mtime_day: &str) -> Vec<ModelUsage> {
             last_known_model = Some(m.clone());
         }
 
-        let Some(usage) = usage_from_value(&value) else {
+        let Some(usage) = parse_usage_from_value(&value, strict)? else {
             continue;
         };
+        found_usage = true;
         if usage.is_empty() {
             continue;
         }
-
-        found_usage = true;
         let model = line_model
             .or_else(|| last_known_model.clone())
             .unwrap_or_else(|| "unknown".to_string());
         let agg = by_day_model
             .entry((day.clone(), model))
             .or_insert_with(|| zero_agg(&day, "measured"));
-        agg.input = agg.input.saturating_add(usage.input);
-        agg.output = agg.output.saturating_add(usage.output);
-        agg.cache_read = agg.cache_read.saturating_add(usage.cache_read);
-        agg.cache_creation = agg.cache_creation.saturating_add(usage.cache_creation);
+        let add = |a: u64, b: u64| {
+            a.checked_add(b)
+                .filter(|n| *n <= i64::MAX as u64)
+                .ok_or_else(|| "会话 token 数超出数据库范围".to_string())
+        };
+        agg.input = add(agg.input, usage.input)?;
+        agg.output = add(agg.output, usage.output)?;
+        agg.cache_read = add(agg.cache_read, usage.cache_read)?;
+        agg.cache_creation = add(agg.cache_creation, usage.cache_creation)?;
     }
 
+    crate::ai::check_session_unchanged(&before, reader.file()).map_err(str::to_string)?;
+
     if found_usage {
-        return group_by_model(by_day_model);
+        return Ok(group_by_model(by_day_model));
     }
 
     // 降级：按日分桶的字符估算（4 chars/token 是业界常用经验值）。
@@ -125,7 +152,7 @@ pub fn extract_usage(path: &str, mtime_day: &str) -> Vec<ModelUsage> {
             if total == 0 {
                 return None;
             }
-            let input = total * 6 / 10;
+            let input = total / 10 * 6 + total % 10 * 6 / 10;
             Some(UsageAgg {
                 day,
                 input,
@@ -138,10 +165,10 @@ pub fn extract_usage(path: &str, mtime_day: &str) -> Vec<ModelUsage> {
         .collect();
     if aggs.is_empty() {
         // 空文件 / 全是空白行：没有可计量内容，不产出记录
-        return Vec::new();
+        return Ok(Vec::new());
     }
     aggs.sort_by(|a, b| a.day.cmp(&b.day));
-    vec![ModelUsage { model, aggs }]
+    Ok(vec![ModelUsage { model, aggs }])
 }
 
 /// (day, model) 映射 → 按模型分组、组内按日期排序。
@@ -250,18 +277,51 @@ pub struct Usage {
 
 impl Usage {
     fn is_empty(&self) -> bool {
-        self.input + self.output + self.cache_read + self.cache_creation == 0
+        self.input == 0 && self.output == 0 && self.cache_read == 0 && self.cache_creation == 0
     }
 }
 
 /// 从一行 JSONL 提取 usage：兼容 Claude Code（message.usage）、OpenAI 风格
 /// （顶层 usage + prompt/completion_tokens）与驼峰命名。生产路径与单测共用同一实现，
 /// 避免「测的是生产不跑的函数」这种假信心。
+#[cfg(test)]
 fn usage_from_value(v: &serde_json::Value) -> Option<Usage> {
-    let usage = v
+    parse_usage_from_value(v, false).ok().flatten()
+}
+
+fn parse_usage_from_value(v: &serde_json::Value, strict: bool) -> Result<Option<Usage>, String> {
+    let Some(usage) = v
         .get("message")
         .and_then(|m| m.get("usage"))
-        .or_else(|| v.get("usage"))?;
+        .or_else(|| v.get("usage"))
+    else {
+        return Ok(None);
+    };
+    let keys = [
+        "input_tokens",
+        "inputTokens",
+        "prompt_tokens",
+        "output_tokens",
+        "outputTokens",
+        "completion_tokens",
+        "cache_read_input_tokens",
+        "cache_creation_input_tokens",
+    ];
+    if strict {
+        for key in keys {
+            if let Some(value) = usage.get(key) {
+                if !usage_token_u64(Some(value)).is_some_and(|n| n <= i64::MAX as u64) {
+                    return Err(format!("无效的会话 token 字段: {key}"));
+                }
+            }
+        }
+    }
+    if !keys
+        .iter()
+        .any(|key| usage_token_u64(usage.get(*key)).is_some())
+    {
+        return Ok(None);
+    }
     let pick = |keys: [&str; 3]| -> u64 {
         keys.iter()
             .filter_map(|k| usage_token_u64(usage.get(*k)))
@@ -272,12 +332,12 @@ fn usage_from_value(v: &serde_json::Value) -> Option<Usage> {
     let output = pick(["output_tokens", "outputTokens", "completion_tokens"]);
     let cache_read = usage_token_u64(usage.get("cache_read_input_tokens")).unwrap_or(0);
     let cache_creation = usage_token_u64(usage.get("cache_creation_input_tokens")).unwrap_or(0);
-    Some(Usage {
+    Ok(Some(Usage {
         input,
         output,
         cache_read,
         cache_creation,
-    })
+    }))
 }
 
 fn usage_token_u64(v: Option<&serde_json::Value>) -> Option<u64> {
@@ -288,23 +348,23 @@ fn usage_token_u64(v: Option<&serde_json::Value>) -> Option<u64> {
     }
 }
 
-/// 批量扫描 session 文件 → 成本记录。
-/// `existing_keys`：已有的 (file_path, mtime, size) 集合，跳过未变化的文件（幂等）。
-/// 同一文件可产出多条按日记录；持久化层按 file_path 整组替换，保证不重复计费。
-pub fn scan_sessions_to_records(
+#[cfg(test)]
+fn scan_sessions_to_records(
     files: &[SessionFileEntry],
     table: &PricingTable,
-    existing_keys: &HashMap<(String, u64, u64), ()>,
+    _existing_keys: &HashMap<(String, u64, u64), ()>,
 ) -> Vec<CostRecord> {
+    scan_complete_sessions(files, table).unwrap_or_default()
+}
+
+pub fn scan_complete_sessions(
+    files: &[SessionFileEntry],
+    table: &PricingTable,
+) -> Result<Vec<CostRecord>, String> {
     let mut records = Vec::new();
     for f in files {
-        let key = (f.path.clone(), f.modified, f.size);
-        if existing_keys.contains_key(&key) {
-            continue;
-        }
-
         let mtime_day = unix_to_day(f.modified);
-        for ModelUsage { model, aggs } in extract_usage(&f.path, &mtime_day) {
+        for ModelUsage { model, aggs } in extract_usage_inner(&f.path, &mtime_day, true)? {
             let priced = table.is_priced(&model);
             for agg in aggs {
                 let (cost_inp, cost_out, cost_total) = table.calc_cost(
@@ -340,7 +400,7 @@ pub fn scan_sessions_to_records(
             }
         }
     }
-    records
+    Ok(records)
 }
 
 fn unix_to_day(unix_secs: u64) -> String {
@@ -368,6 +428,270 @@ pub struct SessionFileEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct Fixture(std::path::PathBuf);
+
+    impl Fixture {
+        fn new(contents: &str) -> Self {
+            use std::sync::atomic::{AtomicU64, Ordering};
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("target")
+                .join(format!(
+                    "session-meter-{}-{}.jsonl",
+                    std::process::id(),
+                    NEXT.fetch_add(1, Ordering::Relaxed)
+                ));
+            fs::write(&path, contents).unwrap();
+            Self(path)
+        }
+
+        fn extract(&self) -> Vec<ModelUsage> {
+            extract_usage(self.0.to_str().unwrap(), "2026-01-01")
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_file(&self.0);
+        }
+    }
+
+    #[test]
+    fn regression_mixed_zero_and_overflow_fails_closed() {
+        let fixture =
+            Fixture::new(r#"{"usage":{"input_tokens":"18446744073709551616","output_tokens":0}}"#);
+        let entry = SessionFileEntry {
+            path: fixture.0.to_string_lossy().into_owned(),
+            tool: "test".into(),
+            project: "test".into(),
+            modified: 1,
+            size: 0,
+        };
+        assert!(scan_complete_sessions(&[entry], &PricingTable::default()).is_err());
+    }
+
+    #[test]
+    fn regression_invalid_tokens_fail_closed() {
+        let fields = [
+            "input_tokens",
+            "inputTokens",
+            "prompt_tokens",
+            "output_tokens",
+            "outputTokens",
+            "completion_tokens",
+            "cache_read_input_tokens",
+            "cache_creation_input_tokens",
+        ];
+        for field in fields {
+            for value in [
+                r#""18446744073709551616""#,
+                "18446744073709551616",
+                "-1",
+                r#""-1""#,
+                "null",
+                "true",
+                "{}",
+                "[]",
+                "1.5",
+                r#""invalid""#,
+            ] {
+                let fixture = Fixture::new(&format!(r#"{{"usage":{{"{field}":{value}}}}}"#));
+                let entry = SessionFileEntry {
+                    path: fixture.0.to_string_lossy().into_owned(),
+                    tool: "test".into(),
+                    project: "test".into(),
+                    modified: 1,
+                    size: 0,
+                };
+                assert!(
+                    scan_complete_sessions(&[entry], &PricingTable::default()).is_err(),
+                    "{field}: {value}"
+                );
+            }
+        }
+        for contents in [
+            r#"{"usage":{"input_tokens":"18446744073709551616","output_tokens":0}}"#,
+            r#"{"usage":{"input_tokens":0,"inputTokens":-1}}"#,
+            r#"{"usage":{"input_tokens":0,"inputTokens":9223372036854775808}}"#,
+        ] {
+            let fixture = Fixture::new(contents);
+            let entry = SessionFileEntry {
+                path: fixture.0.to_string_lossy().into_owned(),
+                tool: "test".into(),
+                project: "test".into(),
+                modified: 1,
+                size: 0,
+            };
+            assert!(
+                scan_complete_sessions(&[entry], &PricingTable::default()).is_err(),
+                "{contents}"
+            );
+        }
+        for contents in [
+            r#"{"usage":{"input_tokens":0,"output_tokens":"0"}}"#,
+            r#"{"usage":{}}"#,
+            r#"{"content":"no usage"}"#,
+        ] {
+            let fixture = Fixture::new(contents);
+            let entry = SessionFileEntry {
+                path: fixture.0.to_string_lossy().into_owned(),
+                tool: "test".into(),
+                project: "test".into(),
+                modified: 1,
+                size: 0,
+            };
+            let records = scan_complete_sessions(&[entry], &PricingTable::default()).unwrap();
+            if contents.contains("input_tokens") {
+                assert!(records.is_empty());
+            } else {
+                assert_eq!(records.len(), 1);
+            }
+        }
+    }
+
+    #[test]
+    fn regression_scan_rejects_token_overflow() {
+        for field in [
+            "input_tokens",
+            "output_tokens",
+            "cache_read_input_tokens",
+            "cache_creation_input_tokens",
+        ] {
+            for value in ["9223372036854775808", "18446744073709551615"] {
+                let fixture = Fixture::new(&format!("{{\"usage\":{{\"{field}\":{value}}}}}"));
+                let entry = SessionFileEntry {
+                    path: fixture.0.to_string_lossy().into_owned(),
+                    tool: "test".into(),
+                    project: "test".into(),
+                    modified: 1,
+                    size: 0,
+                };
+                assert!(
+                    scan_complete_sessions(&[entry], &PricingTable::default()).is_err(),
+                    "{field}: {value}"
+                );
+            }
+            let fixture = Fixture::new(&format!("{{\"usage\":{{\"{field}\":9223372036854775807}}}}\n{{\"usage\":{{\"{field}\":1}}}}"));
+            let entry = SessionFileEntry {
+                path: fixture.0.to_string_lossy().into_owned(),
+                tool: "test".into(),
+                project: "test".into(),
+                modified: 1,
+                size: 0,
+            };
+            assert!(
+                scan_complete_sessions(&[entry], &PricingTable::default()).is_err(),
+                "aggregate {field}"
+            );
+        }
+    }
+
+    #[test]
+    fn regression_rejects_file_changed_during_read() {
+        use std::io::Write;
+        let fixture = Fixture::new("{\"usage\":{\"input_tokens\":1}}\n");
+        let path = fixture.0.to_str().unwrap();
+        let result = extract_usage_with_hook(path, "2026-01-01", true, || {
+            let mut file = fs::OpenOptions::new().append(true).open(path).unwrap();
+            file.write_all(b" ").unwrap();
+            file.flush().unwrap();
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn regression_same_metadata_content_change_must_be_rescanned() {
+        let fixture = Fixture::new(r#"{"model":"gpt-5","usage":{"input_tokens":1000000}}"#);
+        let entry = SessionFileEntry {
+            path: fixture.0.to_str().unwrap().to_string(),
+            tool: "fixture".into(),
+            project: "fixture".into(),
+            modified: 1,
+            size: fs::metadata(&fixture.0).unwrap().len(),
+        };
+        let first = scan_sessions_to_records(
+            std::slice::from_ref(&entry),
+            &PricingTable::default(),
+            &HashMap::new(),
+        );
+        assert_eq!(first[0].input_tokens, 1_000_000);
+        fs::write(
+            &fixture.0,
+            r#"{"model":"gpt-5","usage":{"input_tokens":2000000}}"#,
+        )
+        .unwrap();
+        assert_eq!(fs::metadata(&fixture.0).unwrap().len(), entry.size);
+        let mut existing = HashMap::new();
+        existing.insert((entry.path.clone(), entry.modified, entry.size), ());
+        let records = scan_sessions_to_records(&[entry], &PricingTable::default(), &existing);
+        assert_eq!(
+            records.len(),
+            1,
+            "metadata alone must not skip file contents"
+        );
+        assert_eq!(records[0].input_tokens, 2_000_000);
+    }
+
+    #[test]
+    fn scan_rejects_partial_json_and_reprices_unchanged_file() {
+        let fixture = Fixture::new(r#"{"model":"gpt-5","usage":{"input_tokens":1000000}}"#);
+        let entry = SessionFileEntry {
+            path: fixture.0.to_str().unwrap().to_string(),
+            tool: "fixture".into(),
+            project: "fixture".into(),
+            modified: 1,
+            size: fs::metadata(&fixture.0).unwrap().len(),
+        };
+        let first =
+            scan_complete_sessions(std::slice::from_ref(&entry), &PricingTable::default()).unwrap();
+        let mut changed = PricingTable::default();
+        changed.overrides.insert("gpt-5".into(), (10.0, 20.0));
+        let second = scan_complete_sessions(std::slice::from_ref(&entry), &changed).unwrap();
+        assert_ne!(first[0].cost_total, second[0].cost_total);
+        assert_eq!(second[0].cost_total, 10.0);
+        fs::write(&fixture.0, "{\"usage\":{\"input_tokens\":1}}\n{broken").unwrap();
+        assert!(scan_complete_sessions(&[entry], &changed).is_err());
+    }
+
+    #[test]
+    fn regression_zero_usage_suppresses_estimation() {
+        let fixture = Fixture::new("{\"model\":\"known\",\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}\n{\"content\":\"some text\"}");
+        assert!(fixture.extract().is_empty());
+        assert!(Fixture::new(r#"{"usage":{"cache_read_input_tokens":"0"}}"#)
+            .extract()
+            .is_empty());
+        assert_eq!(
+            Fixture::new(r#"{"usage":{"input_tokens":"invalid"},"content":"preserve fallback"}"#)
+                .extract()[0]
+                .aggs[0]
+                .source,
+            "estimated"
+        );
+    }
+
+    #[test]
+    fn regression_invalid_json_does_not_inflate_estimate() {
+        let valid = r#"{"content":"a valid message for estimation"}"#;
+        let baseline = Fixture::new(valid);
+        let mixed = Fixture::new(&format!("{valid}\n{{invalid json with extra characters"));
+        assert!(!baseline.extract().is_empty());
+        assert_eq!(mixed.extract(), baseline.extract());
+        assert!(Fixture::new("{invalid json with extra characters")
+            .extract()
+            .is_empty());
+    }
+
+    #[test]
+    fn regression_usage_empty_does_not_overflow() {
+        assert!(!Usage {
+            input: u64::MAX,
+            output: 1,
+            ..Usage::default()
+        }
+        .is_empty());
+        assert!(Usage::default().is_empty());
+    }
 
     #[test]
     fn extract_claude_code_format() {
@@ -574,7 +898,8 @@ mod tests {
     #[test]
     fn no_usage_falls_back_to_estimated() {
         let tmp = std::env::temp_dir().join("wb-estimate.jsonl");
-        let content = "This is a test line with about forty characters of text content here.\nAnother line of similar length and content here.";
+        let content = r#"{"content":"This is a test line with about forty characters of text content here."}
+{"content":"Another line of similar length and content here."}"#;
         fs::write(&tmp, content).unwrap();
         let groups = extract_usage(tmp.to_str().unwrap(), "2026-01-06");
         let aggs = &groups[0].aggs;
