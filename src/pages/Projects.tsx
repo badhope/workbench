@@ -165,9 +165,8 @@ export default function Projects() {
       pinned: draft.pinned,
       note: draft.note,
     };
-    if (draft.id) updateProject(draft.id, payload);
-    else addProject(payload);
-    setDraft(null);
+    const accepted = draft.id ? updateProject(draft.id, payload) : addProject(payload);
+    if (accepted) setDraft(null);
   };
 
   return (

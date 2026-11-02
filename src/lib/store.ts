@@ -23,6 +23,7 @@ import {
 import { t } from "./i18n";
 import { persist } from "zustand/middleware";
 import {
+  backupData,
   clearCostRecords,
   getCostOverview,
   getCostSettings,
@@ -35,13 +36,14 @@ import {
   listPorts,
   listProcesses,
   diskInfo,
-  loadData,
+  loadDataVersioned,
   notify,
   opencodeSessions,
   opencodeSessionDetail,
   openExternal,
   gitBranch,
   recentSessions,
+  restoreBackup,
   saveCostSettings,
   saveData,
   scanSessionCosts,
@@ -79,6 +81,7 @@ import type {
   Task,
   ViewKey,
   WorkbenchData,
+  RestoreResult,
 } from "../types";
 
 export type ProcView = "flat" | "tree";
@@ -174,17 +177,21 @@ interface Store extends UiState, RuntimeState {
   fetchGitBranch: (dir: string) => Promise<string>;
   openTarget: (target: string) => Promise<void>;
   killProcess: (pid: number) => Promise<void>;
-  addTask: (t: Partial<Task>) => void;
-  moveTask: (id: string, status: string) => void;
-  updateTask: (id: string, patch: Partial<Task>) => void;
+  addTask: (t: Partial<Task>) => boolean;
+  moveTask: (id: string, status: string) => boolean;
+  updateTask: (id: string, patch: Partial<Task>) => boolean;
   deleteTask: (id: string) => void;
-  addProject: (p: Partial<Project>) => void;
-  updateProject: (id: string, patch: Partial<Project>) => void;
+  addProject: (p: Partial<Project>) => boolean;
+  updateProject: (id: string, patch: Partial<Project>) => boolean;
   deleteProject: (id: string) => void;
-  persistData: (next: WorkbenchData) => void;
+  persistData: (next: WorkbenchData) => boolean;
+  persistDataNow: (next: WorkbenchData) => Promise<boolean>;
+  discardUnsavedAndReload: () => Promise<void>;
+  backupCurrentData: () => ReturnType<typeof backupData>;
+  restoreData: (id: string) => Promise<RestoreResult>;
   // ── 成本计量 ──
   loadCostOverview: () => Promise<string | undefined>;
-  scanCosts: () => Promise<void>;
+  scanCosts: (options?: { afterCurrent?: boolean }) => Promise<void>;
   loadCostSettings: () => Promise<void>;
   updateCostSettings: (s: CostSettings) => Promise<boolean>;
   clearCosts: () => Promise<void>;
@@ -199,10 +206,32 @@ function uid(): string {
 
 // 模块级防抖计时器（仅用于持久化，toast 由 TTL 自动清理）
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingData: WorkbenchData | null = null;
+let saveQueue: Promise<void> = Promise.resolve();
+let restoringData = false;
+let dataSaveBlocked = true;
+let dataGeneration: string | null = null;
+let dataLoadSequence = 0;
+let dataEditSequence = 0;
+let dataDirty = false;
+
+function enqueueSave(data: WorkbenchData): Promise<void> {
+  const editSequence = dataEditSequence;
+  const save = saveQueue
+    .catch(() => undefined)
+    .then(async () => {
+      if (dataGeneration === null) throw new Error("数据尚未加载");
+      dataGeneration = await saveData(data, dataGeneration);
+      if (editSequence === dataEditSequence) dataDirty = false;
+    });
+  saveQueue = save;
+  return save;
+}
 // 运行时刷新的在途 promise（并发调用复用它，而不是丢弃）
 let inflightRefresh: Promise<void> | null = null;
 // 在途期间又有新请求时置位，当前刷新结束后补跑一次
 let refreshAgain = false;
+let costScanAgain = false;
 let aiRefreshId = 0;
 
 export const useStore = create<Store>()(
@@ -364,11 +393,32 @@ export const useStore = create<Store>()(
           });
           return;
         }
+        const loadSequence = ++dataLoadSequence;
+        const editSequence = dataEditSequence;
+        const generation = dataGeneration;
         try {
-          const data = await loadData();
-          set({ data: { ...emptyData, ...data } });
+          const snapshot = await loadDataVersioned();
+          if (
+            loadSequence === dataLoadSequence &&
+            editSequence === dataEditSequence &&
+            generation === dataGeneration &&
+            !restoringData &&
+            !dataDirty
+          ) {
+            dataGeneration = snapshot.generation;
+            set({ data: { ...emptyData, ...snapshot.data } });
+            dataSaveBlocked = false;
+          }
         } catch (e) {
-          set({ toast: t("store.loadFailed", { err: String(e) }) });
+          if (
+            loadSequence === dataLoadSequence &&
+            editSequence === dataEditSequence &&
+            generation === dataGeneration &&
+            !dataDirty
+          ) {
+            dataSaveBlocked = true;
+            set({ toast: t("store.loadFailed", { err: String(e) }) });
+          }
         }
         get().refreshRuntime();
         get().refreshAi();
@@ -527,18 +577,18 @@ export const useStore = create<Store>()(
           created_at: now,
           updated_at: now,
         };
-        get().persistData({ ...get().data, tasks: [task, ...get().data.tasks] });
+        return get().persistData({ ...get().data, tasks: [task, ...get().data.tasks] });
       },
 
       moveTask: (id, status) => {
-        get().updateTask(id, { status });
+        return get().updateTask(id, { status });
       },
 
       updateTask: (id, patch) => {
         const tasks = get().data.tasks.map((t) =>
           t.id === id ? { ...t, ...patch, updated_at: Math.floor(Date.now() / 1000) } : t
         );
-        get().persistData({ ...get().data, tasks });
+        return get().persistData({ ...get().data, tasks });
       },
 
       deleteTask: (id) => {
@@ -559,14 +609,17 @@ export const useStore = create<Store>()(
           note: p.note ?? "",
           created_at: Math.floor(Date.now() / 1000),
         };
-        get().persistData({ ...get().data, projects: [project, ...get().data.projects] });
+        return get().persistData({
+          ...get().data,
+          projects: [project, ...get().data.projects],
+        });
       },
 
       updateProject: (id, patch) => {
         const projects = get().data.projects.map((p) =>
           p.id === id ? { ...p, ...patch } : p
         );
-        get().persistData({ ...get().data, projects });
+        return get().persistData({ ...get().data, projects });
       },
 
       deleteProject: (id) => {
@@ -579,14 +632,172 @@ export const useStore = create<Store>()(
       },
 
       persistData: (next) => {
+        if (restoringData || (isTauri() && dataSaveBlocked)) {
+          set({ toast: t("store.saveFailed", { err: "数据正在恢复或需要重新加载" }) });
+          return false;
+        }
         set({ data: next });
-        if (!isTauri()) return; // 浏览器演示模式不持久化
+        if (!isTauri()) return true;
         if (saveTimer) clearTimeout(saveTimer);
+        pendingData = next;
+        dataDirty = true;
+        const editSequence = ++dataEditSequence;
         saveTimer = setTimeout(() => {
-          saveData(next).catch((e) =>
-            set({ toast: t("store.saveFailed", { err: String(e) }) })
-          );
+          saveTimer = null;
+          const data = pendingData;
+          pendingData = null;
+          if (data)
+            void enqueueSave(data).catch((e) => {
+              if (editSequence === dataEditSequence && !pendingData) pendingData = data;
+              set({ toast: t("store.saveFailed", { err: String(e) }) });
+            });
         }, SAVE_DEBOUNCE_MS);
+        return true;
+      },
+
+      persistDataNow: async (next) => {
+        if (restoringData || (isTauri() && dataSaveBlocked)) {
+          set({ toast: t("store.saveFailed", { err: "数据正在恢复或需要重新加载" }) });
+          return false;
+        }
+        if (!isTauri()) {
+          set({ data: next });
+          return true;
+        }
+        restoringData = true;
+        if (saveTimer) clearTimeout(saveTimer);
+        saveTimer = null;
+        try {
+          await saveQueue.catch(() => undefined);
+          if (pendingData) {
+            const previous = pendingData;
+            pendingData = null;
+            try {
+              await enqueueSave(previous);
+            } catch (error) {
+              pendingData = previous;
+              throw error;
+            }
+          }
+          await enqueueSave(next);
+          dataEditSequence += 1;
+          set({ data: next });
+          return true;
+        } finally {
+          restoringData = false;
+        }
+      },
+
+      discardUnsavedAndReload: async () => {
+        if (restoringData) throw new Error("数据正在恢复");
+        restoringData = true;
+        dataLoadSequence += 1;
+        if (saveTimer) clearTimeout(saveTimer);
+        saveTimer = null;
+        try {
+          await saveQueue.catch(() => undefined);
+          const snapshot = await loadDataVersioned();
+          pendingData = null;
+          dataDirty = false;
+          dataEditSequence += 1;
+          dataGeneration = snapshot.generation;
+          set({ data: { ...emptyData, ...snapshot.data } });
+          dataSaveBlocked = false;
+        } catch (error) {
+          if (pendingData && !dataSaveBlocked) {
+            const editSequence = dataEditSequence;
+            saveTimer = setTimeout(() => {
+              saveTimer = null;
+              const data = pendingData;
+              pendingData = null;
+              if (data)
+                void enqueueSave(data).catch((failure) => {
+                  if (editSequence === dataEditSequence && !pendingData)
+                    pendingData = data;
+                  set({ toast: t("store.saveFailed", { err: String(failure) }) });
+                });
+            }, SAVE_DEBOUNCE_MS);
+          }
+          throw error;
+        } finally {
+          restoringData = false;
+        }
+      },
+
+      backupCurrentData: async () => {
+        if (restoringData) throw new Error("数据正在恢复或备份");
+        restoringData = true;
+        if (saveTimer) clearTimeout(saveTimer);
+        saveTimer = null;
+        try {
+          await saveQueue.catch(() => undefined);
+          if (pendingData) {
+            const data = pendingData;
+            pendingData = null;
+            try {
+              await enqueueSave(data);
+            } catch (error) {
+              pendingData = data;
+              throw error;
+            }
+          }
+          if (dataDirty) throw new Error("有未保存的数据，无法创建备份");
+          return await backupData();
+        } finally {
+          restoringData = false;
+        }
+      },
+
+      restoreData: async (id) => {
+        if (restoringData) throw new Error("数据正在恢复");
+        restoringData = true;
+        dataLoadSequence += 1;
+        if (saveTimer) clearTimeout(saveTimer);
+        saveTimer = null;
+        try {
+          await saveQueue.catch(() => undefined);
+          if (pendingData) {
+            const data = pendingData;
+            pendingData = null;
+            try {
+              await enqueueSave(data);
+            } catch (error) {
+              pendingData = data;
+              throw new Error(
+                `${String(error)}；未保存的数据仍在内存，请先导出 JSON 再重新加载`,
+                { cause: error }
+              );
+            }
+          }
+          let result: RestoreResult | undefined;
+          let restoreError: unknown;
+          let restoreFailed = false;
+          try {
+            result = await restoreBackup(id);
+          } catch (error) {
+            restoreFailed = true;
+            restoreError = error;
+          }
+          dataSaveBlocked = true;
+          try {
+            const snapshot = await loadDataVersioned();
+            dataGeneration = snapshot.generation;
+            set({ data: { ...emptyData, ...snapshot.data } });
+            dataSaveBlocked = false;
+          } catch (error) {
+            if (restoreFailed) {
+              throw new Error(`${String(restoreError)}；重新加载失败: ${String(error)}`, {
+                cause: error,
+              });
+            }
+            throw error;
+          }
+          if (restoreFailed) throw restoreError;
+          if (!result) throw new Error("恢复未返回结果");
+          return result;
+        } finally {
+          restoringData = false;
+        }
       },
 
       // ── 成本计量 ──
@@ -633,42 +844,46 @@ export const useStore = create<Store>()(
         get().checkBudgetAlert();
       },
 
-      scanCosts: async () => {
+      scanCosts: async (options) => {
         if (!isTauri()) return;
-        // 全量扫描是长任务，价格保存后还会自动触发一次重算。用户再点「扫描」
-        // 不能叠出第二条并发扫描：两次 IPC 的结果会互相覆盖，且后到的旧价
-        // 快照可能把新价算出来的账单盖回去。
-        if (get().costLoading) return;
+        if (get().costLoading) {
+          if (options?.afterCurrent) costScanAgain = true;
+          return;
+        }
+        costScanAgain = false;
         set({ costLoading: true });
-        const startedAt = Date.now();
+        let previousError = "";
+        let repeat: boolean;
         try {
-          const result = await scanSessionCosts();
-          const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
-          set({
-            costOverview: result.overview,
-            costTrend: result.trend,
-            costModelBreakdown: result.model_breakdown,
-            costLoading: false,
-            // 全量扫描可能要几秒，把耗时一起报出来，用户能区分「慢」和「卡死」
-            toast: t("ai.scannedSummary", {
-              files: result.total_scanned,
-              seconds,
-            }),
-          });
-          get().checkBudgetAlert();
-        } catch (e) {
-          const scanError = t("store.scanFailed", { err: String(e) });
-          set({ toast: scanError });
-          try {
-            const readError = await get().loadCostOverview();
-            set({ toast: readError ? `${scanError} · ${readError}` : scanError });
-          } catch (readError) {
-            set({
-              toast: `${scanError} · ${t("store.costReadFailed", { err: String(readError) })}`,
-            });
-          } finally {
-            set({ costLoading: false });
-          }
+          do {
+            const startedAt = Date.now();
+            try {
+              const result = await scanSessionCosts();
+              const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+              set({
+                costOverview: result.overview,
+                costTrend: result.trend,
+                costModelBreakdown: result.model_breakdown,
+                toast:
+                  previousError ||
+                  t("ai.scannedSummary", { files: result.total_scanned, seconds }),
+              });
+              get().checkBudgetAlert();
+            } catch (e) {
+              const scanError = t("store.scanFailed", { err: String(e) });
+              try {
+                const readError = await get().loadCostOverview();
+                previousError = readError ? `${scanError} · ${readError}` : scanError;
+              } catch (readError) {
+                previousError = `${scanError} · ${t("store.costReadFailed", { err: String(readError) })}`;
+              }
+              set({ toast: previousError });
+            }
+            repeat = costScanAgain;
+            costScanAgain = false;
+          } while (repeat);
+        } finally {
+          set({ costLoading: false });
         }
       },
 

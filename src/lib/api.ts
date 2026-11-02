@@ -89,8 +89,15 @@ export async function loadData(): Promise<WorkbenchData> {
   return invoke<WorkbenchData>("load_data");
 }
 
-export async function saveData(data: WorkbenchData): Promise<void> {
-  return invoke("save_data", { data });
+export async function loadDataVersioned(): Promise<{
+  data: WorkbenchData;
+  generation: string;
+}> {
+  return invoke("load_data_versioned");
+}
+
+export async function saveData(data: WorkbenchData, generation: string): Promise<string> {
+  return invoke("save_data", { data, generation });
 }
 
 /** 用系统默认方式打开 URL / 目录。

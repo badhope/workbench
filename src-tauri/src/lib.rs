@@ -208,6 +208,7 @@ pub fn run() {
             commands::open_known_path,
             commands::set_always_on_top,
             commands::load_data,
+            commands::load_data_versioned,
             commands::save_data,
             commands::read_logs,
             commands::clear_logs,

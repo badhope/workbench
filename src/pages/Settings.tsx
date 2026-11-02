@@ -4,7 +4,7 @@ import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { isTauri } from "../lib/api";
 import { APP_VERSION, setLang, useLang, useT, type Lang } from "../lib/i18n";
-import { Badge, Btn, Card, Field, SectionTitle, inputCls } from "../ui";
+import { Badge, Btn, Card, ConfirmDialog, Field, SectionTitle, inputCls } from "../ui";
 import { AppearancePanel } from "../components/AppearancePanel";
 import { AutostartCard } from "../components/AutostartCard";
 import { BackupPanel } from "../components/BackupPanel";
@@ -70,7 +70,8 @@ export default function Settings() {
     refreshMs,
     setRefreshMs,
     data,
-    persistData,
+    persistDataNow,
+    discardUnsavedAndReload,
     setToast,
     refreshRuntime,
     // 成本
@@ -83,7 +84,8 @@ export default function Settings() {
       refreshMs: s.refreshMs,
       setRefreshMs: s.setRefreshMs,
       data: s.data,
-      persistData: s.persistData,
+      persistDataNow: s.persistDataNow,
+      discardUnsavedAndReload: s.discardUnsavedAndReload,
       setToast: s.setToast,
       refreshRuntime: s.refreshRuntime,
       costSettings: s.costSettings,
@@ -94,6 +96,7 @@ export default function Settings() {
   );
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const [confirmReload, setConfirmReload] = useState(false);
   const {
     draft: costDraft,
     dirty: costDirty,
@@ -120,7 +123,7 @@ export default function Settings() {
   const importJson = async (file: File) => {
     try {
       const parsed = parseBackup(await file.text(), t);
-      persistData(parsed);
+      if (!(await persistDataNow(parsed))) return;
       setToast(
         t("settings.imported", {
           projects: parsed.projects.length,
@@ -352,6 +355,15 @@ export default function Settings() {
                 <Btn onClick={() => fileRef.current?.click()}>
                   <Upload size={14} /> {t("settings.importJson")}
                 </Btn>
+                {isTauri() && (
+                  <Btn onClick={() => setConfirmReload(true)}>
+                    {lang === "zh"
+                      ? "放弃未保存更改并重新加载"
+                      : lang === "ja"
+                        ? "未保存の変更を破棄して再読込"
+                        : "Discard unsaved changes and reload"}
+                  </Btn>
+                )}
                 <input
                   ref={fileRef}
                   type="file"
@@ -387,6 +399,37 @@ export default function Settings() {
         </div>
       </div>
 
+      <ConfirmDialog
+        open={confirmReload}
+        title={
+          lang === "zh"
+            ? "放弃未保存更改？"
+            : lang === "ja"
+              ? "未保存の変更を破棄しますか？"
+              : "Discard unsaved changes?"
+        }
+        body={
+          lang === "zh"
+            ? "未保存的项目和任务将被丢弃。请先导出 JSON 备份，再确认重新加载磁盘数据。"
+            : lang === "ja"
+              ? "未保存のプロジェクトとタスクは失われます。先に JSON をエクスポートしてください。"
+              : "Unsaved projects and tasks will be discarded. Export JSON first, then reload disk data."
+        }
+        confirmLabel={
+          lang === "zh"
+            ? "放弃并重新加载"
+            : lang === "ja"
+              ? "破棄して再読込"
+              : "Discard and reload"
+        }
+        cancelLabel={t("settings.restoreCancel")}
+        danger
+        onCancel={() => setConfirmReload(false)}
+        onConfirm={() => {
+          setConfirmReload(false);
+          void discardUnsavedAndReload().catch((error) => setToast(String(error)));
+        }}
+      />
       {/* ── 关于 ── */}
       <Card className="">
         <SectionTitle>{t("settings.about")}</SectionTitle>
@@ -418,13 +461,39 @@ function parseBackup(text: string, t: (key: string) => string): WorkbenchData {
   if (!Array.isArray(parsed.projects) || !Array.isArray(parsed.tasks)) {
     throw new Error(t("settings.importBadStructure"));
   }
+  const stringArray = (value: unknown) =>
+    Array.isArray(value) && value.every((item) => typeof item === "string");
+  const uint = (value: unknown) =>
+    typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
   for (const p of parsed.projects) {
-    if (typeof p.id !== "string" || typeof p.name !== "string") {
+    if (
+      !p ||
+      typeof p.id !== "string" ||
+      typeof p.name !== "string" ||
+      typeof p.path !== "string" ||
+      typeof p.status !== "string" ||
+      !stringArray(p.tags) ||
+      typeof p.pinned !== "boolean" ||
+      typeof p.note !== "string" ||
+      !uint(p.created_at)
+    ) {
       throw new Error(t("settings.importBadProject"));
     }
   }
   for (const task of parsed.tasks) {
-    if (typeof task.id !== "string" || typeof task.title !== "string") {
+    if (
+      !task ||
+      typeof task.id !== "string" ||
+      typeof task.title !== "string" ||
+      typeof task.priority !== "string" ||
+      !stringArray(task.tags) ||
+      !uint(task.created_at) ||
+      !uint(task.updated_at) ||
+      (task.due !== null && task.due !== undefined && typeof task.due !== "string") ||
+      (task.project_id !== null &&
+        task.project_id !== undefined &&
+        typeof task.project_id !== "string")
+    ) {
       throw new Error(t("settings.importBadTask"));
     }
     if (!["todo", "doing", "done"].includes(task.status)) {

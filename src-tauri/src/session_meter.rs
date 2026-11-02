@@ -51,18 +51,26 @@ pub fn extract_usage(path: &str, mtime_day: &str) -> Vec<ModelUsage> {
     extract_usage_inner(path, mtime_day, false).unwrap_or_default()
 }
 
+#[cfg(test)]
 fn extract_usage_inner(
     path: &str,
     mtime_day: &str,
     strict: bool,
 ) -> Result<Vec<ModelUsage>, String> {
-    extract_usage_with_hook(path, mtime_day, strict, || {})
+    extract_usage_with_hook(
+        path,
+        mtime_day,
+        strict,
+        &mut ScanReadBudget::new(256 * 1024 * 1024),
+        || {},
+    )
 }
 
 fn extract_usage_with_hook(
     path: &str,
     mtime_day: &str,
     strict: bool,
+    budget: &mut ScanReadBudget,
     after_open: impl FnOnce(),
 ) -> Result<Vec<ModelUsage>, String> {
     let file = crate::ai::open_session_file(std::path::Path::new(path)).map_err(str::to_string)?;
@@ -70,7 +78,7 @@ fn extract_usage_with_hook(
         .metadata()
         .map_err(|_| "session file metadata error".to_string())?;
     after_open();
-    let mut reader = crate::ai::SessionReader::new(file);
+    let mut reader = crate::ai::SessionReader::with_budget(file, budget);
     // (day, model) -> 用量
     let mut by_day_model: HashMap<(String, String), UsageAgg> = HashMap::new();
     let mut chars_by_day: HashMap<String, usize> = HashMap::new();
@@ -357,14 +365,38 @@ fn scan_sessions_to_records(
     scan_complete_sessions(files, table).unwrap_or_default()
 }
 
+pub struct ScanReadBudget {
+    pub(crate) remaining: u64,
+}
+
+impl ScanReadBudget {
+    pub fn new(bytes: u64) -> Self {
+        Self { remaining: bytes }
+    }
+
+    pub fn remaining(&self) -> u64 {
+        self.remaining
+    }
+}
+
 pub fn scan_complete_sessions(
     files: &[SessionFileEntry],
     table: &PricingTable,
 ) -> Result<Vec<CostRecord>, String> {
+    scan_complete_sessions_with_budget(files, table, &mut ScanReadBudget::new(256 * 1024 * 1024))
+}
+
+pub fn scan_complete_sessions_with_budget(
+    files: &[SessionFileEntry],
+    table: &PricingTable,
+    budget: &mut ScanReadBudget,
+) -> Result<Vec<CostRecord>, String> {
     let mut records = Vec::new();
     for f in files {
         let mtime_day = unix_to_day(f.modified);
-        for ModelUsage { model, aggs } in extract_usage_inner(&f.path, &mtime_day, true)? {
+        for ModelUsage { model, aggs } in
+            extract_usage_with_hook(&f.path, &mtime_day, true, budget, || {})?
+        {
             let priced = table.is_priced(&model);
             for agg in aggs {
                 let (cost_inp, cost_out, cost_total) = table.calc_cost(
@@ -455,6 +487,113 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_file(&self.0);
         }
+    }
+
+    fn entry(fixture: &Fixture) -> SessionFileEntry {
+        SessionFileEntry {
+            path: fixture.0.to_string_lossy().into_owned(),
+            tool: "test".into(),
+            project: "test".into(),
+            modified: 1,
+            size: 0,
+        }
+    }
+
+    #[test]
+    fn shared_read_budget_counts_failed_and_buffered_reads() {
+        let bad = Fixture::new("!\n{}\n");
+        let good = Fixture::new("{}\n");
+        let mut budget = ScanReadBudget::new(8);
+        assert!(scan_complete_sessions_with_budget(
+            &[entry(&bad)],
+            &PricingTable::default(),
+            &mut budget
+        )
+        .is_err());
+        assert_eq!(budget.remaining(), 3);
+        assert!(scan_complete_sessions_with_budget(
+            &[entry(&good)],
+            &PricingTable::default(),
+            &mut budget
+        )
+        .is_ok());
+        assert_eq!(budget.remaining(), 0);
+        assert!(scan_complete_sessions_with_budget(
+            &[entry(&good)],
+            &PricingTable::default(),
+            &mut budget
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn shared_read_budget_enforces_exact_and_stale_size_boundaries() {
+        let fixture = Fixture::new("{}\n{}\n");
+        let mut exact = ScanReadBudget::new(6);
+        assert!(scan_complete_sessions_with_budget(
+            &[entry(&fixture)],
+            &PricingTable::default(),
+            &mut exact
+        )
+        .is_ok());
+        assert_eq!(exact.remaining(), 0);
+        let mut short = ScanReadBudget::new(5);
+        assert!(scan_complete_sessions_with_budget(
+            &[entry(&fixture)],
+            &PricingTable::default(),
+            &mut short
+        )
+        .is_err());
+        assert_eq!(short.remaining(), 0);
+        let mut empty = ScanReadBudget::new(0);
+        let empty_file = Fixture::new("");
+        assert!(scan_complete_sessions_with_budget(
+            &[entry(&empty_file)],
+            &PricingTable::default(),
+            &mut empty
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn shared_read_budget_counts_growth_after_open() {
+        let fixture = Fixture::new("{}\n");
+        let mut budget = ScanReadBudget::new(4);
+        let result = extract_usage_with_hook(
+            fixture.0.to_str().unwrap(),
+            "2026-01-01",
+            true,
+            &mut budget,
+            || {
+                use std::io::Write;
+                fs::OpenOptions::new()
+                    .append(true)
+                    .open(&fixture.0)
+                    .unwrap()
+                    .write_all(b"{}\n")
+                    .unwrap();
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!(budget.remaining(), 0);
+    }
+
+    #[test]
+    fn total_read_budget_rejects_stale_enumerated_sizes() {
+        let line = format!("\"{}\"\n", "x".repeat(128 * 1024 - 3));
+        let content = line.repeat(256);
+        let fixtures: Vec<_> = (0..9).map(|_| Fixture::new(&content)).collect();
+        let entries: Vec<_> = fixtures
+            .iter()
+            .map(|fixture| SessionFileEntry {
+                path: fixture.0.to_string_lossy().into_owned(),
+                tool: "test".into(),
+                project: "test".into(),
+                modified: 1,
+                size: 0,
+            })
+            .collect();
+        assert!(scan_complete_sessions(&entries, &PricingTable::default()).is_err());
     }
 
     #[test]
@@ -592,11 +731,17 @@ mod tests {
         use std::io::Write;
         let fixture = Fixture::new("{\"usage\":{\"input_tokens\":1}}\n");
         let path = fixture.0.to_str().unwrap();
-        let result = extract_usage_with_hook(path, "2026-01-01", true, || {
-            let mut file = fs::OpenOptions::new().append(true).open(path).unwrap();
-            file.write_all(b" ").unwrap();
-            file.flush().unwrap();
-        });
+        let result = extract_usage_with_hook(
+            path,
+            "2026-01-01",
+            true,
+            &mut ScanReadBudget::new(256 * 1024 * 1024),
+            || {
+                let mut file = fs::OpenOptions::new().append(true).open(path).unwrap();
+                file.write_all(b" ").unwrap();
+                file.flush().unwrap();
+            },
+        );
         assert!(result.is_err());
     }
 

@@ -59,11 +59,17 @@ describe("命令名与参数", () => {
   });
 
   it("数据读写", async () => {
+    const requiresGeneration: Parameters<typeof api.saveData> extends [unknown, string]
+      ? true
+      : false = true;
+    expect(requiresGeneration).toBe(true);
     await api.loadData();
     expect(invokeMock).toHaveBeenLastCalledWith("load_data");
     const data = { projects: [], tasks: [] };
-    await api.saveData(data);
-    expect(invokeMock).toHaveBeenLastCalledWith("save_data", { data });
+    await api.loadDataVersioned();
+    expect(invokeMock).toHaveBeenLastCalledWith("load_data_versioned");
+    await api.saveData(data, "12");
+    expect(invokeMock).toHaveBeenLastCalledWith("save_data", { data, generation: "12" });
   });
 
   it("git 分支", async () => {

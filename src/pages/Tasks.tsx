@@ -105,8 +105,7 @@ export default function Tasks() {
     setTaskDraft((d) => (d ? { ...d, ...patch } : d));
 
   const commitTask = () => {
-    if (taskDraft) updateTask(taskDraft.id, taskDraft);
-    setTaskDraft(null);
+    if (taskDraft && updateTask(taskDraft.id, taskDraft)) setTaskDraft(null);
   };
 
   // ── 图表：优先级分布 ──────────────────────────────────────
@@ -300,8 +299,11 @@ export default function Tasks() {
                 onAdd={() => {
                   const title = (drafts[col.key] ?? "").trim();
                   if (!title) return;
-                  addTask({ title, status: col.key, project_id: projectFilter || null });
-                  setDrafts((d) => ({ ...d, [col.key]: "" }));
+                  if (
+                    addTask({ title, status: col.key, project_id: projectFilter || null })
+                  ) {
+                    setDrafts((d) => ({ ...d, [col.key]: "" }));
+                  }
                 }}
               >
                 {tasks.length === 0 ? (

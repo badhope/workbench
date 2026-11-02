@@ -541,13 +541,46 @@ pub async fn load_data(
     Ok(data)
 }
 
+#[derive(Serialize)]
+pub struct VersionedWorkbenchData {
+    data: WorkbenchData,
+    generation: String,
+}
+
+#[tauri::command(async)]
+pub async fn load_data_versioned(
+    app: AppHandle,
+    dirs: tauri::State<'_, KnownDirs>,
+) -> Result<VersionedWorkbenchData, String> {
+    let snapshot = tauri::async_runtime::spawn_blocking(move || {
+        let _guard = lock_ledger_operation()?;
+        let data = data::load_from_disk(&app)?;
+        let generation = DATA_RESTORE_GENERATION.load(std::sync::atomic::Ordering::Acquire);
+        Ok::<_, String>(VersionedWorkbenchData {
+            data,
+            generation: generation.to_string(),
+        })
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))??;
+    let paths = snapshot
+        .data
+        .projects
+        .iter()
+        .map(|p| p.path.clone())
+        .collect();
+    dirs.record_validated_blocking(paths).await?;
+    Ok(snapshot)
+}
+
 #[tauri::command(async)]
 pub async fn save_data(
     app: AppHandle,
     dirs: tauri::State<'_, KnownDirs>,
     data: WorkbenchData,
-) -> Result<(), String> {
-    let generation = DATA_RESTORE_GENERATION.load(std::sync::atomic::Ordering::Acquire);
+    generation: Option<String>,
+) -> Result<String, String> {
+    let started = DATA_RESTORE_GENERATION.load(std::sync::atomic::Ordering::Acquire);
     log::debug!(
         "持久化数据: {} 项目 {} 任务",
         data.projects.len(),
@@ -562,8 +595,12 @@ pub async fn save_data(
     let app2 = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = lock_ledger_operation()?;
-        ensure_restore_generation(generation, &DATA_RESTORE_GENERATION)?;
-        data::save_to_disk(&app2, &data)
+        save_with_restore_generation(
+            generation.as_deref(),
+            started,
+            &DATA_RESTORE_GENERATION,
+            || data::save_to_disk(&app2, &data),
+        )
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
@@ -593,9 +630,30 @@ fn ensure_restore_generation(
     current: &std::sync::atomic::AtomicU64,
 ) -> Result<(), String> {
     if current.load(std::sync::atomic::Ordering::Acquire) != generation {
-        return Err("数据已恢复，请重新加载后再保存".to_string());
+        return Err("数据已被其他操作修改；请先导出未保存数据，再重新加载".to_string());
     }
     Ok(())
+}
+
+fn save_with_restore_generation(
+    supplied: Option<&str>,
+    started: u64,
+    current: &std::sync::atomic::AtomicU64,
+    save: impl FnOnce() -> Result<(), String>,
+) -> Result<String, String> {
+    ensure_restore_generation(started, current)?;
+    let actual = current.load(std::sync::atomic::Ordering::Acquire);
+    let supplied =
+        supplied.ok_or_else(|| "旧版保存协议不可用，请先导出未保存数据并升级客户端".to_string())?;
+    if supplied.parse::<u64>().ok() != Some(actual) {
+        return Err("数据已被其他操作修改；请先导出未保存数据，再重新加载".to_string());
+    }
+    let next = actual
+        .checked_add(1)
+        .ok_or_else(|| "数据版本已耗尽，拒绝保存".to_string())?;
+    save()?;
+    current.store(next, std::sync::atomic::Ordering::Release);
+    Ok(next.to_string())
 }
 
 fn lock_ledger_operation() -> Result<std::sync::MutexGuard<'static, ()>, String> {
@@ -666,19 +724,14 @@ pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String
         // 各 32 MiB 就是 312 GiB，长时间持锁且拖慢整个应用。到顶后剩余文件
         // 按失败上报（保留旧账），不静默截断成"扫描成功"。
         const SCAN_TOTAL_BYTES: u64 = 256 * 1024 * 1024;
-        let mut bytes_budget = SCAN_TOTAL_BYTES;
+        let mut bytes_budget = session_meter::ScanReadBudget::new(SCAN_TOTAL_BYTES);
         for entry in &entries {
-            if entry.size > bytes_budget {
-                errors.push(format!(
-                    "{}: 本次扫描总读取量已达上限，其余文件本次跳过",
-                    entry.project
-                ));
-                continue;
-            }
-            match session_meter::scan_complete_sessions(std::slice::from_ref(entry), &pricing_table)
-            {
+            match session_meter::scan_complete_sessions_with_budget(
+                std::slice::from_ref(entry),
+                &pricing_table,
+                &mut bytes_budget,
+            ) {
                 Ok(file_records) => {
-                    bytes_budget = bytes_budget.saturating_sub(entry.size);
                     records.extend(file_records);
                     scanned_paths.push(entry.path.clone());
                 }
@@ -1008,6 +1061,19 @@ pub async fn restore_backup(app: AppHandle, id: String) -> Result<RestoreResult,
     .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
+fn validate_restore_json(name: &str, text: &str) -> Result<(), String> {
+    let value: serde_json::Value =
+        serde_json::from_str(text).map_err(|e| format!("备份 {name} 不是合法 JSON: {e}"))?;
+    if !value.is_object() {
+        return Err(format!("备份 {name} 顶层不是对象，拒绝恢复"));
+    }
+    if name == "data.json" {
+        serde_json::from_value::<WorkbenchData>(value)
+            .map_err(|e| format!("备份 {name} 数据格式不兼容，拒绝恢复: {e}"))?;
+    }
+    Ok(())
+}
+
 fn restore_now(app: &AppHandle, id: &str) -> Result<RestoreResult, String> {
     if !is_backup_id(id) {
         return Err("非法的备份 id".to_string());
@@ -1017,11 +1083,6 @@ fn restore_now(app: &AppHandle, id: &str) -> Result<RestoreResult, String> {
         return Err(format!("备份不存在: {id}"));
     }
 
-    // 1) 先校验源备份：合法 JSON 且顶层是对象。
-    //    顺序很重要——若先做安全备份再发现源备份坏了，会留下一个没用的
-    //    备份点，而用户以为恢复已经发生。这里只校验不落盘。
-    //    不反序列化到具体结构：旧版本备份可能缺新字段，硬反序列化会
-    //    拒绝掉本来可用的备份。
     let mut plan: Vec<(&'static str, std::path::PathBuf, std::path::PathBuf)> = Vec::new();
     let mut untouched = Vec::new();
     for (name, dest) in data_files(app) {
@@ -1038,11 +1099,7 @@ fn restore_now(app: &AppHandle, id: &str) -> Result<RestoreResult, String> {
         } else {
             let text =
                 std::fs::read_to_string(&src).map_err(|e| format!("读取备份 {name} 失败: {e}"))?;
-            let value: serde_json::Value = serde_json::from_str(&text)
-                .map_err(|e| format!("备份 {name} 不是合法 JSON: {e}"))?;
-            if !value.is_object() {
-                return Err(format!("备份 {name} 顶层不是对象，拒绝恢复"));
-            }
+            validate_restore_json(name, &text)?;
         }
         plan.push((name, src, dest));
     }
@@ -1061,6 +1118,14 @@ fn restore_now(app: &AppHandle, id: &str) -> Result<RestoreResult, String> {
         }
         let tmp = dest.with_extension("restore-tmp");
         std::fs::copy(&src, &tmp).map_err(|e| format!("复制 {name} 失败: {e}"))?;
+        if name == "data.json" {
+            let text =
+                std::fs::read_to_string(&tmp).map_err(|e| format!("读取备份 {name} 失败: {e}"))?;
+            if let Err(error) = validate_restore_json(name, &text) {
+                let _ = std::fs::remove_file(&tmp);
+                return Err(error);
+            }
+        }
         std::fs::rename(&tmp, &dest).map_err(|e| format!("替换 {name} 失败: {e}"))?;
         if name == "data.json" {
             DATA_RESTORE_GENERATION.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
@@ -1200,6 +1265,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn malformed_workbench_backup_must_not_replace_good_data() {
+        let dir = std::env::temp_dir().join(format!("wb-schema-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let dest = dir.join("data.json");
+        let src = dir.join("backup.json");
+        let good = r#"{"projects":[],"tasks":[]}"#;
+        std::fs::write(&dest, good).unwrap();
+        std::fs::write(&src, r#"{"projects":[{"id":"x"}],"tasks":[]}"#).unwrap();
+        let text = std::fs::read_to_string(&src).unwrap();
+        assert!(validate_restore_json("data.json", &text).is_err());
+        assert!(validate_restore_json("data.json", good).is_ok());
+        assert!(validate_restore_json("data.json", r#"{"projects":[],"tasks":[{"id":"t","title":"T","status":"todo","priority":"normal","tags":[],"created_at":1,"updated_at":2}]}"#).is_ok());
+        assert!(validate_restore_json(
+            "data.json",
+            r#"{"projects":[],"tasks":[{"id":"t","title":"T","status":"todo"}]}"#
+        )
+        .is_err());
+        let actual = std::fs::read_to_string(&dest).unwrap();
+        std::fs::remove_dir_all(dir).unwrap();
+        assert_eq!(actual, good);
+    }
+
+    #[test]
     fn corrupt_pricing_repeated_reads_fail_without_losing_source() {
         let dir = std::env::temp_dir().join(format!("wb-pricing-retry-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -1218,6 +1306,127 @@ mod tests {
         assert_eq!(source.unwrap(), "{broken");
         assert_eq!(repaired.overrides.get("example-model"), Some(&(1.0, 2.0)));
         assert!(missing.overrides.is_empty());
+    }
+
+    #[test]
+    fn same_generation_saves_do_not_overwrite_each_other() {
+        use std::sync::atomic::AtomicU64;
+        let version = AtomicU64::new(0);
+        let mut disk = String::from("initial");
+        save_with_restore_generation(Some("0"), 0, &version, || {
+            disk = "first".into();
+            Ok(())
+        })
+        .unwrap();
+        let second = save_with_restore_generation(Some("0"), 0, &version, || {
+            disk = "second".into();
+            Ok(())
+        });
+        assert!(second.is_err());
+        assert_eq!(disk, "first");
+    }
+
+    #[test]
+    fn concurrent_same_generation_writes_only_one_snapshot() {
+        use std::sync::{atomic::AtomicU64, Arc, Barrier, Mutex};
+        let version = Arc::new(AtomicU64::new(0));
+        let disk = Arc::new(Mutex::new(String::from("initial")));
+        let start = Arc::new(Barrier::new(2));
+        let lock = Arc::new(Mutex::new(()));
+        let workers: Vec<_> = ["first", "second"]
+            .into_iter()
+            .map(|value| {
+                let version = version.clone();
+                let disk = disk.clone();
+                let start = start.clone();
+                let lock = lock.clone();
+                std::thread::spawn(move || {
+                    start.wait();
+                    let _guard = lock.lock().unwrap();
+                    save_with_restore_generation(Some("0"), 0, &version, || {
+                        *disk.lock().unwrap() = value.into();
+                        Ok(())
+                    })
+                })
+            })
+            .collect();
+        let results: Vec<_> = workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .collect();
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        let winner = disk.lock().unwrap().clone();
+        assert!(winner == "first" || winner == "second");
+        assert_eq!(
+            results
+                .iter()
+                .find_map(|result| result.as_ref().ok())
+                .unwrap(),
+            "1"
+        );
+    }
+
+    #[test]
+    fn failed_save_does_not_advance_generation() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        let version = AtomicU64::new(0);
+        assert!(
+            save_with_restore_generation(Some("0"), 0, &version, || Err("disk".into())).is_err()
+        );
+        assert_eq!(version.load(Ordering::Acquire), 0);
+        assert_eq!(
+            save_with_restore_generation(Some("0"), 0, &version, || Ok(())).unwrap(),
+            "1"
+        );
+    }
+
+    #[test]
+    fn legacy_save_requires_explicit_migration_before_any_write() {
+        use std::sync::atomic::AtomicU64;
+        let version = AtomicU64::new(0);
+        let mut disk = String::from("original");
+        let result = save_with_restore_generation(None, 0, &version, || {
+            disk = "legacy".into();
+            Ok(())
+        });
+        assert!(result.is_err());
+        assert_eq!(disk, "original");
+    }
+
+    #[test]
+    fn stale_frontend_save_after_restore_preserves_restored_fixture() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        let dir = std::env::temp_dir().join(format!("wb-restore-fixture-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("data.json");
+        let version = AtomicU64::new(0);
+        let client_generation = version.load(Ordering::Acquire).to_string();
+        let stale = r#"{"projects":[],"tasks":["old"]}"#;
+        let restored = r#"{"projects":[],"tasks":["restored"]}"#;
+        std::fs::write(&path, restored).unwrap();
+        version.fetch_add(1, Ordering::AcqRel);
+        let request_generation = version.load(Ordering::Acquire);
+        let stale_result = save_with_restore_generation(
+            Some(&client_generation),
+            request_generation,
+            &version,
+            || std::fs::write(&path, stale).map_err(|e| e.to_string()),
+        );
+        assert!(stale_result.is_err());
+        let legacy_result =
+            save_with_restore_generation(None, request_generation, &version, || {
+                std::fs::write(&path, stale).map_err(|e| e.to_string())
+            });
+        assert!(legacy_result.is_err());
+        let actual = std::fs::read_to_string(&path).unwrap();
+        let current = version.load(Ordering::Acquire).to_string();
+        save_with_restore_generation(Some(&current), request_generation, &version, || {
+            std::fs::write(&path, "new").map_err(|e| e.to_string())
+        })
+        .unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "new");
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(actual, restored, "stale client overwrote restored data");
     }
 
     #[test]

@@ -493,24 +493,78 @@ pub(crate) fn check_session_unchanged(
     Ok(())
 }
 
-pub(crate) struct SessionReader {
-    reader: std::io::BufReader<std::io::Take<fs::File>>,
+struct BudgetedSessionFile<'a> {
+    file: fs::File,
+    budget: Option<&'a mut crate::session_meter::ScanReadBudget>,
+    position: u64,
+}
+
+impl std::io::Read for BudgetedSessionFile<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        use std::io::Error;
+        if buf.is_empty() {
+            return Ok(0);
+        }
+        let limit = match self.budget.as_ref() {
+            Some(budget) if budget.remaining == 0 => {
+                if self.file.metadata()?.len() > self.position {
+                    return Err(Error::other("session scan read budget exceeded"));
+                }
+                return Ok(0);
+            }
+            Some(budget) => buf
+                .len()
+                .min(budget.remaining.min(usize::MAX as u64) as usize),
+            None => buf.len(),
+        };
+        let count = self.file.read(&mut buf[..limit])?;
+        self.position += count as u64;
+        if let Some(budget) = self.budget.as_mut() {
+            budget.remaining -= count as u64;
+        }
+        Ok(count)
+    }
+}
+
+pub(crate) struct SessionReader<'a> {
+    reader: std::io::BufReader<std::io::Take<BudgetedSessionFile<'a>>>,
     bytes: usize,
     lines: usize,
 }
 
-impl SessionReader {
+impl<'a> SessionReader<'a> {
     pub(crate) fn new(file: fs::File) -> Self {
+        Self::with_optional_budget(file, None)
+    }
+
+    pub(crate) fn with_budget(
+        file: fs::File,
+        budget: &'a mut crate::session_meter::ScanReadBudget,
+    ) -> Self {
+        Self::with_optional_budget(file, Some(budget))
+    }
+
+    fn with_optional_budget(
+        file: fs::File,
+        budget: Option<&'a mut crate::session_meter::ScanReadBudget>,
+    ) -> Self {
         use std::io::Read;
         Self {
-            reader: std::io::BufReader::new(file.take(32 * 1024 * 1024 + 1)),
+            reader: std::io::BufReader::new(
+                BudgetedSessionFile {
+                    file,
+                    budget,
+                    position: 0,
+                }
+                .take(32 * 1024 * 1024 + 1),
+            ),
             bytes: 0,
             lines: 0,
         }
     }
 
     pub(crate) fn file(&self) -> &fs::File {
-        self.reader.get_ref().get_ref()
+        &self.reader.get_ref().get_ref().file
     }
 
     pub(crate) fn next_line(&mut self) -> Result<Option<String>, &'static str> {

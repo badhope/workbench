@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CostDashboard } from "./CostDashboard";
 import { useStore } from "../../lib/store";
@@ -118,6 +118,34 @@ describe("保存价格后重算账单", () => {
 
     // 覆盖角标由 pricing.refresh() 重新读取 getPricing 得到
     expect(await screen.findByText("已覆盖 1 个型号的价格")).toBeInTheDocument();
+  });
+
+  it("扫描期间保存价格会在旧扫描结束后刷新为新价格", async () => {
+    useStore.setState({ costOverview: overview(1) });
+    let finish!: (value: Awaited<ReturnType<typeof scanSessionCosts>>) => void;
+    vi.mocked(scanSessionCosts).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+    render(<CostDashboard />);
+    await screen.findByText("gpt-test");
+    await userEvent.click(
+      screen.getByTitle("扫描 session 文件提取 token 用量并计算成本")
+    );
+    await editAndSavePrice();
+    expect(scanSessionCosts).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      finish({
+        new_records: 0,
+        total_scanned: 1,
+        overview: overview(1),
+        trend: [],
+        model_breakdown: [],
+      });
+    });
+    await waitFor(() => expect(screen.getAllByText("$12.34").length).toBeGreaterThan(0));
+    expect(scanSessionCosts).toHaveBeenCalledTimes(2);
   });
 
   it("保存失败时展示错误且不触发扫描、不刷新角标", async () => {

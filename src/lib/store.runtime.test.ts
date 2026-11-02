@@ -9,6 +9,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 const api = {
   loadData: vi.fn(),
+  loadDataVersioned: vi.fn(),
+  restoreBackup: vi.fn(),
   saveData: vi.fn(),
   listProcesses: vi.fn(),
   listPorts: vi.fn(),
@@ -199,7 +201,7 @@ describe("loadAll", () => {
   });
 
   it("桌面模式读盘失败时提示，但仍继续刷新运行时", async () => {
-    api.loadData.mockRejectedValue(new Error("corrupt"));
+    api.loadDataVersioned.mockRejectedValue(new Error("corrupt"));
     api.listProcesses.mockResolvedValue([proc()]);
     api.listPorts.mockResolvedValue([]);
     api.listDevServers.mockResolvedValue([]);
@@ -467,6 +469,95 @@ describe("成本动作", () => {
     expect(useStore.getState().costOverview).toEqual({ today_cost: 2 });
   });
 
+  it("loading 订阅者同步请求补扫时不会丢失请求", async () => {
+    let finish!: (value: unknown) => void;
+    api.scanSessionCosts
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+      )
+      .mockResolvedValueOnce({
+        total_scanned: 1,
+        overview: { today_cost: 2 },
+        trend: [],
+        model_breakdown: [],
+      });
+    const unsubscribe = useStore.subscribe((state, previous) => {
+      if (state.costLoading && !previous.costLoading) {
+        void state.scanCosts({ afterCurrent: true });
+      }
+    });
+    try {
+      const scan = useStore.getState().scanCosts();
+      expect(api.scanSessionCosts).toHaveBeenCalledTimes(1);
+      finish({
+        total_scanned: 1,
+        overview: { today_cost: 1 },
+        trend: [],
+        model_breakdown: [],
+      });
+      await scan;
+      expect(api.scanSessionCosts).toHaveBeenCalledTimes(2);
+      expect(useStore.getState().costOverview).toEqual({ today_cost: 2 });
+      expect(useStore.getState().costLoading).toBe(false);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it("价格多次变更合并补扫，补扫期间变更再补一次且手工重入不排队", async () => {
+    const resolvers: ((v: unknown) => void)[] = [];
+    api.scanSessionCosts.mockImplementation(
+      () => new Promise((resolve) => resolvers.push(resolve))
+    );
+    const result = (cost: number) => ({
+      total_scanned: 1,
+      overview: { today_cost: cost },
+      trend: [],
+      model_breakdown: [],
+    });
+    const first = useStore.getState().scanCosts();
+    void useStore.getState().scanCosts({ afterCurrent: true });
+    void useStore.getState().scanCosts({ afterCurrent: true });
+    void useStore.getState().scanCosts();
+    expect(resolvers).toHaveLength(1);
+    resolvers[0](result(1));
+    await vi.waitFor(() => expect(resolvers).toHaveLength(2));
+    expect(useStore.getState().costLoading).toBe(true);
+    void useStore.getState().scanCosts({ afterCurrent: true });
+    void useStore.getState().scanCosts({ afterCurrent: true });
+    resolvers[1](result(2));
+    await vi.waitFor(() => expect(resolvers).toHaveLength(3));
+    resolvers[2](result(3));
+    await first;
+    expect(useStore.getState().costOverview).toEqual({ today_cost: 3 });
+    expect(useStore.getState().costLoading).toBe(false);
+    expect(api.scanSessionCosts).toHaveBeenCalledTimes(3);
+  });
+
+  it("旧扫描失败后仍补扫，补扫失败可见且不会无限重试", async () => {
+    let rejectFirst!: (reason: Error) => void;
+    api.scanSessionCosts
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        })
+      )
+      .mockRejectedValueOnce(new Error("rescan failed"));
+    api.getCostOverview.mockResolvedValue(null);
+    api.getCostTrend.mockResolvedValue([]);
+    api.getModelBreakdown.mockResolvedValue([]);
+    api.getCostSettings.mockResolvedValue(useStore.getState().costSettings);
+    const first = useStore.getState().scanCosts();
+    void useStore.getState().scanCosts({ afterCurrent: true });
+    rejectFirst(new Error("initial failed"));
+    await first;
+    expect(api.scanSessionCosts).toHaveBeenCalledTimes(2);
+    expect(useStore.getState().toast).toContain("rescan failed");
+    expect(useStore.getState().costLoading).toBe(false);
+  });
+
   it("扫描部分提交后失败时重新读取成本视图并保留扫描错误", async () => {
     const overview = { today_cost: 7 };
     const trend = [{ date: "2026-01-01", cost: 7 }];
@@ -596,6 +687,20 @@ describe("预算告警", () => {
  * 是最难发现的一类。
  */
 describe("数据重载与持久化", () => {
+  beforeEach(async () => {
+    api.restoreBackup.mockResolvedValue({
+      safety_backup: "fixture",
+      restored: [],
+      untouched: [],
+    });
+    api.loadDataVersioned.mockResolvedValue({
+      data: { projects: [], tasks: [] },
+      generation: "0",
+    });
+    await useStore.getState().restoreData("20261101-000000");
+    api.saveData.mockClear();
+  });
+
   it("updateProject 只改目标项目", () => {
     useStore.setState({
       data: {

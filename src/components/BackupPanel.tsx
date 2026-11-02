@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Archive, FolderOpen, History, RotateCcw } from "lucide-react";
-import {
-  backupData,
-  isTauri,
-  listBackups,
-  openBackupDir,
-  restoreBackup,
-} from "../lib/api";
+import { isTauri, listBackups, openBackupDir } from "../lib/api";
+import { useStore } from "../lib/store";
 import { useT } from "../lib/i18n";
 import { Badge, Btn, Card, ConfirmDialog, SectionTitle } from "../ui";
 import type { BackupPoint } from "../types";
@@ -25,6 +20,8 @@ import type { BackupPoint } from "../types";
  */
 export function BackupPanel() {
   const t = useT();
+  const restoreData = useStore((state) => state.restoreData);
+  const backupCurrentData = useStore((state) => state.backupCurrentData);
   const [points, setPoints] = useState<BackupPoint[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -62,7 +59,7 @@ export function BackupPanel() {
   const doBackup = async () => {
     setBusy(true);
     try {
-      const r = await backupData();
+      const r = await backupCurrentData();
       setError("");
       await refresh();
       return r;
@@ -132,6 +129,7 @@ export function BackupPanel() {
                 <button
                   type="button"
                   className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10.5px] text-accent hover:underline"
+                  disabled={busy}
                   onClick={() => setPending(p)}
                 >
                   <RotateCcw size={10} /> {t("settings.restore")}
@@ -158,7 +156,7 @@ export function BackupPanel() {
           setPending(null);
           if (!target) return;
           setBusy(true);
-          void restoreBackup(target.id)
+          void restoreData(target.id)
             .then((r) => {
               setError("");
               void refresh();

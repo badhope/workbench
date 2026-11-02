@@ -31,10 +31,8 @@ const steps = [
   { name: "Lint", cmd: "npm", args: ["run", "lint"] },
   { name: "Format check", cmd: "npx", args: ["prettier", "--check", "."] },
   { name: "Duplication < 3%", cmd: "npm", args: ["run", "dup"] },
-  // CI 目前没有 npm audit（SECURITY.md 如实记录了这一点），这一步是本地的
-  // 额外门禁。只审计生产依赖：devDependencies 不进安装包，全量审计目前有
-  // 1 个 high 告警来自 dev 传递依赖，把它当发布门禁会逼人加 || true。
-  // 失败一律非 0 —— 包括 registry 不支持 audit 接口的情况，见 runAudit。
+  // 与 CI 一致，只审计生产依赖并以 high 为失败阈值。
+  // 本地 registry 不可用时会尝试官方 registry；仍不可用则失败，见 runAudit。
   { name: "npm audit (prod, >=high)", custom: runAudit },
   // 与 ci.yml 一致：一次 coverage 同时跑单元测试并执行阈值。
   // 阈值写在 vitest.config.mts，普通 `npm test` 不会触发。

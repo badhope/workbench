@@ -15,6 +15,8 @@
 项目与任务，以及 Claude Code / Codex 会话到底花了多少钱。数据不出本机，没有账号、
 没有云端、不需要配置模型。
 
+数据保存 IPC 已改为版本校验：调用方必须先通过 `load_data_versioned` 获取 generation，再将其传给 `save_data`；每次成功保存后，使用返回的新 generation 进行下一次保存。无 generation 的旧保存调用会被拒绝。升级旧客户端前，请先导出尚未保存的数据。
+
 ## 与同类工具的不同
 
 | | |
