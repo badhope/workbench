@@ -261,7 +261,8 @@ whether to run it. Release asset availability and signing have not been verified
 
 ## Roadmap
 
-Done and planned. Vote or propose new ideas in the Issues.
+The authoritative plan — including what is explicitly **not** planned and how a
+release is cut — lives in [ROADMAP.md](ROADMAP.md). Summary:
 
 - [x] Real-time process / port / dev-server monitoring
 - [x] AI session cost metering with budget alerts

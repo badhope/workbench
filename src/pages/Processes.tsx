@@ -419,8 +419,11 @@ function ViewToggle({
 
 /** 直方图选项：0 值不显示标签（标签会贴在轴上像散落字符）。 */
 function histogram(bins: Bucket[], palette: string[]) {
+  // 柱顶的数值标签也要占高度。轴上限若正好等于最大值，标签会压在最高那条
+  // 刻度上（实测 max=4 时柱顶的 "4" 与 Y 轴刻度 "4" 重叠）。留一格余量。
+  const peak = Math.max(...bins.map((b) => b.count), 1);
   return {
-    grid: { left: 36, right: 16, top: 12, bottom: 24 },
+    grid: { left: 36, right: 16, top: 20, bottom: 24 },
     tooltip: { trigger: "axis" },
     xAxis: {
       type: "category",
@@ -429,8 +432,12 @@ function histogram(bins: Bucket[], palette: string[]) {
     },
     yAxis: {
       type: "value",
+      minInterval: 1,
+      max: peak + 1,
       axisLabel: { fontSize: 9 },
-      splitLine: { lineStyle: { type: "dashed" } },
+      // 柱顶已经有精确数值标签，再画水平网格线会让虚线直接穿过那几位数字
+      // （实测 "4" 被网格线划成两半）。这里关掉网格线，读数以标签为准。
+      splitLine: { show: false },
     },
     series: [
       {

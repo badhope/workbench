@@ -18,8 +18,8 @@ import { dict as logs } from "./logs";
 
 export type Lang = "en" | "zh" | "ja";
 
-/** 应用版本号：版本发布时手动同步 package.json / tauri.conf.json 与发布产物命名 */
-export const APP_VERSION = "0.3.0";
+/** 应用版本号：构建时由 vite.config.ts 从 package.json 注入，不在这里手抄 */
+export const APP_VERSION = __APP_VERSION__;
 
 type Dict = Record<string, string>;
 

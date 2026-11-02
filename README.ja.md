@@ -2,10 +2,10 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | **日本語**
 
-[![Release](https://img.shields.io/github/v/release/X33834/workbench?color=22d3ee&label=release)](https://github.com/X33834/workbench/releases/latest)
-[![License](https://img.shields.io/github/license/X33834/workbench?color=34d399)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.4.0-22d3ee)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.ja.md#システム要件)
-[![CI](https://github.com/X33834/workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/X33834/workbench/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-408%20unit%20%2B%20131%20backend-8b5cf6)](#品質ゲート)
 
 ![Workbench](docs/screenshots/12-brand-hero.png)
 
@@ -73,6 +73,23 @@
 | **三言語 UI** | 简体中文（既定）/ English / 日本語 |
 | **クロスプラットフォーム** | CI に Windows / Linux / macOS のジョブを定義。Linux `.deb` と macOS `.app` のビルドを含む |
 
+## 品質ゲート
+
+このリポジトリの主張は、コマンドで検証できるものだけです。ローカル
+（`node scripts/ci-local.mjs`）と CI は同じ手順を実行します:
+
+| ゲート | 検出するもの |
+|--------|--------------|
+| `npm run version:check` | 4 か所のバージョン番号のずれ |
+| `npx tsc --noEmit` | 型エラー（生成された IPC 契約を含む） |
+| `npm run lint` · `npm run format:check` | ESLint 警告ゼロ、Prettier 整形 |
+| `npm run dup` | 重複コード 3% 超 |
+| `npm run coverage` | フロントエンド 408 テスト、カバレッジ閾値付き |
+| `cargo test` | バックエンド 131 テスト + ts-rs バインディング出力 |
+| `cargo clippy -- -D warnings` | Rust lint、警告ゼロ |
+| `npm audit` · `cargo audit` | 両方の依存ツリーの既知脆弱性 |
+| `npm run test:e2e` | Playwright 28 ケース: 構造、WCAG AA コントラスト、視覚ベースライン |
+
 ## ダウンロード
 
 利用可能なバージョンとアセットは Release ページで確認してください。リリースワークフローには
@@ -83,9 +100,9 @@ Release ページ:
 
 | ミラー | Release ページ |
 |--------|----------------|
-| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) |
-| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) |
 | GitCode | [gitcode.com/badhope/workbench/releases](https://gitcode.com/badhope/workbench/releases) |
+| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) |
+| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) |
 
 ## ビルド
 

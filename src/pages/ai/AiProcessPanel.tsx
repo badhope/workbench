@@ -44,11 +44,16 @@ export function AiProcessPanel() {
 
   const aiMemChart = useMemo(() => {
     const sorted = [...ais].sort((a, b) => b.memory - a.memory).slice(0, 8);
+    const values = sorted.map((a) => Math.round(a.memory / 1024 / 1024));
+    // 条形末端还要放 "NNN MB" 标签。若轴上限正好等于最大值，标签会压在
+    // 最右一个刻度上（实测 180 MB 与刻度 180 重叠成一团）。留 30% 余量。
+    const peak = Math.max(...values, 1);
     return {
-      grid: { left: 90, right: 40, top: 8, bottom: 8 },
+      grid: { left: 90, right: 56, top: 8, bottom: 8 },
       tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
       xAxis: {
         type: "value",
+        max: Math.ceil((peak * 1.3) / 10) * 10,
         axisLabel: { fontSize: 10 },
         splitLine: { lineStyle: { type: "dashed" } },
       },
@@ -66,7 +71,7 @@ export function AiProcessPanel() {
         {
           id: "ai-memory",
           type: "bar",
-          data: sorted.map((a) => Math.round(a.memory / 1024 / 1024)),
+          data: values,
           barWidth: 14,
           label: { show: true, position: "right", fontSize: 10, formatter: "{c} MB" },
         },

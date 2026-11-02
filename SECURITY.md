@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-The current project version is `0.3.0`. A security-fix support policy for
+The current project version is `0.4.0`. A security-fix support policy for
 specific versions has not been confirmed.
 
 ## Reporting a vulnerability

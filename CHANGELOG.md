@@ -3,6 +3,58 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-11-02
+
+### Added
+
+- **Bounded session scanning with a real report.** Walking `~/.claude/projects`
+  and `~/.codex/sessions` now enforces depth, entry, file-count, per-file byte,
+  per-line byte and total-byte budgets, never follows symlinks or NTFS reparse
+  points, and verifies that the file it opened is the file it inspected. Every
+  skipped entry is reported as a `ScanIssue` instead of being dropped: the UI can
+  now distinguish "no sessions" from "the scan gave up". `ScanLimits` and the
+  `SessionScanReport` shape live in `src-tauri/src/ai.rs`.
+- **Content fingerprints replace the (path, mtime, size) cache key.** Two scans of
+  a file whose size and modification second did not change now produce a new
+  fingerprint and replace the stored snapshot, so a same-size rewrite is no
+  longer billed as stale. Parser and pricing generations are part of the key, and
+  bumping either invalidates the whole incremental cache.
+- **Pricing edits invalidate the ledger.** Saving an override now bumps a pricing
+  generation and the cost dashboard rescans, so displayed totals follow the new
+  prices instead of silently keeping the old ones.
+- **Explicit restore path for user data.** `store.restore.test.ts` and
+  `Settings.restore.test.tsx` cover refusal, confirmation and post-restore state;
+  drafts survive navigation (`DraftPersistence.test.tsx`), and a rejected import
+  no longer reports success.
+- **`scripts/release-workflow.test.mjs`** asserts that the release workflow gates
+  on tag/version consistency, non-empty artifacts and checksums.
+
+### Changed
+
+- **Malformed token values fail the file instead of counting as zero usage.**
+  Previously an unparseable `usage` field was billed as 0, which silently
+  under-reported spend. Token arithmetic is range-checked against SQLite's i64
+  before it is written.
+- **A 256 MiB read budget per scan** bounds total work. Files beyond the budget
+  are reported as failures and keep their previous ledger rows, rather than
+  truncating the scan into an apparent success.
+- **README ×3 and the architecture docs** now state the actual toolchain
+  (Node `^22.22.2 || ^24.15.0 || >=26.0.0`, Rust ≥ 1.90) and the real limits.
+- **Visual baselines regenerated** for the three themes whose demo data changed;
+  the suite is stable across consecutive runs.
+
+### Fixed
+
+- **The UI no longer shows a raw exception as an empty session list.** A read
+  failure renders an error state with a retry action, and out-of-order refresh
+  results are discarded instead of overwriting newer data.
+- **`Settings.restore.test.tsx` "does not report imported when persistence
+  rejects the import"** failed on the previous tree; the restore path now
+  propagates the rejection.
+- **The Chinese README carried a schema-migration note inside the feature
+  introduction** where it did not belong; the note now lives in the version
+  history and the introduction reads as a product page.
+
 ## [0.3.0] - 2026-10-24
 
 ### Added

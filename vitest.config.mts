@@ -1,11 +1,19 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { readFileSync } from "node:fs";
+
+// 测试与构建共用同一个版本号来源（package.json），否则 `APP_VERSION`
+// 在测试里变成未定义常量——vitest 不会执行 vite.config.ts 的 define。
+const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 
 // 测试专用配置：jsdom 环境 + 全局 DOM 断言。
 // 与 vite.config.ts 分开，避免把 tauri 特有设置带进测试。
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   test: {
     environment: "jsdom",
     globals: true,

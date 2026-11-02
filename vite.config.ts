@@ -1,9 +1,17 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { readFileSync } from "node:fs";
+
+// 版本号只有一个来源：package.json。注入成编译期常量，前端不再手抄一份
+// —— 之前 `src/lib/i18n/index.ts` 里硬编码的 "0.3.0" 就是这样漂移的。
+const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   clearScreen: false,
   server: {
     port: 5173,

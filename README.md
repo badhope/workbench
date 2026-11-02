@@ -2,10 +2,10 @@
 
 **English** | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-[![Release](https://img.shields.io/github/v/release/X33834/workbench?color=22d3ee&label=release)](https://github.com/X33834/workbench/releases/latest)
-[![License](https://img.shields.io/github/license/X33834/workbench?color=34d399)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.4.0-22d3ee)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.md#system-requirements)
-[![CI](https://github.com/X33834/workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/X33834/workbench/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-408%20unit%20%2B%20131%20backend-8b5cf6)](#quality-gates)
 
 ![Workbench](docs/screenshots/12-brand-hero.png)
 
@@ -74,6 +74,23 @@ data appears in it). [Download the MP4](docs/screenshots/workbench-demo.mp4).
 | **Trilingual UI** | 简体中文 (default) / English / 日本語 |
 | **Cross-platform** | CI defines Windows, Linux and macOS jobs, including Linux `.deb` and macOS `.app` builds |
 
+## Quality gates
+
+Nothing in this repo is claimed without a command that proves it. The same
+steps run locally (`node scripts/ci-local.mjs`) and in CI:
+
+| Gate | What it catches |
+|------|-----------------|
+| `npm run version:check` | the four version files drifting apart |
+| `npx tsc --noEmit` | type errors, including the generated IPC contract |
+| `npm run lint` · `npm run format:check` | zero-warning ESLint, Prettier |
+| `npm run dup` | duplicated code above 3 % |
+| `npm run coverage` | 408 frontend tests with an enforced threshold |
+| `cargo test` | 131 backend tests, plus the ts-rs binding export |
+| `cargo clippy -- -D warnings` | Rust lints, zero tolerated |
+| `npm audit` · `cargo audit` | known vulnerabilities in either dependency tree |
+| `npm run test:e2e` | 28 Playwright cases: structure, WCAG AA contrast, visual baselines |
+
 ## Download
 
 Check the release pages for available versions and assets. The release workflow
@@ -84,9 +101,9 @@ Release pages:
 
 | Mirror | Releases |
 |--------|----------|
-| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) |
-| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) |
 | GitCode | [gitcode.com/badhope/workbench/releases](https://gitcode.com/badhope/workbench/releases) |
+| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) |
+| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) |
 
 ## Build
 
@@ -114,11 +131,13 @@ workbench diag          # environment self-check
 workbench ports --json  # machine-readable output for scripts
 ```
 
-Tech stack, project structure, FAQ, roadmap, screenshots and everything else
-live in the [architecture & reference doc](docs/ARCHITECTURE.md)
+Tech stack, project structure, FAQ, screenshots and everything else live in
+the [architecture & reference doc](docs/ARCHITECTURE.md)
 ([简体中文](docs/ARCHITECTURE.zh-CN.md) / [日本語](docs/ARCHITECTURE.ja.md)).
-How this compares with Mission Center, System Informer, btop++, Glances,
-ccusage and friends: [docs/COMPARISON.md](docs/COMPARISON.md).
+What ships next — and what is deliberately refused — is in
+[ROADMAP.md](docs/ROADMAP.md). How this compares with Mission Center, System
+Informer, btop++, Glances, ccusage and friends:
+[docs/COMPARISON.md](docs/COMPARISON.md).
 
 ## Contributing & License
 

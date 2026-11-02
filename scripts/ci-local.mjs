@@ -27,6 +27,7 @@ const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url),
 
 const steps = [
   { name: "Icon contract", cmd: "python", args: ["scripts/check_icons.py"] },
+  { name: "Version consistency", cmd: "npm", args: ["run", "version:check"] },
   { name: "Typecheck", cmd: "npx", args: ["tsc", "--noEmit"] },
   { name: "Lint", cmd: "npm", args: ["run", "lint"] },
   { name: "Format check", cmd: "npx", args: ["prettier", "--check", "."] },

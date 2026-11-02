@@ -5,7 +5,7 @@ name: Deploy Pages
 # 因此不需要为每个账号单独维护一套页面。
 on:
   push:
-    branches: [main, master]
+    branches: [main]
     paths:
       - "docs/**"
       - ".github/workflows/pages.yml"

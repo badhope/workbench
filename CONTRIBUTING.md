@@ -52,10 +52,43 @@ fails if the Rust side changed without regenerating.
 
 ## Branches & commits
 
-- Branch off `master`, named `feat/xxx`, `fix/xxx`, …
+`main` is the single long-lived branch and the default branch on every mirror.
+Work happens on short-lived branches that are merged back and deleted:
+
+| Prefix | Use |
+|--------|-----|
+| `feat/` | new capability |
+| `fix/` | defect repair |
+| `docs/` | documentation only |
+| `refactor/` | behaviour-preserving restructure |
+| `chore/` | tooling, dependencies, housekeeping |
+
+Rules:
+
+- Branch off `main`, open a PR back into `main`, delete the branch after merge
+- No long-lived release branch: a release is a tag on `main` (`v0.4.0`), and
+  the tag must match `package.json`, `tauri.conf.json` and `Cargo.toml`
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/):
   `feat:` / `fix:` / `docs:` / `refactor:` / `test:` / `chore:` / `ci:`
 - One commit does one thing — easier to review and to revert
+
+### Versioning
+
+[Semantic Versioning](https://semver.org/) with a three-part `MAJOR.MINOR.PATCH`:
+
+| Change | Bump |
+|--------|------|
+| Breaking change to stored data, IPC contract or CLI output | MAJOR |
+| New feature, new command, new page | MINOR |
+| Bug fix, docs, internal refactor | PATCH |
+
+The version is written in four places that must stay in sync — `package.json`,
+`package-lock.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`.
+`npm run version:check` verifies them; the release workflow refuses to build a
+tag that disagrees.
+
+Every user-visible change gets an entry in [CHANGELOG.md](CHANGELOG.md) under
+`Unreleased`, moved into a dated section when the tag is cut.
 
 ## Code conventions
 

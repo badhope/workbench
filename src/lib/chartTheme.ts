@@ -181,7 +181,8 @@ export function horizontalBarOption({
   barWidth = 18,
   valueLabel = "{c}",
 }: HorizontalBarOptions) {
-  const accent = chartTheme(theme).accent;
+  const palette = chartTheme(theme);
+  const accent = palette.accent;
   return {
     // 右侧留够空间给数值标签：值为 0 时条形长度为 0，
     // 标签会紧贴左边缘，right 太小时更容易被裁掉。
@@ -223,9 +224,12 @@ export function horizontalBarOption({
           position: "right",
           fontSize,
           formatter: valueLabel,
-          // 0 值也显示，但用弱化色，避免看起来像数据缺失
-          color: "inherit",
-          opacity: 0.75,
+          // 标签颜色必须显式给主题文字色。
+          // `color: "inherit"` 会继承 series 的 itemStyle，而这里的 itemStyle
+          // 是条形渐变（深色主题下末端接近面板色），实测数字几乎看不见，
+          // 看起来像渲染失败而不是"数值偏暗"。
+          color: palette.text,
+          opacity: 0.85,
         },
       },
     ],

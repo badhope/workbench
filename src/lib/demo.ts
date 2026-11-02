@@ -357,7 +357,7 @@ export const demoCostTrend: CostTrendRow[] = demoTrendCosts.map((cost, i) => {
  * 也让人误以为功能坏了。这里给一段形状真实的样例并明确标注是演示数据。
  */
 export const demoLogs = [
-  "2026-10-24T10:12:01.442Z  INFO  workbench_lib: 工作台 v0.3.0 启动",
+  "2026-10-24T10:12:01.442Z  INFO  workbench_lib: 工作台 v0.4.0 启动",
   "2026-10-24T10:12:01.451Z  INFO  workbench_lib: 托盘创建成功 (Windows)",
   "2026-10-24T10:12:01.470Z  INFO  workbench_lib: 全局快捷键 CmdOrCtrl+Shift+W 已注册",
   "2026-10-24T10:12:02.118Z  INFO  workbench::commands: 从 data.json 登记 2 个有效项目目录（共 2 个）",
