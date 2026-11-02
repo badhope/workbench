@@ -145,7 +145,10 @@ function Masthead({ date, lang }: { date: Date; lang: Lang }) {
           </span>
         </div>
         <p className="mt-2 max-w-[62ch] text-[12.5px] leading-relaxed text-dim">
-          {greeting(t)}，{t("overview.heroSubtitle")}
+          {/* 分隔符跟语言走：硬编码全角「，」会让英文页出现 "Good evening，..." */}
+          {greeting(t)}
+          {t("overview.greetingSeparator")}
+          {t("overview.heroSubtitle")}
         </p>
       </div>
       <div className="flex items-center gap-4 sm:ml-auto sm:flex-col sm:items-end sm:gap-1.5">

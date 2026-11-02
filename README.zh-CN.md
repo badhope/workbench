@@ -29,27 +29,27 @@
 
 | 概览 | 进程监控 |
 |------|----------|
-| ![概览](docs/screenshots/01-overview.png) | ![进程监控](docs/screenshots/02-processes.png) |
+| ![概览](docs/screenshots/zh/01-overview.png) | ![进程监控](docs/screenshots/zh/02-processes.png) |
 | CPU / 内存趋势、磁盘与进程分类 | 全进程快照、虚拟滚动、CSV 导出 |
 
 | 进程树 | 命令面板 |
 |--------|----------|
-| ![进程树](docs/screenshots/17-process-tree.png) | ![命令面板](docs/screenshots/18-command-palette.png) |
+| ![进程树](docs/screenshots/zh/17-process-tree.png) | ![命令面板](docs/screenshots/zh/18-command-palette.png) |
 | 按父 PID 归组，展开看子进程与端口 | Ctrl/Cmd+K 横跨页面 / 进程 / 端口 / 项目 / 任务 |
 
 | 服务与端口 | AI 会话 |
 |------------|----------|
-| ![服务与端口](docs/screenshots/03-servers.png) | ![AI 会话](docs/screenshots/04-ai-sessions.png) |
+| ![服务与端口](docs/screenshots/zh/03-servers.png) | ![AI 会话](docs/screenshots/zh/04-ai-sessions.png) |
 | netstat / ss 解析与开发框架标注 | 会话文件、在线会话、工具分布 |
 
 | 成本账本 | 任务看板 |
 |----------|----------|
-| ![成本账本](docs/screenshots/05-costs.png) | ![任务看板](docs/screenshots/08-tasks.png) |
+| ![成本账本](docs/screenshots/zh/05-costs.png) | ![任务看板](docs/screenshots/zh/08-tasks.png) |
 | 预算进度、趋势、模型分解 | 拖拽看板，待办 / 进行中 / 已完成 |
 
 ### 30 秒演示
 
-[![演示](docs/screenshots/01-overview.png)](docs/screenshots/workbench-demo.mp4)
+[![演示](docs/screenshots/zh/01-overview.png)](docs/screenshots/workbench-demo.mp4)
 
 浏览器演示模式下录制的真实界面（不含任何真实主机名、路径或账户数据）。
 [直接下载 MP4](docs/screenshots/workbench-demo.mp4)。

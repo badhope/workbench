@@ -1,7 +1,16 @@
 /**
  * 浏览器预览模式（非 Tauri）下的静态演示数据。
- * 仅在 window.__TAURI_INTERNALS__ 不存在时使用，让 UI 可以离线演示；
+ *
+ * 仅在 `window.__TAURI_INTERNALS__` 不存在时使用，让 UI 可以离线演示；
  * 桌面端永远走真实 IPC，不会读取这里。
+ *
+ * 设计约束：演示数据里的**可读文本**（项目名、任务标题、会话预览、日志）
+ * 必须跟随界面语言。早先这些字符串是硬编码中文，导致英文 README 的截图
+ * 里出现 "Windows 11 (演示)" 这种中英混排 —— 对外展示时非常刺眼。
+ * 所以这里按语言分表，`demoBundle(lang)` 是唯一入口。
+ *
+ * 不可翻译的部分（进程名 `chrome.exe`、路径、模型 id）保持原样：
+ * 它们本来就是机器的标识符，不是给人读的文案。
  */
 import type {
   AiProcess,
@@ -17,68 +26,176 @@ import type {
   WorkbenchData,
 } from "../types";
 
+type DemoLang = "en" | "zh" | "ja";
+
 const nowSec = () => Math.floor(Date.now() / 1000);
 
-export const demoData: WorkbenchData = {
-  projects: [
-    {
-      id: "demo-p1",
-      name: "商城前端重构",
-      path: "C:\\proj\\shop-web",
-      status: "active",
-      tags: ["前端", "v2"],
-      pinned: true,
-      note: "演示项目",
-      created_at: nowSec() - 86400 * 7,
-    },
-    {
-      id: "demo-p2",
-      name: "数据中台 API",
-      path: "C:\\proj\\data-api",
-      status: "paused",
-      tags: ["后端"],
-      pinned: false,
-      note: "",
-      created_at: nowSec() - 86400 * 30,
-    },
-  ],
-  tasks: [
-    {
-      id: "demo-t1",
-      title: "登录页改版（演示）",
-      status: "doing",
-      priority: "high",
-      due: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
-      project_id: "demo-p1",
-      tags: [],
-      created_at: nowSec() - 3600,
-      updated_at: nowSec(),
-    },
-    {
-      id: "demo-t2",
-      title: "接口压测（演示）",
-      status: "todo",
-      priority: "normal",
-      due: null,
-      project_id: "demo-p2",
-      tags: ["测试"],
-      created_at: nowSec() - 7200,
-      updated_at: nowSec() - 7200,
-    },
-    {
-      id: "demo-t3",
-      title: "组件库升级（演示）",
-      status: "done",
-      priority: "low",
-      due: null,
-      project_id: null,
-      tags: [],
-      created_at: nowSec() - 86400,
-      updated_at: nowSec() - 3600,
-    },
-  ],
+/** 每种语言需要本地化的可读文本。 */
+interface DemoStrings {
+  osName: string;
+  projectShop: { name: string; note: string; tags: string[] };
+  projectApi: { name: string; tags: string[] };
+  taskLogin: string;
+  taskLoad: string;
+  taskUi: string;
+  taskLoadTag: string;
+  sessionFirst: string;
+  sessionLast: string;
+  logLines: string[];
+  logFooter: string;
+}
+
+const STRINGS: Record<DemoLang, DemoStrings> = {
+  en: {
+    osName: "Windows 11 (demo)",
+    projectShop: { name: "Storefront rewrite", note: "Demo project", tags: ["frontend", "v2"] },
+    projectApi: { name: "Data platform API", tags: ["backend"] },
+    taskLogin: "Redesign the sign-in page (demo)",
+    taskLoad: "Load-test the API (demo)",
+    taskUi: "Upgrade the component library (demo)",
+    taskLoadTag: "testing",
+    sessionFirst: "Switch the sign-in page to the new design",
+    sessionLast: "Done, tests pass",
+    logLines: [
+      "2026-10-24T10:12:01.442Z  INFO  workbench_lib: workbench v0.4.0 starting",
+      "2026-10-24T10:12:01.451Z  INFO  workbench_lib: tray icon created (Windows)",
+      "2026-10-24T10:12:01.470Z  INFO  workbench_lib: global shortcut CmdOrCtrl+Shift+W registered",
+      "2026-10-24T10:12:02.118Z  INFO  workbench::commands: 2 valid project directories registered from data.json (2 total)",
+      "2026-10-24T10:12:02.240Z  INFO  workbench::cost_store: cost ledger ready at cost.db (386 records)",
+      "2026-10-24T10:12:02.905Z  WARN  workbench::ai: no opencode service on 127.0.0.1:4096, skipping live sessions",
+      "2026-10-24T10:12:03.331Z  INFO  workbench::ports: 3 listening ports collected (netstat -ano)",
+      "2026-10-24T10:12:03.336Z  INFO  workbench::devserver: 2 dev servers recognised (vite:5173, uvicorn:8000)",
+      "2026-10-24T10:12:06.412Z  INFO  workbench::commands: requested termination of PID=9876",
+      "2026-10-24T10:12:06.510Z  WARN  workbench::procs: process refused termination or already exited PID=9876",
+      "2026-10-24T10:12:09.002Z  INFO  workbench::session_meter: scanned 12 session files, 3 new usage records",
+      "2026-10-24T10:12:12.771Z  DEBUG workbench::ipc_guard: refused to open an unregistered path: C:\\Users\\me\\secrets",
+      "2026-10-24T10:12:15.203Z  INFO  workbench::commands: self-check finished 9 ok / 3 warn / 0 fail",
+    ],
+    logFooter: "(the above is browser demo data; real logs are written by the desktop app only)",
+  },
+  zh: {
+    osName: "Windows 11 (演示)",
+    projectShop: { name: "商城前端重构", note: "演示项目", tags: ["前端", "v2"] },
+    projectApi: { name: "数据中台 API", tags: ["后端"] },
+    taskLogin: "登录页改版（演示）",
+    taskLoad: "接口压测（演示）",
+    taskUi: "组件库升级（演示）",
+    taskLoadTag: "测试",
+    sessionFirst: "帮我把登录页改成新设计稿",
+    sessionLast: "已完成，测试通过",
+    logLines: [
+      "2026-10-24T10:12:01.442Z  INFO  workbench_lib: 工作台 v0.4.0 启动",
+      "2026-10-24T10:12:01.451Z  INFO  workbench_lib: 托盘创建成功 (Windows)",
+      "2026-10-24T10:12:01.470Z  INFO  workbench_lib: 全局快捷键 CmdOrCtrl+Shift+W 已注册",
+      "2026-10-24T10:12:02.118Z  INFO  workbench::commands: 从 data.json 登记 2 个有效项目目录（共 2 个）",
+      "2026-10-24T10:12:02.240Z  INFO  workbench::cost_store: 成本库已就绪 cost.db（386 条记录）",
+      "2026-10-24T10:12:02.905Z  WARN  workbench::ai: opencode 服务未监听 127.0.0.1:4096，跳过在线会话",
+      "2026-10-24T10:12:03.331Z  INFO  workbench::ports: 采集监听端口 3 条（netstat -ano）",
+      "2026-10-24T10:12:03.336Z  INFO  workbench::devserver: 识别开发服务器 2 个（vite:5173, uvicorn:8000）",
+      "2026-10-24T10:12:06.412Z  INFO  workbench::commands: 请求终止进程 PID=9876",
+      "2026-10-24T10:12:06.510Z  WARN  workbench::procs: 进程拒绝终止或已退出 PID=9876",
+      "2026-10-24T10:12:09.002Z  INFO  workbench::session_meter: 扫描会话文件 12 个，新增 3 条用量记录",
+      "2026-10-24T10:12:12.771Z  DEBUG workbench::ipc_guard: 拒绝打开未登记的路径: C:\\Users\\me\\secrets",
+      "2026-10-24T10:12:15.203Z  INFO  workbench::commands: 环境自检完成 9 ok / 3 warn / 0 fail",
+    ],
+    logFooter: "（以上为浏览器演示数据，真实日志仅在桌面端写入）",
+  },
+  ja: {
+    osName: "Windows 11 (デモ)",
+    projectShop: { name: "ストアフロント刷新", note: "デモプロジェクト", tags: ["フロントエンド", "v2"] },
+    projectApi: { name: "データ基盤 API", tags: ["バックエンド"] },
+    taskLogin: "ログイン画面の刷新（デモ）",
+    taskLoad: "API 負荷試験（デモ）",
+    taskUi: "コンポーネントライブラリ更新（デモ）",
+    taskLoadTag: "テスト",
+    sessionFirst: "ログイン画面を新しいデザインに変更してください",
+    sessionLast: "完了しました。テストは通過しています",
+    logLines: [
+      "2026-10-24T10:12:01.442Z  INFO  workbench_lib: workbench v0.4.0 起動",
+      "2026-10-24T10:12:01.451Z  INFO  workbench_lib: トレイアイコンを作成 (Windows)",
+      "2026-10-24T10:12:01.470Z  INFO  workbench_lib: グローバルショートカット CmdOrCtrl+Shift+W を登録",
+      "2026-10-24T10:12:02.118Z  INFO  workbench::commands: data.json から有効なプロジェクトディレクトリを 2 件登録（全 2 件）",
+      "2026-10-24T10:12:02.240Z  INFO  workbench::cost_store: コスト台帳の準備完了 cost.db（386 件）",
+      "2026-10-24T10:12:02.905Z  WARN  workbench::ai: opencode サービスが 127.0.0.1:4096 で待ち受けていません。オンラインセッションをスキップ",
+      "2026-10-24T10:12:03.331Z  INFO  workbench::ports: 待ち受けポートを 3 件取得（netstat -ano）",
+      "2026-10-24T10:12:03.336Z  INFO  workbench::devserver: 開発サーバーを 2 件認識（vite:5173, uvicorn:8000）",
+      "2026-10-24T10:12:06.412Z  INFO  workbench::commands: PID=9876 の終了を要求",
+      "2026-10-24T10:12:06.510Z  WARN  workbench::procs: プロセスが終了を拒否したか既に終了しています PID=9876",
+      "2026-10-24T10:12:09.002Z  INFO  workbench::session_meter: セッションファイルを 12 件走査し、使用量レコードを 3 件追加",
+      "2026-10-24T10:12:12.771Z  DEBUG workbench::ipc_guard: 未登録のパスを開くことを拒否: C:\\Users\\me\\secrets",
+      "2026-10-24T10:12:15.203Z  INFO  workbench::commands: セルフチェック完了 9 ok / 3 warn / 0 fail",
+    ],
+    logFooter: "（以上はブラウザのデモデータです。実際のログはデスクトップ版のみが書き込みます）",
+  },
 };
 
+function buildData(s: DemoStrings): WorkbenchData {
+  return {
+    projects: [
+      {
+        id: "demo-p1",
+        name: s.projectShop.name,
+        path: "C:\\proj\\shop-web",
+        status: "active",
+        tags: s.projectShop.tags,
+        pinned: true,
+        note: s.projectShop.note,
+        created_at: nowSec() - 86400 * 7,
+      },
+      {
+        id: "demo-p2",
+        name: s.projectApi.name,
+        path: "C:\\proj\\data-api",
+        status: "paused",
+        tags: s.projectApi.tags,
+        pinned: false,
+        note: "",
+        created_at: nowSec() - 86400 * 30,
+      },
+    ],
+    tasks: [
+      {
+        id: "demo-t1",
+        title: s.taskLogin,
+        status: "doing",
+        priority: "high",
+        due: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
+        project_id: "demo-p1",
+        tags: [],
+        created_at: nowSec() - 3600,
+        updated_at: nowSec(),
+      },
+      {
+        id: "demo-t2",
+        title: s.taskLoad,
+        status: "todo",
+        priority: "normal",
+        due: null,
+        project_id: "demo-p2",
+        tags: [s.taskLoadTag],
+        created_at: nowSec() - 7200,
+        updated_at: nowSec() - 7200,
+      },
+      {
+        id: "demo-t3",
+        title: s.taskUi,
+        status: "done",
+        priority: "low",
+        due: null,
+        project_id: null,
+        tags: [],
+        created_at: nowSec() - 86400,
+        updated_at: nowSec() - 3600,
+      },
+    ],
+  };
+}
+
+/**
+ * 进程、端口、磁盘这些是机器的客观标识，与语言无关，只构造一次。
+ * 数据里刻意包含父子关系（explorer → node / python、chrome → renderer），
+ * 否则进程树视图在首次打开时看起来是空的。
+ */
 export const demoProcs: ProcInfo[] = [
   {
     pid: 900,
@@ -227,28 +344,6 @@ export const demoAis: AiProcess[] = [
   },
 ];
 
-export const demoSessionFiles: SessionFilePreview[] = [
-  {
-    tool: "Claude Code",
-    project: "-proj-shop-web",
-    path: "C:\\Users\\me\\.claude\\projects\\-proj-shop-web\\demo.jsonl",
-    modified: nowSec() - 600,
-    size: 245_000,
-    message_count: 42,
-    first_line: "帮我把登录页改成新设计稿",
-    last_line: "已完成，测试通过",
-    human_preview: "已完成，测试通过",
-  },
-];
-
-export const demoSysinfo: SystemInfo = {
-  hostname: "DEMO-PC",
-  os_name: "Windows 11 (演示)",
-  cpu_cores: 16,
-  total_memory: 32 * 1024 ** 3,
-  uptime_seconds: 3600 * 26,
-};
-
 export const demoDisks: DiskInfo[] = [
   {
     label: "C",
@@ -268,25 +363,22 @@ export const demoDisks: DiskInfo[] = [
   },
 ];
 
-// ── 成本计量（演示）────────────────────────────────────────
-// 数字均为构造值，不代表任何真实账户消费。
-
 export const demoCostOverview: CostOverview = {
-  today_cost: 1.284,
-  today_input_tokens: 412_000,
-  today_output_tokens: 96_500,
-  today_cache_read_tokens: 1_820_000,
-  today_cache_creation_tokens: 240_000,
+  today_cost: 1.28,
+  today_input_tokens: 380_000,
+  today_output_tokens: 96_000,
+  today_cache_read_tokens: 26_000,
+  today_cache_creation_tokens: 6_500,
   month_cost: 18.63,
-  month_input_tokens: 5_640_000,
-  month_output_tokens: 1_280_000,
-  month_cache_read_tokens: 24_100_000,
-  month_cache_creation_tokens: 3_150_000,
+  month_input_tokens: 5_120_000,
+  month_output_tokens: 1_330_000,
+  month_cache_read_tokens: 380_000,
+  month_cache_creation_tokens: 90_000,
   total_cost: 47.91,
-  total_input_tokens: 14_200_000,
-  total_output_tokens: 3_460_000,
-  total_cache_read_tokens: 61_500_000,
-  total_cache_creation_tokens: 8_020_000,
+  total_input_tokens: 13_260_000,
+  total_output_tokens: 3_420_000,
+  total_cache_read_tokens: 810_000,
+  total_cache_creation_tokens: 170_000,
   record_count: 386,
   measured_count: 352,
   estimated_count: 26,
@@ -294,86 +386,44 @@ export const demoCostOverview: CostOverview = {
   daily_budget: 5,
   monthly_budget: 50,
   alert_threshold_pct: 80,
-  daily_pct: 25.68,
+  daily_pct: 25.6,
   monthly_pct: 37.26,
   budget_exceeded: false,
 };
 
 /**
- * 近 14 天趋势（构造值，形状贴近真实扫描结果）。
- * 日期按「今天往前推」动态生成：写死日期会让 demo 在几周后变成一屏过期数据，
- * 且必须保持后端契约的 YYYY-MM-DD 格式（趋势图取 slice(5) 显示 MM-DD）。
+ * 14 天趋势。数值是构造的，但形状是真实的：工作日高、周末回落，
+ * 让趋势图在演示时看起来像真的在跑业务，而不是一条直线。
  */
 const demoTrendCosts = [
-  0.912, 1.176, 0.744, 1.462, 0.418, 0.271, 1.084, 1.328, 1.132, 1.504, 1.248, 1.006,
-  1.268, 1.284,
+  1.12, 1.35, 0.98, 1.52, 1.44, 0.62, 0.41, 1.28, 1.31, 1.05, 1.47, 1.52, 1.18, 1.24,
 ];
-
-const demoTrendTokens = [
-  [320_000, 78_000, 1_100_000, 160_000],
-  [410_000, 96_000, 1_540_000, 210_000],
-  [268_000, 61_000, 980_000, 130_000],
-  [512_000, 124_000, 2_050_000, 280_000],
-  [148_000, 36_000, 520_000, 74_000],
-  [96_000, 22_000, 340_000, 48_000],
-  [382_000, 91_000, 1_420_000, 195_000],
-  [466_000, 112_000, 1_780_000, 245_000],
-  [398_000, 95_000, 1_460_000, 198_000],
-  [524_000, 128_000, 2_140_000, 292_000],
-  [442_000, 104_000, 1_690_000, 228_000],
-  [356_000, 84_000, 1_320_000, 178_000],
-  [448_000, 108_000, 1_720_000, 232_000],
-  [412_000, 96_500, 1_820_000, 240_000],
+const demoTrendInput = [
+  330_000, 402_000, 305_000, 474_000, 448_000, 188_000, 119_000, 399_000, 410_000,
+  316_000, 462_000, 480_000, 367_000, 388_000,
 ];
-
+const demoTrendOutput = [
+  90_000, 110_000, 83_000, 130_000, 123_000, 52_000, 33_000, 109_000, 112_000,
+  86_000, 126_000, 131_000, 101_000, 106_000,
+];
 const demoTrendCounts = [18, 22, 15, 27, 9, 6, 21, 25, 19, 28, 23, 17, 24, 20];
 
 function isoDay(offsetFromToday: number): string {
   const d = new Date();
-  d.setDate(d.getDate() + offsetFromToday);
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mm}-${dd}`;
+  d.setDate(d.getDate() - offsetFromToday);
+  return d.toISOString().slice(0, 10);
 }
 
-export const demoCostTrend: CostTrendRow[] = demoTrendCosts.map((cost, i) => {
-  const [input, output, cacheRead, cacheCreation] = demoTrendTokens[i];
-  return {
-    day: isoDay(i - demoTrendCosts.length + 1),
-    input_tokens: input,
-    output_tokens: output,
-    cache_read_tokens: cacheRead,
-    cache_creation_tokens: cacheCreation,
-    cost,
-    record_count: demoTrendCounts[i],
-  };
-});
+export const demoCostTrend: CostTrendRow[] = demoTrendCosts.map((cost, i) => ({
+  day: isoDay(demoTrendCosts.length - 1 - i),
+  input_tokens: demoTrendInput[i],
+  output_tokens: demoTrendOutput[i],
+  cache_read_tokens: Math.round(demoTrendInput[i] * 0.06),
+  cache_creation_tokens: Math.round(demoTrendInput[i] * 0.015),
+  cost,
+  record_count: demoTrendCounts[i],
+}));
 
-/**
- * 浏览器演示模式下的日志样例。
- *
- * 真实日志由 Rust 侧写入 app data 目录，浏览器里没有后端可读；
- * 输出一句「不可用」会让日志页在演示/截图里变成一整块空白，
- * 也让人误以为功能坏了。这里给一段形状真实的样例并明确标注是演示数据。
- */
-export const demoLogs = [
-  "2026-10-24T10:12:01.442Z  INFO  workbench_lib: 工作台 v0.4.0 启动",
-  "2026-10-24T10:12:01.451Z  INFO  workbench_lib: 托盘创建成功 (Windows)",
-  "2026-10-24T10:12:01.470Z  INFO  workbench_lib: 全局快捷键 CmdOrCtrl+Shift+W 已注册",
-  "2026-10-24T10:12:02.118Z  INFO  workbench::commands: 从 data.json 登记 2 个有效项目目录（共 2 个）",
-  "2026-10-24T10:12:02.240Z  INFO  workbench::cost_store: 成本库已就绪 cost.db（386 条记录）",
-  "2026-10-24T10:12:02.905Z  WARN  workbench::ai: opencode 服务未监听 127.0.0.1:4096，跳过在线会话",
-  "2026-10-24T10:12:03.331Z  INFO  workbench::ports: 采集监听端口 3 条（netstat -ano）",
-  "2026-10-24T10:12:03.336Z  INFO  workbench::devserver: 识别开发服务器 2 个（vite:5173, uvicorn:8000）",
-  "2026-10-24T10:12:06.412Z  INFO  workbench::commands: 请求终止进程 PID=9876",
-  "2026-10-24T10:12:06.510Z  WARN  workbench::procs: 进程拒绝终止或已退出 PID=9876",
-  "2026-10-24T10:12:09.002Z  INFO  workbench::session_meter: 扫描会话文件 12 个，新增 3 条用量记录",
-  "2026-10-24T10:12:12.771Z  DEBUG workbench::ipc_guard: 拒绝打开未登记的路径: C:\\Users\\me\\secrets",
-  "2026-10-24T10:12:15.203Z  INFO  workbench::commands: 环境自检完成 9 ok / 3 warn / 0 fail",
-  "（以上为浏览器演示数据，真实日志仅在桌面端写入）",
-].join("\n");
-
-/** 按模型分解（构造值）。 */
 export const demoCostModelBreakdown: ModelBreakdownRow[] = [
   {
     model: "claude-sonnet-4-5",
@@ -384,23 +434,66 @@ export const demoCostModelBreakdown: ModelBreakdownRow[] = [
   },
   {
     model: "claude-opus-4-1",
-    input_tokens: 2_120_000,
-    output_tokens: 640_000,
+    input_tokens: 1_920_000,
+    output_tokens: 840_000,
     cost: 12.86,
-    record_count: 58,
-  },
-  {
-    model: "claude-haiku-4-5",
-    input_tokens: 3_040_000,
-    output_tokens: 520_000,
-    cost: 5.13,
     record_count: 96,
   },
   {
+    model: "claude-haiku-4-5",
+    input_tokens: 3_120_000,
+    output_tokens: 440_000,
+    cost: 5.13,
+    record_count: 58,
+  },
+  {
     model: "gpt-5-codex",
-    input_tokens: 400_000,
-    output_tokens: 120_000,
+    input_tokens: 420_000,
+    output_tokens: 100_000,
     cost: 1.5,
     record_count: 18,
   },
 ];
+
+
+/**
+ * 演示数据的唯一入口：按界面语言返回一整套一致的样例。
+ *
+ * 为什么不是一堆独立的 `demoXxx` 常量：语言是横切的，散着导出就得在
+ * 每个调用点重复 `demoXxx[lang]`，漏一处就又是混排。
+ */
+export function demoBundle(lang: DemoLang) {
+  const s = STRINGS[lang] ?? STRINGS.en;
+  return {
+    data: buildData(s),
+    procs: demoProcs,
+    ports: demoPorts,
+    devs: demoDevs,
+    ais: demoAis,
+    sessionFiles: [
+      {
+        tool: "Claude Code",
+        project: "-proj-shop-web",
+        path: "C:\\Users\\me\\.claude\\projects\\-proj-shop-web\\demo.jsonl",
+        modified: nowSec() - 600,
+        size: 245_000,
+        message_count: 42,
+        first_line: s.sessionFirst,
+        last_line: s.sessionLast,
+        human_preview: s.sessionLast,
+      },
+    ] satisfies SessionFilePreview[],
+    sysinfo: {
+      hostname: "DEMO-PC",
+      os_name: s.osName,
+      cpu_cores: 16,
+      total_memory: 32 * 1024 ** 3,
+      uptime_seconds: 3600 * 26,
+    } satisfies SystemInfo,
+    disks: demoDisks,
+    costOverview: demoCostOverview,
+    costTrend: demoCostTrend,
+    costModelBreakdown: demoCostModelBreakdown,
+    logs: [...s.logLines, s.logFooter].join("\n"),
+  };
+}

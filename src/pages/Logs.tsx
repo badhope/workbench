@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FileText, RefreshCw, Trash2 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { isTauri, readLogs, clearLogs } from "../lib/api";
-import { demoLogs } from "../lib/demo";
+import { demoBundle } from "../lib/demo";
 import { Btn } from "../ui";
-import { t as translate, useT } from "../lib/i18n";
+import { getLang, t as translate, useT } from "../lib/i18n";
 
 /**
  * Log viewer — displays the Rust backend logs without needing the DevTools console.
@@ -22,7 +22,7 @@ export default function Logs() {
     // 浏览器预览没有后端日志文件：给一段标注清楚的样例，
     // 而不是把整页渲染成「不可用」——那看起来像功能坏了。
     if (!isTauri()) {
-      setContent(demoLogs);
+      setContent(demoBundle(getLang()).logs);
       return;
     }
     try {

@@ -16,6 +16,7 @@ export const dict = {
     "overview.hubAi": "AI",
     "overview.heroSubtitle":
       "Local ops dashboard with AI session cost metering — data stays on this device",
+    "overview.greetingSeparator": ", ",
     "overview.liveMonitoring": "Monitoring live",
     "overview.greeting.lateNight": "Late night",
     "overview.greeting.morning": "Good morning",
@@ -84,6 +85,7 @@ export const dict = {
     "overview.hubSrv": "服务",
     "overview.hubAi": "AI",
     "overview.heroSubtitle": "本机运维仪表盘与 AI 会话成本计量，数据仅存本机",
+    "overview.greetingSeparator": "，",
     "overview.liveMonitoring": "实时监控中",
     "overview.greeting.lateNight": "夜深了",
     "overview.greeting.morning": "早上好",
@@ -152,6 +154,7 @@ export const dict = {
     "overview.hubAi": "AI",
     "overview.heroSubtitle":
       "ローカル運用ダッシュボードと AI セッションコスト計測。データはこの端末のみに保存",
+    "overview.greetingSeparator": "、",
     "overview.liveMonitoring": "ライブ監視中",
     "overview.greeting.lateNight": "深夜です",
     "overview.greeting.morning": "おはようございます",

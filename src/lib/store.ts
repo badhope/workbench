@@ -20,7 +20,7 @@ import {
   type ShellId,
   type WidgetId,
 } from "./layout";
-import { t } from "./i18n";
+import { getLang, t } from "./i18n";
 import { persist } from "zustand/middleware";
 import {
   backupData,
@@ -50,19 +50,7 @@ import {
   systemInfo,
   terminateProcess,
 } from "../lib/api";
-import {
-  demoAis,
-  demoCostModelBreakdown,
-  demoCostOverview,
-  demoCostTrend,
-  demoData,
-  demoDevs,
-  demoDisks,
-  demoPorts,
-  demoProcs,
-  demoSessionFiles,
-  demoSysinfo,
-} from "../lib/demo";
+import { demoBundle } from "../lib/demo";
 import type {
   AiProcess,
   CostOverview,
@@ -375,18 +363,20 @@ export const useStore = create<Store>()(
             memGb: Math.round((12 + i * 0.4) * 100) / 100,
             t: Date.now() - (3 - i) * 3000,
           }));
+          // 演示数据跟随界面语言：否则英文界面里会混进中文项目名与日志。
+          const demo = demoBundle(getLang());
           set({
-            data: demoData,
-            procs: demoProcs,
-            ports: demoPorts,
-            devs: demoDevs,
-            ais: demoAis,
-            sessionFiles: demoSessionFiles,
-            sysinfo: demoSysinfo,
-            disks: demoDisks,
-            costOverview: demoCostOverview,
-            costTrend: demoCostTrend,
-            costModelBreakdown: demoCostModelBreakdown,
+            data: demo.data,
+            procs: demo.procs,
+            ports: demo.ports,
+            devs: demo.devs,
+            ais: demo.ais,
+            sessionFiles: demo.sessionFiles,
+            sysinfo: demo.sysinfo,
+            disks: demo.disks,
+            costOverview: demo.costOverview,
+            costTrend: demo.costTrend,
+            costModelBreakdown: demo.costModelBreakdown,
             history: seed,
             loading: false,
             lastRefreshAt: Date.now(),

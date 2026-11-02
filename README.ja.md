@@ -30,27 +30,27 @@
 
 | 概要 | プロセス |
 |------|----------|
-| ![概要](docs/screenshots/01-overview.png) | ![プロセス](docs/screenshots/02-processes.png) |
+| ![概要](docs/screenshots/ja/01-overview.png) | ![プロセス](docs/screenshots/ja/02-processes.png) |
 | CPU / メモリ推移、ディスク、プロセス分類 | 全プロセス snapshot、仮想スクロール、CSV 書き出し |
 
 | プロセスツリー | コマンドパレット |
 |----------------|------------------|
-| ![プロセスツリー](docs/screenshots/17-process-tree.png) | ![コマンドパレット](docs/screenshots/18-command-palette.png) |
+| ![プロセスツリー](docs/screenshots/ja/17-process-tree.png) | ![コマンドパレット](docs/screenshots/ja/18-command-palette.png) |
 | 親 PID でグループ化、子プロセスと待受ポート | Ctrl/Cmd+K でページ / プロセス / ポート / プロジェクト / タスクを検索 |
 
 | サーバー & ポート | AI セッション |
 |-------------------|----------------|
-| ![サーバー](docs/screenshots/03-servers.png) | ![AI セッション](docs/screenshots/04-ai-sessions.png) |
+| ![サーバー](docs/screenshots/ja/03-servers.png) | ![AI セッション](docs/screenshots/ja/04-ai-sessions.png) |
 | netstat / ss 解析、開発フレームワーク判定 | セッションファイル、オンラインセッション、ツール分布 |
 
 | コスト台帳 | タスク |
 |------------|--------|
-| ![コスト](docs/screenshots/05-costs.png) | ![タスク](docs/screenshots/08-tasks.png) |
+| ![コスト](docs/screenshots/ja/05-costs.png) | ![タスク](docs/screenshots/ja/08-tasks.png) |
 | 予算進捗、推移、モデル内訳 | ドラッグ＆ドロップのカンバン |
 
 ### 30 秒ツアー
 
-[![デモ](docs/screenshots/01-overview.png)](docs/screenshots/workbench-demo.mp4)
+[![デモ](docs/screenshots/ja/01-overview.png)](docs/screenshots/workbench-demo.mp4)
 
 ブラウザのデモモードで録画した実際の UI（実在のホスト名・パス・アカウント情報は含みません）。
 [MP4 を直接ダウンロード](docs/screenshots/workbench-demo.mp4)。

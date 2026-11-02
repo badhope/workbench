@@ -23,8 +23,22 @@ import http from "node:http";
 import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const BASE = process.argv[2] || "http://localhost:4173";
-const OUT_DIR = path.resolve(HERE, "..", "docs", "screenshots");
+const argUrl = process.argv.find((a) => a.startsWith("http"));
+const BASE = argUrl || "http://localhost:4173";
+
+/**
+ * 界面语言。英文 README 必须配英文界面截图，否则读者看到的第一屏是
+ * 中文，与「英文为主」的定位直接冲突。中文版截图单独出一套放在
+ * docs/screenshots/zh/ 下。
+ *
+ *   node scripts/shoot_docs.mjs http://127.0.0.1:4199          # 英文（默认）
+ *   node scripts/shoot_docs.mjs http://127.0.0.1:4199 --lang=zh
+ */
+const langArg = process.argv.find((a) => a.startsWith("--lang="));
+const LANG = langArg ? langArg.split("=")[1] : "en";
+const OUT_DIR = path.resolve(
+  HERE, "..", "docs", "screenshots", LANG === "en" ? "" : LANG
+);
 const CDP_PORT = 9222;
 const VIEW = { width: 1440, height: 900, deviceScaleFactor: 1 };
 
@@ -143,12 +157,20 @@ async function main() {
     mobile: false,
   });
 
+  // 先落 localStorage 再刷新，让应用以目标语言启动（i18n 在启动时读一次）
   await cdp.send("Page.navigate", { url: BASE });
-  await sleep(2500);
+  await sleep(2000);
+  await cdp.send("Runtime.evaluate", {
+    expression: `localStorage.setItem('workbench-lang', ${JSON.stringify(LANG)})`,
+  });
+  await cdp.send("Page.reload", { ignoreCache: true });
+  await sleep(3000);
 
-  // 断言确实处于演示模式：否则拒绝截图，避免泄漏真实数据
+  // 断言确实处于演示模式：否则拒绝截图，避免泄漏真实数据。
+  // 标记随界面语言变化，三种都要认，否则英文/日文截图永远被拒。
   const probe = await cdp.send("Runtime.evaluate", {
-    expression: "document.body.innerText.includes('演示')",
+    expression:
+      "['演示','Demo','デモ'].some((m) => document.body.innerText.includes(m))",
     returnByValue: true,
   });
   if (!probe.result.value) {
@@ -174,6 +196,21 @@ async function main() {
     fs.writeFileSync(path.join(OUT_DIR, file), Buffer.from(shot.data, "base64"));
     console.log(`  ${file}`);
   }
+
+  // Hero：页头品牌区（logo + 标题 + 副标题）。
+  // 三份 README 的首图，必须跟界面语言一致 —— 早先共用一张中文 hero，
+  // 英文 README 首屏就变成"Workbench 工作台"混排。
+  // 坐标基于 1440×900 视口下的概览页页头（侧栏 220px + 标题区）。
+  await cdp.send("Runtime.evaluate", {
+    expression: `(() => { const b = [...document.querySelectorAll('nav button')][0]; if (b) b.click(); })()`,
+  });
+  await sleep(1200);
+  const hero = await cdp.send("Page.captureScreenshot", {
+    format: "png",
+    clip: { x: 236, y: 56, width: 820, height: 120, scale: 1 },
+  });
+  fs.writeFileSync(path.join(OUT_DIR, "12-brand-hero.png"), Buffer.from(hero.data, "base64"));
+  console.log("  12-brand-hero.png");
 
   for (const shot of SHOTS) {
     if (shot.page) {
