@@ -111,11 +111,61 @@ describe("诊断缓冲", () => {
       off();
     });
 
+    it("拒绝原因是可以 JSON 化的对象时，序列化进消息", () => {
+      const off = installGlobalDiagnostics();
+      const evt = new Event("unhandledrejection") as Event & { reason?: unknown };
+      Object.defineProperty(evt, "reason", { value: { code: 42 } });
+      window.dispatchEvent(evt);
+      expect(getDiagnostics()[0].message).toContain("42");
+      off();
+    });
+
+    it("拒绝原因是循环引用对象时退化为 String，不抛异常", () => {
+      const off = installGlobalDiagnostics();
+      const circular: Record<string, unknown> = {};
+      circular.self = circular;
+      const evt = new Event("unhandledrejection") as Event & { reason?: unknown };
+      Object.defineProperty(evt, "reason", { value: circular });
+      expect(() => window.dispatchEvent(evt)).not.toThrow();
+      expect(getDiagnostics()).toHaveLength(1);
+      off();
+    });
+
     it("卸载后不再记录", () => {
       const off = installGlobalDiagnostics();
       off();
       window.dispatchEvent(new ErrorEvent("error", { message: "after off" }));
       expect(getDiagnostics()).toHaveLength(0);
+    });
+  });
+
+  describe("持久化恢复", () => {
+    it("从 localStorage 恢复历史并续号，不与旧 id 撞号", async () => {
+      localStorage.setItem(
+        "workbench-diagnostics-v1",
+        JSON.stringify([{ id: "E001", at: "t", kind: "error", message: "old" }])
+      );
+      vi.resetModules();
+      const mod = await import("./diagnostics");
+      const e = mod.recordDiagnostic("error", "fresh");
+      expect(mod.getDiagnostics()).toHaveLength(2);
+      expect(e!.id).toBe("E002");
+    });
+
+    it("存储损坏时静默清空，不影响后续记录", async () => {
+      localStorage.setItem("workbench-diagnostics-v1", "{broken json");
+      vi.resetModules();
+      const mod = await import("./diagnostics");
+      const e = mod.recordDiagnostic("error", "fresh");
+      expect(mod.getDiagnostics()).toHaveLength(1);
+      expect(e!.id).toBe("E001");
+    });
+
+    it("存储里不是数组时按空处理", async () => {
+      localStorage.setItem("workbench-diagnostics-v1", '{"a":1}');
+      vi.resetModules();
+      const mod = await import("./diagnostics");
+      expect(mod.getDiagnostics()).toHaveLength(0);
     });
   });
 });

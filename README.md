@@ -2,10 +2,10 @@
 
 **English** | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-[![Version](https://img.shields.io/badge/version-0.4.0-22d3ee)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.md#system-requirements)
-[![Tests](https://img.shields.io/badge/tests-408%20unit%20%2B%20131%20backend-8b5cf6)](#quality-gates)
+[![Tests](https://img.shields.io/badge/tests-441%20unit%20%2B%20136%20backend-8b5cf6)](#quality-gates)
 
 ![Workbench](docs/screenshots/12-brand-hero.png)
 

@@ -26,7 +26,10 @@ const api = {
   openExternal: vi.fn(),
   getCostOverview: vi.fn(),
   getCostTrend: vi.fn(),
+  getCostTrendExtended: vi.fn(),
   getModelBreakdown: vi.fn(),
+  getProjectBreakdown: vi.fn(),
+  getCostExportRows: vi.fn(),
   getCostSettings: vi.fn(),
   saveCostSettings: vi.fn(),
   scanSessionCosts: vi.fn(),
@@ -87,6 +90,10 @@ function reset() {
     costNotified: false,
   });
   Object.values(api).forEach((fn) => fn.mockReset());
+  // 0.5.0 新接口的兜底 mock：成功且为空；个别用例按需覆盖
+  api.getCostTrendExtended.mockResolvedValue({ days: 14, daily: [], monthly: [] });
+  api.getProjectBreakdown.mockResolvedValue([]);
+  api.getCostExportRows.mockResolvedValue([]);
   tauriMode = true;
 }
 
@@ -566,6 +573,11 @@ describe("成本动作", () => {
     api.scanSessionCosts.mockImplementation(async () => {
       api.getCostOverview.mockResolvedValue(overview);
       api.getCostTrend.mockResolvedValue(trend);
+      api.getCostTrendExtended.mockResolvedValue({
+        days: 14,
+        daily: trend,
+        monthly: [],
+      });
       api.getModelBreakdown.mockResolvedValue(breakdown);
       api.getCostSettings.mockResolvedValue(useStore.getState().costSettings);
       throw new Error("scan boom");
@@ -615,7 +627,7 @@ describe("成本动作", () => {
 
   it("读取成本总览时多个接口失败只提示第一条并带总数", async () => {
     api.getCostOverview.mockRejectedValue(new Error("A"));
-    api.getCostTrend.mockRejectedValue(new Error("B"));
+    api.getCostTrendExtended.mockRejectedValue(new Error("B"));
     api.getModelBreakdown.mockRejectedValue(new Error("C"));
     api.getCostSettings.mockResolvedValue(useStore.getState().costSettings);
 
@@ -633,6 +645,35 @@ describe("成本动作", () => {
     const s = useStore.getState();
     expect(s.costOverview).toBeNull();
     expect(s.costNotified).toBe(false);
+    expect(s.costProjectBreakdown).toEqual([]);
+    expect(s.costTrendMonthly).toEqual([]);
+  });
+
+  it("loadCostTrend 切换窗口：日粒度与月度桶一起更新", async () => {
+    api.getCostTrendExtended.mockResolvedValue({
+      days: 90,
+      daily: [{ day: "2026-03-01", cost: 1 }],
+      monthly: [{ month: "2026-01", cost: 9 }],
+    });
+    await useStore.getState().loadCostTrend(90);
+    expect(useStore.getState().costTrendDays).toBe(90);
+    expect(useStore.getState().costTrend).toEqual([{ day: "2026-03-01", cost: 1 }]);
+    expect(useStore.getState().costTrendMonthly).toEqual([{ month: "2026-01", cost: 9 }]);
+  });
+
+  it("loadCostTrend 失败时提示且不改窗口天数", async () => {
+    useStore.setState({ costTrendDays: 30 });
+    api.getCostTrendExtended.mockRejectedValue(new Error("db locked"));
+    await useStore.getState().loadCostTrend(90);
+    expect(useStore.getState().costTrendDays).toBe(30);
+    expect(useStore.getState().toast).toContain("db locked");
+  });
+
+  it("演示模式下 loadCostTrend 只切窗口，不发请求", async () => {
+    tauriMode = false;
+    await useStore.getState().loadCostTrend(30);
+    expect(useStore.getState().costTrendDays).toBe(30);
+    expect(api.getCostTrendExtended).not.toHaveBeenCalled();
   });
 });
 

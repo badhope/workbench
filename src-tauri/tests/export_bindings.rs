@@ -13,7 +13,10 @@ use workbench_lib::commands::{
     BackupPoint, BackupResult, DiskInfo, OpencodeSessionsResult, PricingView, RestoreResult,
     ScanCostResult, SystemInfo,
 };
-use workbench_lib::cost_store::{CostOverview, CostSettings, CostTrendRow, ModelBreakdownRow};
+use workbench_lib::cost_store::{
+    CostExportRow, CostMonthRow, CostOverview, CostSettings, CostTrendRow, ExtendedTrend,
+    ModelBreakdownRow, ProjectBreakdownRow,
+};
 use workbench_lib::data::{Project, Task, WorkbenchData};
 use workbench_lib::devserver::DevServer;
 use workbench_lib::diagnostics::{DiagnosticCheck, DiagnosticsReport};
@@ -40,6 +43,10 @@ fn export_ts_bindings() {
     CostOverview::export_all(&cfg).unwrap();
     CostTrendRow::export_all(&cfg).unwrap();
     ModelBreakdownRow::export_all(&cfg).unwrap();
+    ProjectBreakdownRow::export_all(&cfg).unwrap();
+    CostMonthRow::export_all(&cfg).unwrap();
+    ExtendedTrend::export_all(&cfg).unwrap();
+    CostExportRow::export_all(&cfg).unwrap();
     Project::export_all(&cfg).unwrap();
     Task::export_all(&cfg).unwrap();
     WorkbenchData::export_all(&cfg).unwrap();

@@ -3,7 +3,10 @@
 use tauri::{AppHandle, Manager};
 
 use crate::ai::{self, AiProcess, OpencodeSession, SessionDetail, SessionFilePreview};
-use crate::cost_store::{self, CostOverview, CostSettings, CostTrendRow, ModelBreakdownRow};
+use crate::cost_store::{
+    self, CostExportRow, CostOverview, CostSettings, CostTrendRow, ExtendedTrend,
+    ModelBreakdownRow, ProjectBreakdownRow,
+};
 use crate::data::{self, WorkbenchData};
 use crate::devserver::{self, DevServer};
 use crate::diagnostics::{self, DiagnosticsReport};
@@ -792,6 +795,44 @@ pub async fn get_model_breakdown(app: AppHandle) -> Result<Vec<ModelBreakdownRow
     tauri::async_runtime::spawn_blocking(move || {
         let _scan_guard = lock_ledger_operation()?;
         cost_store::build_model_breakdown(&app)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+/// 按项目目录归因成本（"哪个仓库花钱最多"）
+#[tauri::command(async)]
+pub async fn get_project_breakdown(
+    app: AppHandle,
+) -> Result<Vec<ProjectBreakdownRow>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _scan_guard = lock_ledger_operation()?;
+        cost_store::build_project_breakdown(&app)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+/// 扩展趋势：最近 `days` 天按日，更早的按月聚合
+#[tauri::command(async)]
+pub async fn get_cost_trend_extended(
+    app: AppHandle,
+    days: usize,
+) -> Result<ExtendedTrend, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _scan_guard = lock_ledger_operation()?;
+        cost_store::build_trend_extended(&app, days)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+/// 台账导出：原始成本记录（含估算行，来源列自述）
+#[tauri::command(async)]
+pub async fn get_cost_export(app: AppHandle, limit: usize) -> Result<Vec<CostExportRow>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _scan_guard = lock_ledger_operation()?;
+        cost_store::build_cost_export(&app, limit)
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?

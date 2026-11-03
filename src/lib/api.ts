@@ -6,6 +6,9 @@ import type {
   CostOverview,
   CostSettings,
   CostTrendRow,
+  CostExportRow,
+  ExtendedTrend,
+  ProjectBreakdownRow,
   DevServer,
   DiskInfo,
   ModelBreakdownRow,
@@ -195,6 +198,21 @@ export async function getCostTrend(days: number = 14): Promise<CostTrendRow[]> {
 /** 按模型分解成本 */
 export async function getModelBreakdown(): Promise<ModelBreakdownRow[]> {
   return invoke<ModelBreakdownRow[]>("get_model_breakdown");
+}
+
+/** 按项目目录归因成本（"哪个仓库花钱最多"） */
+export async function getProjectBreakdown(): Promise<ProjectBreakdownRow[]> {
+  return invoke<ProjectBreakdownRow[]>("get_project_breakdown");
+}
+
+/** 扩展趋势：最近 `days` 天按日，更早的按月聚合 */
+export async function getCostTrendExtended(days: number): Promise<ExtendedTrend> {
+  return invoke<ExtendedTrend>("get_cost_trend_extended", { days });
+}
+
+/** 台账导出：原始成本记录（含估算行，来源列自述）。上限 20 万行。 */
+export async function getCostExportRows(limit = 200_000): Promise<CostExportRow[]> {
+  return invoke<CostExportRow[]>("get_cost_export", { limit });
 }
 
 /** 获取成本设置 */

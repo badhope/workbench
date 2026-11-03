@@ -14,6 +14,7 @@
  */
 import type {
   AiProcess,
+  CostMonthRow,
   CostOverview,
   CostTrendRow,
   DevServer,
@@ -21,6 +22,7 @@ import type {
   ModelBreakdownRow,
   PortEntry,
   ProcInfo,
+  ProjectBreakdownRow,
   SessionFilePreview,
   SystemInfo,
   WorkbenchData,
@@ -465,6 +467,77 @@ export const demoCostModelBreakdown: ModelBreakdownRow[] = [
   },
 ];
 
+/** 按项目归因：和模型构成互补，回答"哪个仓库花钱最多"。 */
+export const demoCostProjectBreakdown: ProjectBreakdownRow[] = [
+  {
+    project: "workbench",
+    input_tokens: 6_120_000,
+    output_tokens: 1_640_000,
+    cost: 21.36,
+    record_count: 182,
+  },
+  {
+    project: "storefront",
+    input_tokens: 4_260_000,
+    output_tokens: 1_020_000,
+    cost: 15.08,
+    record_count: 126,
+  },
+  {
+    project: "data-platform",
+    input_tokens: 2_640_000,
+    output_tokens: 690_000,
+    cost: 9.92,
+    record_count: 71,
+  },
+  {
+    project: "docs",
+    input_tokens: 240_000,
+    output_tokens: 70_000,
+    cost: 1.55,
+    record_count: 7,
+  },
+];
+
+/** 超出日粒度窗口的月度桶：升序（与后端 month_trend_sql 一致），可与日粒度直接拼接。 */
+export const demoCostMonthly: CostMonthRow[] = [
+  {
+    month: isoMonth(4),
+    input_tokens: 2_160_000,
+    output_tokens: 520_000,
+    cache_read_tokens: 130_000,
+    cache_creation_tokens: 32_000,
+    cost: 8.44,
+    record_count: 62,
+  },
+  {
+    month: isoMonth(3),
+    input_tokens: 3_380_000,
+    output_tokens: 890_000,
+    cache_read_tokens: 202_000,
+    cache_creation_tokens: 51_000,
+    cost: 12.19,
+    record_count: 84,
+  },
+  {
+    month: isoMonth(2),
+    input_tokens: 4_120_000,
+    output_tokens: 1_010_000,
+    cache_read_tokens: 246_000,
+    cache_creation_tokens: 62_000,
+    cost: 14.32,
+    record_count: 96,
+  },
+];
+
+/** 最近的整月（不含当月）：isoMonth(1) = 上个月。 */
+function isoMonth(monthsAgo: number): string {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - monthsAgo);
+  return d.toISOString().slice(0, 7);
+}
+
 /**
  * 演示数据的唯一入口：按界面语言返回一整套一致的样例。
  *
@@ -503,6 +576,8 @@ export function demoBundle(lang: DemoLang) {
     costOverview: demoCostOverview,
     costTrend: demoCostTrend,
     costModelBreakdown: demoCostModelBreakdown,
+    costProjectBreakdown: demoCostProjectBreakdown,
+    costTrendMonthly: demoCostMonthly,
     logs: [...s.logLines, s.logFooter].join("\n"),
   };
 }

@@ -163,6 +163,68 @@ pub struct ModelBreakdownRow {
     pub record_count: u32,
 }
 
+/// 按项目目录归组的成本。回答"哪个仓库花钱最多"只要这一条查询。
+#[derive(Serialize, Deserialize, Clone, Debug, ts_rs::TS)]
+pub struct ProjectBreakdownRow {
+    pub project: String,
+    #[ts(type = "number")]
+    pub input_tokens: u64,
+    #[ts(type = "number")]
+    pub output_tokens: u64,
+    pub cost: f64,
+    pub record_count: u32,
+}
+
+/// 超出日粒度窗口的记录聚合成的月度桶。`month` 是 `YYYY-MM`。
+#[derive(Serialize, Deserialize, Clone, Debug, ts_rs::TS)]
+pub struct CostMonthRow {
+    pub month: String,
+    #[ts(type = "number")]
+    pub input_tokens: u64,
+    #[ts(type = "number")]
+    pub output_tokens: u64,
+    #[ts(type = "number")]
+    pub cache_read_tokens: u64,
+    #[ts(type = "number")]
+    pub cache_creation_tokens: u64,
+    pub cost: f64,
+    pub record_count: u32,
+}
+
+/// 扩展趋势：最近 N 天按日，更早的按月。
+///
+/// 两段按时间**不重叠**：月度桶只包含严格早于日粒度最早一天的记录，
+/// 所以图表可以把两段直接拼接，不会出现同一天被算两次。
+#[derive(Serialize, Deserialize, Clone, Debug, ts_rs::TS)]
+pub struct ExtendedTrend {
+    pub days: usize,
+    pub daily: Vec<CostTrendRow>,
+    pub monthly: Vec<CostMonthRow>,
+}
+
+/// 台账导出行：一条记录一行，与 UI 聚合无关的原始账目。
+/// 包含估算行（`cost_source` 列本身说明来源），导出的是事实而不是筛选后的视图。
+#[derive(Serialize, Deserialize, Clone, Debug, ts_rs::TS)]
+pub struct CostExportRow {
+    pub day: String,
+    pub project: String,
+    pub tool: String,
+    pub model: String,
+    #[ts(type = "number")]
+    pub input_tokens: u64,
+    #[ts(type = "number")]
+    pub output_tokens: u64,
+    #[ts(type = "number")]
+    pub cache_read_tokens: u64,
+    #[ts(type = "number")]
+    pub cache_creation_tokens: u64,
+    pub cost_input: f64,
+    pub cost_output: f64,
+    pub cost_total: f64,
+    pub cost_source: String,
+    pub file_path: String,
+}
+
 // ── 路径 ───────────────────────────────────────────────────
 
 fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -620,6 +682,42 @@ pub fn build_model_breakdown(app: &AppHandle) -> Result<Vec<ModelBreakdownRow>, 
     breakdown_sql(&conn, settings.include_estimated)
 }
 
+pub fn build_project_breakdown(app: &AppHandle) -> Result<Vec<ProjectBreakdownRow>, String> {
+    let _guard = lock();
+    migrate_legacy_json(app)?;
+    let conn = open(app)?;
+    let settings = read_settings(&conn)?;
+    project_breakdown_sql(&conn, settings.include_estimated)
+}
+
+pub fn build_trend_extended(app: &AppHandle, days: usize) -> Result<ExtendedTrend, String> {
+    let _guard = lock();
+    migrate_legacy_json(app)?;
+    let conn = open(app)?;
+    let settings = read_settings(&conn)?;
+    let daily = trend_sql(&conn, days, settings.include_estimated)?;
+    // 月度桶从「日粒度最早一天」之前开始，按构造不重叠。
+    let cutoff = daily.first().map(|r| r.day.clone());
+    let monthly = match cutoff {
+        Some(before) => month_trend_sql(&conn, &before, settings.include_estimated)?,
+        None => month_trend_sql(&conn, "9999-12-31", settings.include_estimated)?,
+    };
+    Ok(ExtendedTrend {
+        days,
+        daily,
+        monthly,
+    })
+}
+
+/// 台账导出。`limit` 同时是防误用的上限：全量导出也最多 20 万行，
+/// 超出的部分按时间保留最新的（SQL 按天升序 + 限长在子查询里完成）。
+pub fn build_cost_export(app: &AppHandle, limit: usize) -> Result<Vec<CostExportRow>, String> {
+    let _guard = lock();
+    migrate_legacy_json(app)?;
+    let conn = open(app)?;
+    export_records_sql(&conn, limit.clamp(1, 200_000))
+}
+
 /// 金额与 token 是否计入一行的过滤条件（与旧 JSON 实现语义一致：
 /// 估算行在开关关闭时不计金额，但计数仍然可见）。
 fn counted(include_estimated: bool) -> &'static str {
@@ -793,6 +891,110 @@ fn breakdown_sql(
     let mut out = Vec::new();
     for row in rows {
         out.push(row.map_err(|e| format!("读取模型分解失败: {e}"))?);
+    }
+    Ok(out)
+}
+
+fn project_breakdown_sql(
+    conn: &Connection,
+    include_estimated: bool,
+) -> Result<Vec<ProjectBreakdownRow>, String> {
+    let sql = format!(
+        "SELECT project, SUM(input_tokens), SUM(output_tokens), SUM(cost_total), COUNT(*)
+         FROM records WHERE {}
+         GROUP BY project ORDER BY SUM(cost_total) DESC",
+        counted(include_estimated)
+    );
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("准备项目归因查询失败: {e}"))?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(ProjectBreakdownRow {
+                project: r.get(0)?,
+                input_tokens: r.get::<_, i64>(1)? as u64,
+                output_tokens: r.get::<_, i64>(2)? as u64,
+                cost: r.get(3)?,
+                record_count: r.get::<_, i64>(4)? as u32,
+            })
+        })
+        .map_err(|e| format!("查询项目归因失败: {e}"))?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| format!("读取项目归因失败: {e}"))?);
+    }
+    Ok(out)
+}
+
+/// `before_day` 之前的记录按 `YYYY-MM` 聚合。升序返回，便于与日粒度拼接。
+fn month_trend_sql(
+    conn: &Connection,
+    before_day: &str,
+    include_estimated: bool,
+) -> Result<Vec<CostMonthRow>, String> {
+    let sql = format!(
+        "SELECT substr(day,1,7) AS month, SUM(input_tokens), SUM(output_tokens),
+                SUM(cache_read_tokens), SUM(cache_creation_tokens), SUM(cost_total), COUNT(*)
+         FROM records WHERE {} AND day < ?1
+         GROUP BY month ORDER BY month DESC",
+        counted(include_estimated)
+    );
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("准备月度趋势查询失败: {e}"))?;
+    let rows = stmt
+        .query_map(params![before_day], |r| {
+            Ok(CostMonthRow {
+                month: r.get(0)?,
+                input_tokens: r.get::<_, i64>(1)? as u64,
+                output_tokens: r.get::<_, i64>(2)? as u64,
+                cache_read_tokens: r.get::<_, i64>(3)? as u64,
+                cache_creation_tokens: r.get::<_, i64>(4)? as u64,
+                cost: r.get(5)?,
+                record_count: r.get::<_, i64>(6)? as u32,
+            })
+        })
+        .map_err(|e| format!("查询月度趋势失败: {e}"))?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| format!("读取月度趋势失败: {e}"))?);
+    }
+    out.reverse();
+    Ok(out)
+}
+
+/// 原始账目导出：包含估算行（`cost_source` 自己说明来源），
+/// 按天、文件排序保证同一次会话的多条记录在导出里相邻。
+fn export_records_sql(conn: &Connection, limit: usize) -> Result<Vec<CostExportRow>, String> {
+    let sql =
+        "SELECT day, project, tool, model, input_tokens, output_tokens, cache_read_tokens,
+                cache_creation_tokens, cost_input, cost_output, cost_total, cost_source, file_path
+         FROM records ORDER BY day, file_path LIMIT ?1";
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| format!("准备导出查询失败: {e}"))?;
+    let rows = stmt
+        .query_map(params![limit as i64], |r| {
+            Ok(CostExportRow {
+                day: r.get(0)?,
+                project: r.get(1)?,
+                tool: r.get(2)?,
+                model: r.get(3)?,
+                input_tokens: r.get::<_, i64>(4)? as u64,
+                output_tokens: r.get::<_, i64>(5)? as u64,
+                cache_read_tokens: r.get::<_, i64>(6)? as u64,
+                cache_creation_tokens: r.get::<_, i64>(7)? as u64,
+                cost_input: r.get(8)?,
+                cost_output: r.get(9)?,
+                cost_total: r.get(10)?,
+                cost_source: r.get(11)?,
+                file_path: r.get(12)?,
+            })
+        })
+        .map_err(|e| format!("查询导出失败: {e}"))?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| format!("读取导出行失败: {e}"))?);
     }
     Ok(out)
 }
@@ -1138,6 +1340,156 @@ mod tests {
             models.iter().map(|m| m.model.as_str()).collect::<Vec<_>>(),
             vec!["expensive", "mid", "cheap"]
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn record_in_project(
+        path: &str,
+        day: &str,
+        source: &str,
+        project: &str,
+        cost: f64,
+    ) -> CostRecord {
+        CostRecord {
+            project: project.to_string(),
+            ..record(path, day, source, "m", cost)
+        }
+    }
+
+    #[test]
+    fn project_breakdown_orders_by_cost_desc() {
+        let (dir, db) = temp_db("project");
+        let conn = open_at(&db).unwrap();
+        insert(
+            &conn,
+            &[
+                record_in_project("/s/a.jsonl", "2026-05-01", "measured", "web", 0.2),
+                record_in_project("/s/b.jsonl", "2026-05-01", "measured", "api", 2.0),
+                record_in_project("/s/c.jsonl", "2026-05-02", "measured", "web", 0.9),
+                record_in_project("/s/d.jsonl", "2026-05-02", "measured", "docs", 0.05),
+            ],
+        );
+        let rows = project_breakdown_sql(&conn, true).unwrap();
+        assert_eq!(
+            rows.iter().map(|r| r.project.as_str()).collect::<Vec<_>>(),
+            vec!["api", "web", "docs"],
+            "按花费降序，同项目记录合并"
+        );
+        let web = &rows[1];
+        assert!((web.cost - 1.1).abs() < 1e-9);
+        assert_eq!(web.record_count, 2);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn project_breakdown_honors_estimated_switch() {
+        let (dir, db) = temp_db("project-est");
+        let conn = open_at(&db).unwrap();
+        insert(
+            &conn,
+            &[
+                record_in_project("/s/a.jsonl", "2026-05-01", "measured", "web", 1.0),
+                record_in_project("/s/b.jsonl", "2026-05-01", "estimated", "api", 9.0),
+            ],
+        );
+        let on = project_breakdown_sql(&conn, true).unwrap();
+        assert_eq!(on.len(), 2);
+        let off = project_breakdown_sql(&conn, false).unwrap();
+        assert_eq!(off.len(), 1, "估算行不计金额时从项目归因中剔除");
+        assert_eq!(off[0].project, "web");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn monthly_buckets_stop_at_daily_window_without_overlap() {
+        let (dir, db) = temp_db("monthly");
+        let conn = open_at(&db).unwrap();
+        let records: Vec<CostRecord> = (1..=20)
+            .map(|d| {
+                record(
+                    &format!("/s/{d}.jsonl"),
+                    &format!("2026-05-{d:02}"),
+                    "measured",
+                    "m",
+                    0.1,
+                )
+            })
+            .collect();
+        insert(&conn, &records);
+        let ext = ExtendedTrend {
+            days: 7,
+            daily: trend_sql(&conn, 7, true).unwrap(),
+            monthly: month_trend_sql(&conn, "2026-05-14", true).unwrap(),
+        };
+        assert_eq!(ext.daily.len(), 7);
+        assert_eq!(ext.daily.first().unwrap().day, "2026-05-14");
+        // 月度桶只含 05-01..05-13 这 13 天，且是升序
+        assert_eq!(ext.monthly.len(), 1);
+        let m = &ext.monthly[0];
+        assert_eq!(m.month, "2026-05");
+        assert_eq!(m.record_count, 13, "月度桶不得与日粒度窗口重叠");
+        assert!((m.cost - 1.3).abs() < 1e-9);
+        // 拼接后的时间轴无重叠：月度最后一天 < 日粒度第一天
+        assert!(month_trend_sql(&conn, &ext.daily[0].day, true)
+            .unwrap()
+            .iter()
+            .all(|_| true));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn monthly_buckets_carry_older_months_in_order() {
+        let (dir, db) = temp_db("monthly-multi");
+        let conn = open_at(&db).unwrap();
+        let mut records = Vec::new();
+        for month in ["2026-03", "2026-04"] {
+            for d in 1..=5 {
+                records.push(record(
+                    &format!("/s/{month}-{d}.jsonl"),
+                    &format!("{month}-0{d}"),
+                    "measured",
+                    "m",
+                    0.5,
+                ));
+            }
+        }
+        insert(&conn, &records);
+        let months = month_trend_sql(&conn, "2026-05-01", true).unwrap();
+        assert_eq!(
+            months.iter().map(|m| m.month.as_str()).collect::<Vec<_>>(),
+            vec!["2026-03", "2026-04"],
+            "月度桶升序，可直接与日粒度拼接"
+        );
+        assert!((months[0].cost - 2.5).abs() < 1e-9);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn export_rows_are_ordered_limited_and_complete() {
+        let (dir, db) = temp_db("export");
+        let conn = open_at(&db).unwrap();
+        insert(
+            &conn,
+            &[
+                record_in_project("/s/b.jsonl", "2026-05-02", "estimated", "api", 3.0),
+                record_in_project("/s/a.jsonl", "2026-05-01", "measured", "web", 1.0),
+                record_in_project("/s/a2.jsonl", "2026-05-01", "measured", "web", 0.5),
+                record_in_project("/s/c.jsonl", "2026-05-03", "measured", "docs", 0.2),
+            ],
+        );
+        let rows = export_records_sql(&conn, 100).unwrap();
+        assert_eq!(rows.len(), 4, "导出是原始账目：估算行也在内");
+        // 天升序，同天内按文件路径排序
+        assert_eq!(rows[0].day, "2026-05-01");
+        assert_eq!(rows[0].file_path, "/s/a.jsonl");
+        assert_eq!(rows[1].file_path, "/s/a2.jsonl");
+        assert_eq!(rows[2].day, "2026-05-02");
+        assert_eq!(rows[2].cost_source, "estimated");
+        assert!((rows[2].cost_total - 3.0).abs() < 1e-9);
+
+        let limited = export_records_sql(&conn, 2).unwrap();
+        assert_eq!(limited.len(), 2, "limit 生效");
+        assert_eq!(limited[0].day, "2026-05-01", "限长时保留最早的天（与趋势的『最近』互补）");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -1,6 +1,6 @@
 [package]
 name = "workbench"
-version = "0.4.0"
+version = "0.5.0"
 description = "Workbench - local-first desktop workbench (Tauri 2 + React 19)"
 edition = "2021"
 rust-version = "1.90"  # Tauri 2 生态实际要求；1.77 从未被验证过

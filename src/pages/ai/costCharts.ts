@@ -13,8 +13,9 @@ export function costTrendOption(
   colors: string[],
   labels: { legend: string; tooltip: (value: string) => string }
 ) {
-  // 后端契约是 YYYY-MM-DD；slice(5) 取 MM-DD
-  const days = rows.map((r) => r.day.slice(5));
+  // 后端契约：日粒度是 YYYY-MM-DD（slice(5) 取 MM-DD）；
+  // 扩展趋势会把更早的数据按月聚合成 YYYY-MM，整段显示。
+  const days = rows.map((r) => (r.day.length === 7 ? r.day : r.day.slice(5)));
   return {
     grid: { left: 50, right: 16, top: 20, bottom: 24 },
     tooltip: {

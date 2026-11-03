@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Coins,
   DollarSign,
+  Download,
   Hash,
   RefreshCw,
   Trash2,
@@ -13,6 +14,9 @@ import { chartGapColor, seriesColors } from "../../lib/chartTheme";
 import { useStore } from "../../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { useT } from "../../lib/i18n";
+import { getCostExportRows } from "../../lib/api";
+import { buildCostCsv, buildCostJson, costExportFilename } from "../../lib/costExport";
+import { downloadText } from "../../lib/export";
 import {
   Btn,
   Card,
@@ -24,11 +28,19 @@ import {
 } from "../../ui";
 import { formatTokens, formatUsd } from "../../lib/util";
 import type { EChartsCoreOption } from "echarts/core";
-import type { CostOverview, ModelBreakdownRow } from "../../types";
+import type {
+  CostOverview,
+  CostTrendRow,
+  ModelBreakdownRow,
+  ProjectBreakdownRow,
+} from "../../types";
 import { isPieWorthRendering } from "../../lib/aggregate";
 import { costTrendOption, modelBreakdownOption } from "./costCharts";
 import { PricingEditor } from "./PricingEditor";
 import { usePricingSummary } from "./usePricingSummary";
+
+/** 趋势窗口选项：90 天起旧数据由后端按月聚合。 */
+const TREND_RANGES = [14, 30, 90] as const;
 
 /**
  * 成本仪表盘：预算告警、四项统计、预算进度条、趋势/模型分解图。
@@ -37,29 +49,55 @@ import { usePricingSummary } from "./usePricingSummary";
 export function CostDashboard() {
   const t = useT();
   const [confirmClear, setConfirmClear] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const pricing = usePricingSummary();
 
   const {
     theme,
     costOverview,
     costTrend,
+    costTrendMonthly,
+    costTrendDays,
     costModelBreakdown,
+    costProjectBreakdown,
     costLoading,
     scanCosts,
     clearCosts,
+    loadCostTrend,
+    setToast,
   } = useStore(
     useShallow((s) => ({
       theme: s.theme,
       costOverview: s.costOverview,
       costTrend: s.costTrend,
+      costTrendMonthly: s.costTrendMonthly,
+      costTrendDays: s.costTrendDays,
       costModelBreakdown: s.costModelBreakdown,
+      costProjectBreakdown: s.costProjectBreakdown,
       costLoading: s.costLoading,
       scanCosts: s.scanCosts,
       clearCosts: s.clearCosts,
+      loadCostTrend: s.loadCostTrend,
+      setToast: s.setToast,
     }))
   );
 
   const colors = useMemo(() => seriesColors(theme), [theme]);
+
+  // 月度桶（升序）拼在日粒度前面：一张图同时表达"最近 N 天按日 + 更早按月"
+  const mergedTrend = useMemo<CostTrendRow[]>(() => {
+    if (costTrendMonthly.length === 0) return costTrend;
+    const monthlyAsDaily: CostTrendRow[] = costTrendMonthly.map((m) => ({
+      day: m.month,
+      input_tokens: m.input_tokens,
+      output_tokens: m.output_tokens,
+      cache_read_tokens: m.cache_read_tokens,
+      cache_creation_tokens: m.cache_creation_tokens,
+      cost: m.cost,
+      record_count: m.record_count,
+    }));
+    return [...monthlyAsDaily, ...costTrend];
+  }, [costTrendMonthly, costTrend]);
 
   const totalTokensDisplay = useMemo(() => {
     if (!costOverview) return "—";
@@ -82,14 +120,33 @@ export function CostDashboard() {
 
   const costTrendChart = useMemo(
     () =>
-      costTrend.length
-        ? costTrendOption(costTrend, colors, {
+      mergedTrend.length
+        ? costTrendOption(mergedTrend, colors, {
             legend: t("ai.costLegend"),
             tooltip: (value) => t("ai.costTrendTooltip", { value }),
           })
         : null,
-    [costTrend, t, colors]
+    [mergedTrend, t, colors]
   );
+
+  /** 台账导出：现取现导，不常驻内存。失败落 toast 而不是静默。 */
+  const exportLedger = async (fmt: "csv" | "json") => {
+    setExporting(true);
+    try {
+      const rows = await getCostExportRows();
+      const text = fmt === "csv" ? buildCostCsv(rows) : buildCostJson(rows);
+      downloadText(
+        costExportFilename(fmt),
+        text,
+        fmt === "csv" ? "text/csv" : "application/json"
+      );
+      setToast(t("ai.exportDone", { count: rows.length }));
+    } catch (e) {
+      setToast(t("ai.exportFailed", { err: String(e) }));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const modelBreakdownChart = useMemo(
     () =>
@@ -123,8 +180,10 @@ export function CostDashboard() {
         totalTokens={totalTokensDisplay}
         loading={costLoading}
         overrideCount={pricing.count}
+        exporting={exporting}
         onScan={() => void scanCosts()}
         onClear={() => setConfirmClear(true)}
+        onExport={(fmt) => void exportLedger(fmt)}
       />
 
       <BudgetProgress overview={costOverview} />
@@ -134,7 +193,12 @@ export function CostDashboard() {
         breakdown={modelBreakdownChart}
         breakdownRows={costModelBreakdown}
         colors={colors}
+        trendDays={costTrendDays}
+        hasMonthly={costTrendMonthly.length > 0}
+        onRangeChange={(days) => void loadCostTrend(days)}
       />
+
+      <ProjectBreakdown rows={costProjectBreakdown} colors={colors} />
 
       <ConfirmDialog
         open={confirmClear}
@@ -238,21 +302,25 @@ function BudgetBanners({
   );
 }
 
-/** 四项统计 + 扫描/清空操作。窄屏时按钮换到单独一行。 */
+/** 四项统计 + 扫描/清空/导出操作。窄屏时按钮换到单独一行。 */
 function CostHeader({
   overview,
   totalTokens,
   loading,
   overrideCount,
+  exporting,
   onScan,
   onClear,
+  onExport,
 }: {
   overview: CostOverview | null;
   totalTokens: string;
   loading: boolean;
   overrideCount: number | null;
+  exporting: boolean;
   onScan: () => void;
   onClear: () => void;
+  onExport: (fmt: "csv" | "json") => void;
 }) {
   const t = useT();
   const stats = costStats(overview, totalTokens, t);
@@ -266,9 +334,11 @@ function CostHeader({
       </div>
       <CostActions
         loading={loading}
+        exporting={exporting}
         overrideCount={overrideCount}
         onScan={onScan}
         onClear={onClear}
+        onExport={onExport}
       />
     </div>
   );
@@ -321,21 +391,25 @@ function costStats(
   ];
 }
 
-/** 扫描 / 清空 / 定价覆盖提示。 */
+/** 扫描 / 清空 / 导出 / 定价覆盖提示。 */
 function CostActions({
   loading,
+  exporting,
   overrideCount,
   onScan,
   onClear,
+  onExport,
 }: {
   loading: boolean;
+  exporting: boolean;
   overrideCount: number | null;
   onScan: () => void;
   onClear: () => void;
+  onExport: (fmt: "csv" | "json") => void;
 }) {
   const t = useT();
   return (
-    <div className="flex shrink-0 gap-2 lg:ml-3 lg:flex-col">
+    <div className="flex shrink-0 flex-wrap gap-2 lg:ml-3 lg:flex-col">
       <Btn onClick={onScan} disabled={loading} title={t("ai.scanCostsTitle")}>
         {loading ? <Spinner /> : <RefreshCw size={14} />}
         {loading ? t("ai.scanning") : t("ai.scanCosts")}
@@ -346,6 +420,17 @@ function CostActions({
           {t("ai.scanHint")}
         </span>
       )}
+      <Btn onClick={() => onExport("csv")} disabled={exporting} title={t("ai.exportCsv")}>
+        {exporting ? <Spinner /> : <Download size={14} />} {t("ai.exportCsv")}
+      </Btn>
+      <Btn
+        onClick={() => onExport("json")}
+        disabled={exporting}
+        className="!py-1 !text-xs"
+        title={t("ai.exportJson")}
+      >
+        {t("ai.exportJson")}
+      </Btn>
       <Btn onClick={onClear} className="!py-1 !text-xs" title={t("ai.clearCostsTitle")}>
         <Trash2 size={12} /> {t("ai.clear")}
       </Btn>
@@ -400,11 +485,17 @@ function CostCharts({
   breakdown,
   breakdownRows,
   colors,
+  trendDays,
+  hasMonthly,
+  onRangeChange,
 }: {
   trend: EChartsCoreOption | null;
   breakdown: EChartsCoreOption | null;
   breakdownRows: ModelBreakdownRow[];
   colors: string[];
+  trendDays: number;
+  hasMonthly: boolean;
+  onRangeChange: (days: number) => void;
 }) {
   const t = useT();
   if (!trend && !breakdown) return null;
@@ -412,7 +503,36 @@ function CostCharts({
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
       {trend && (
         <Card className="lg:col-span-3">
-          <SectionTitle>{t("ai.costTrendTitle")}</SectionTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="mr-auto">
+              <SectionTitle>{t("ai.costTrendTitle")}</SectionTitle>
+            </div>
+            <div
+              role="group"
+              aria-label={t("ai.trendRangeLabel")}
+              className="flex items-center gap-1"
+            >
+              {TREND_RANGES.map((d) => (
+                <button
+                  key={d}
+                  onClick={() => onRangeChange(d)}
+                  aria-pressed={trendDays === d}
+                  className={`rounded-[var(--radius-btn)] px-2 py-0.5 text-[11px] transition-colors ${
+                    trendDays === d
+                      ? "bg-accent-soft font-medium text-accent"
+                      : "text-dim hover:text-text"
+                  }`}
+                >
+                  {t("ai.trendRangeDays", { days: d })}
+                </button>
+              ))}
+            </div>
+          </div>
+          {hasMonthly && (
+            <p className="mt-1 text-[10.5px] text-faint">
+              {t("ai.trendMonthlyNote", { days: TREND_RANGES[1] })}
+            </p>
+          )}
           <EChart option={trend} style={{ height: 200 }} lazyUpdate />
         </Card>
       )}
@@ -426,10 +546,10 @@ function CostCharts({
             {breakdownRows.slice(0, 5).map((r, i) => (
               <div key={r.model} className="flex items-center gap-2 text-xs">
                 <span
-                  className="inline-block h-2 w-2 rounded-full"
+                  className="inline-block h-2 w-2 shrink-0 rounded-full"
                   style={{ background: colors[i % colors.length] }}
                 />
-                <span className="flex-1 truncate text-dim" title={r.model}>
+                <span className="min-w-0 flex-1 truncate text-dim" title={r.model}>
                   {r.model}
                 </span>
                 <span className="font-mono text-text">{formatUsd(r.cost)}</span>
@@ -442,5 +562,53 @@ function CostCharts({
         </Card>
       )}
     </div>
+  );
+}
+
+/**
+ * 项目成本构成：回答"哪个仓库花钱最多"。
+ *
+ * 只展示前 8 个项目：第 9 名之后的往往是几十行小项目，塞进来只会把
+ * 有意义的条目挤出视口。完整数据在台账导出里。
+ */
+function ProjectBreakdown({
+  rows,
+  colors,
+}: {
+  rows: ProjectBreakdownRow[];
+  colors: string[];
+}) {
+  const t = useT();
+  const shown = rows.slice(0, 8);
+  if (shown.length === 0) return null;
+  const max = Math.max(...shown.map((r) => r.cost), 1e-9);
+  return (
+    <Card>
+      <SectionTitle>{t("ai.projectBreakdownTitle")}</SectionTitle>
+      <div className="space-y-2.5">
+        {shown.map((r, i) => (
+          <div key={r.project} className="text-xs">
+            <div className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-dim" title={r.project}>
+                {r.project}
+              </span>
+              <span className="font-mono text-text">{formatUsd(r.cost)}</span>
+              <span className="w-20 text-right text-dim">
+                {formatTokens(r.input_tokens + r.output_tokens)}
+              </span>
+            </div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-panel2">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${Math.max((r.cost / max) * 100, 2)}%`,
+                  background: colors[i % colors.length],
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }

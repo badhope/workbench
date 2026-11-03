@@ -38,6 +38,10 @@ export type { CostSettings } from "./generated/CostSettings";
 export type { CostOverview } from "./generated/CostOverview";
 export type { CostTrendRow } from "./generated/CostTrendRow";
 export type { ModelBreakdownRow } from "./generated/ModelBreakdownRow";
+export type { ProjectBreakdownRow } from "./generated/ProjectBreakdownRow";
+export type { CostMonthRow } from "./generated/CostMonthRow";
+export type { ExtendedTrend } from "./generated/ExtendedTrend";
+export type { CostExportRow } from "./generated/CostExportRow";
 
 // ── 仅前端使用的类型 ──────────────────────────────────────────
 

@@ -27,7 +27,8 @@ import {
   clearCostRecords,
   getCostOverview,
   getCostSettings,
-  getCostTrend,
+  getCostTrendExtended,
+  getProjectBreakdown,
   getModelBreakdown,
   ensureNotificationPermission,
   isTauri,
@@ -59,6 +60,8 @@ import type {
   DevServer,
   DiskInfo,
   ModelBreakdownRow,
+  CostMonthRow,
+  ProjectBreakdownRow,
   OpencodeSession,
   PortEntry,
   ProcInfo,
@@ -130,6 +133,12 @@ interface RuntimeState {
   costOverview: CostOverview | null;
   costTrend: CostTrendRow[];
   costModelBreakdown: ModelBreakdownRow[];
+  /** 按项目目录归因的成本（"哪个仓库花钱最多"） */
+  costProjectBreakdown: ProjectBreakdownRow[];
+  /** 超出日粒度窗口的月度聚合桶（升序，可拼在日粒度前） */
+  costTrendMonthly: CostMonthRow[];
+  /** 趋势窗口天数；>30 时旧数据由后端按月聚合 */
+  costTrendDays: number;
   costSettings: CostSettings;
   costLoading: boolean;
   costNotified: boolean; // 是否已发过预算告警通知（避免重复打扰）
@@ -179,6 +188,8 @@ interface Store extends UiState, RuntimeState {
   restoreData: (id: string) => Promise<RestoreResult>;
   // ── 成本计量 ──
   loadCostOverview: () => Promise<string | undefined>;
+  /** 按天数窗口重取趋势（>30 天时旧数据按月聚合）。 */
+  loadCostTrend: (days: number) => Promise<void>;
   scanCosts: (options?: { afterCurrent?: boolean }) => Promise<void>;
   loadCostSettings: () => Promise<void>;
   updateCostSettings: (s: CostSettings) => Promise<boolean>;
@@ -260,6 +271,9 @@ export const useStore = create<Store>()(
       costOverview: null,
       costTrend: [],
       costModelBreakdown: [],
+      costProjectBreakdown: [],
+      costTrendMonthly: [],
+      costTrendDays: 14,
       costSettings: {
         daily_budget: 5,
         monthly_budget: 50,
@@ -377,6 +391,9 @@ export const useStore = create<Store>()(
             costOverview: demo.costOverview,
             costTrend: demo.costTrend,
             costModelBreakdown: demo.costModelBreakdown,
+            costProjectBreakdown: demo.costProjectBreakdown,
+            costTrendMonthly: demo.costTrendMonthly,
+            costTrendDays: 14,
             history: seed,
             loading: false,
             lastRefreshAt: Date.now(),
@@ -805,20 +822,31 @@ export const useStore = create<Store>()(
             return fallback;
           });
 
-        const [overview, trend, breakdown, settings] = await Promise.all([
+        const [overview, extended, breakdown, projectRows, settings] = await Promise.all([
           track(t("store.track.overview"), getCostOverview(), null),
-          track(t("store.track.trend"), getCostTrend(14), [] as CostTrendRow[]),
+          track(t("store.track.trend"), getCostTrendExtended(get().costTrendDays), {
+            days: get().costTrendDays,
+            daily: [] as CostTrendRow[],
+            monthly: [] as CostMonthRow[],
+          }),
           track(
             t("store.track.breakdown"),
             getModelBreakdown(),
             [] as ModelBreakdownRow[]
           ),
+          track(
+            t("store.track.projectBreakdown"),
+            getProjectBreakdown(),
+            [] as ProjectBreakdownRow[]
+          ),
           track(t("store.track.settings"), getCostSettings(), get().costSettings),
         ]);
         set({
           costOverview: overview,
-          costTrend: trend,
+          costTrend: extended.daily,
+          costTrendMonthly: extended.monthly,
           costModelBreakdown: breakdown,
+          costProjectBreakdown: projectRows,
           costSettings: settings,
         });
         if (errors.length) {
@@ -832,6 +860,24 @@ export const useStore = create<Store>()(
           return message;
         }
         get().checkBudgetAlert();
+      },
+
+      loadCostTrend: async (days) => {
+        if (!isTauri()) {
+          set({ costTrendDays: days });
+          return;
+        }
+        // 只切窗口：不碰 overview / settings，避免一次点击打四个查询
+        try {
+          const extended = await getCostTrendExtended(days);
+          set({
+            costTrendDays: days,
+            costTrend: extended.daily,
+            costTrendMonthly: extended.monthly,
+          });
+        } catch (e) {
+          set({ toast: t("store.costReadFailed", { err: String(e) }) });
+        }
       },
 
       scanCosts: async (options) => {
@@ -858,6 +904,16 @@ export const useStore = create<Store>()(
                   previousError ||
                   t("ai.scannedSummary", { files: result.total_scanned, seconds }),
               });
+              // 扫描结果不带项目归因/月度桶：补一次轻量聚合。
+              // 失败只静默——主视图（overview/trend/breakdown）已经更新了。
+              void getProjectBreakdown()
+                .then((rows) => set({ costProjectBreakdown: rows }))
+                .catch(() => {});
+              void getCostTrendExtended(get().costTrendDays)
+                .then((ext) =>
+                  set({ costTrend: ext.daily, costTrendMonthly: ext.monthly })
+                )
+                .catch(() => {});
               get().checkBudgetAlert();
             } catch (e) {
               const scanError = t("store.scanFailed", { err: String(e) });
@@ -917,6 +973,8 @@ export const useStore = create<Store>()(
             costOverview: null,
             costTrend: [],
             costModelBreakdown: [],
+            costProjectBreakdown: [],
+            costTrendMonthly: [],
             costNotified: false,
             toast: t("store.cleared"),
           });

@@ -4,7 +4,7 @@ Workbench ships in small, verifiable increments. Every entry below states what
 is done, what is next, and what is explicitly **not** planned — a roadmap that
 only lists ambitions is a wish list, not a plan.
 
-Current version: **0.4.0** · Status legend: ✅ shipped · 🚧 in progress · ⬜ planned
+Current version: **0.5.0** · Status legend: ✅ shipped · 🚧 in progress · ⬜ planned
 
 ## 0.4.0 — Integrity of the numbers (shipped 2026-11-02)
 
@@ -16,14 +16,14 @@ Current version: **0.4.0** · Status legend: ✅ shipped · 🚧 in progress · 
 | Explicit restore path with rejection handling | ✅ | `store.restore.test.ts`, `Settings.restore.test.tsx` |
 | Single `main` branch, version gate in CI | ✅ | `scripts/check-version.mjs`, `.github/workflows/ci.yml` |
 
-## 0.5.0 — Depth on the cost side
+## 0.5.0 — Depth on the cost side (shipped 2026-11-03)
 
-| Item | Status | Notes |
-|------|--------|-------|
-| Per-project cost attribution | ⬜ | Group the ledger by project directory instead of by session file, so "which repo costs the most" is one query |
-| Budget alerts that actually fire | ⬜ | Today the budget is a display-only progress bar; it needs an OS notification at threshold |
-| Export the ledger | ⬜ | CSV and JSON export of cost records, with the same RFC 4180 escaping the process table uses |
-| Historical trend beyond 30 days | ⬜ | The trend query is bounded; older data is aggregated into monthly buckets |
+| Item | Status | Evidence |
+|------|--------|----------|
+| Per-project cost attribution | ✅ | `cost_store.rs` `project_breakdown_sql`, `ProjectBreakdownRow`; dashboard card |
+| Budget alerts that actually fire | ✅ | `store.ts` `checkBudgetAlert` — OS notification via `ensureNotificationPermission` + `notify`, once per crossing |
+| Export the ledger | ✅ | `get_cost_export` command, `src/lib/costExport.ts` (RFC 4180 escaping via `csvCell`), CSV + JSON |
+| Historical trend beyond 30 days | ✅ | `get_cost_trend_extended`: daily window + monthly buckets (`CostMonthRow`), no overlap by construction |
 
 ## 0.6.0 — Reach
 

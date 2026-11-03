@@ -3,10 +3,25 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.5.0] - 2026-11-03
 
 ### Added
 
+- **Per-project cost attribution.** The dashboard answers "which repo costs the
+  most" in one query: `project_breakdown_sql` groups the ledger by the session's
+  project directory (`ProjectBreakdownRow`), ordered by spend, with a per-row
+  bar and token counts. Estimated rows follow the same include-estimated switch
+  as every other money view.
+- **Ledger export.** New `get_cost_export` command returns the raw records
+  (bounded at 200k rows, oldest first), and the cost page gains CSV and JSON
+  export buttons. CSV reuses the RFC 4180 escaping and formula-injection guard
+  from the process table (`src/lib/costExport.ts`), keeps full float precision,
+  and includes estimated rows — `cost_source` is a column, so the file states
+  what is measured and what is not.
+- **Historical trend beyond 30 days.** `get_cost_trend_extended` returns the
+  daily window plus monthly buckets (`CostMonthRow`) for everything older; the
+  two ranges cannot overlap by construction, so the chart splices them into one
+  line. A 14/30/90-day switcher lives in the trend card header.
 - **Frontend diagnostics buffer.** `src/lib/diagnostics.ts` captures global
   `error` and `unhandledrejection` events — the ones an `ErrorBoundary` cannot
   see (event callbacks, timers, unawaited promises). The most recent 50 entries
@@ -47,6 +62,10 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The log pane uses theme-derived `panel2`** instead of a hardcoded
   `color-mix(bg 82%, black)`, which dropped timestamps to 4.02:1 on the new
   light default.
+- **Budget alerts are acknowledged as shipped.** The OS notification path
+  (`checkBudgetAlert` + permission request) has existed since 0.4.0; the
+  roadmap wrongly listed it as open. Tests cover the notify-once-then-reset
+  behaviour.
 
 ### Fixed
 
@@ -56,7 +75,8 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   already prepared state and memos for is now actually rendered.
 - **E2E custom-theme assertion** now checks that the accent keeps its hue and
   meets AA after the contrast solve, instead of asserting the raw input
-  survives; visual baselines were regenerated for the light default.
+  survives; visual baselines were regenerated for the light default and the new
+  cost-page cards.
 
 ## [0.4.0] - 2026-11-02
 
