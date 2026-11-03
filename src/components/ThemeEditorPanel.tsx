@@ -2,7 +2,10 @@ import { useState } from "react";
 import { useT } from "../lib/i18n";
 import {
   buildTheme,
+  clampElevation,
+  clampGlow,
   contrastRatio,
+  deriveAccent2,
   ensureTextContrast,
   type Density,
   type FontChoice,
@@ -130,6 +133,8 @@ const MATERIALS: { id: Material; key: string }[] = [
   { id: "glass", key: "settings.materialGlass" },
 ];
 
+const ELEVATIONS = [0, 1, 2, 3] as const;
+
 export function ThemeEditor({
   draft,
   onSave,
@@ -214,7 +219,25 @@ function ColorFields({
           label={t("settings.editorAccent")}
           against={local.bg}
         />
+        <ColorRow
+          local={local}
+          patch={patch}
+          field="accent2"
+          label={t("settings.editorAccent2")}
+          against={local.bg}
+          fallback={deriveAccent2(local.accent)}
+        />
       </div>
+
+      {/* 渐变开关：关掉后 --gradient-accent 退化为 accent 纯色，即时反映在预览里 */}
+      <label className="mt-2 flex items-center gap-2 text-[11.5px] text-dim">
+        <input
+          type="checkbox"
+          checked={local.gradientAccent !== false}
+          onChange={(e) => patch({ gradientAccent: e.target.checked })}
+        />
+        {t("settings.editorGradient")}
+      </label>
 
       <div className="mb-1.5 mt-3 text-[11px] font-medium text-dim">
         {t("settings.editorSemantic")}
@@ -275,7 +298,7 @@ function ColorRow({
 }: {
   local: ThemeInput;
   patch: (p: Partial<ThemeInput>) => void;
-  field: "bg" | "panel" | "text" | "accent" | "ok" | "warn" | "danger";
+  field: "bg" | "panel" | "text" | "accent" | "accent2" | "ok" | "warn" | "danger";
   label: string;
   against?: string;
   fallback?: string;
@@ -404,6 +427,40 @@ function ShapeFields({
           className="mt-1 w-full"
         />
       </label>
+      {/* 氛围光：0 = 关。滑杆显示的是 0-100 原始参数，求解（clamp/默认派生）
+          在 buildTheme 里做，这里不重复实现，避免两处规则漂移。 */}
+      <label className="mb-2 block text-[11px] text-dim">
+        {t("settings.editorGlow")} — {clampGlow(local.glow, local.material)}
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={clampGlow(local.glow, local.material)}
+          onChange={(e) => patch({ glow: Number(e.target.value) })}
+          className="mt-1 w-full"
+        />
+      </label>
+      <div className="mt-2">
+        <div className="mb-1 text-[10px] tracking-[0.06em] text-faint">
+          {t("settings.editorElevation")}
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {ELEVATIONS.map((lv) => (
+            <Btn
+              key={lv}
+              variant={
+                clampElevation(local.elevation, local.material) === lv
+                  ? "primary"
+                  : "ghost"
+              }
+              className="!px-2 !py-0.5 !text-[11px]"
+              onClick={() => patch({ elevation: lv })}
+            >
+              {t(`settings.editorElevation${lv}`)}
+            </Btn>
+          ))}
+        </div>
+      </div>
       {(
         [
           [DENSITIES, "density", "settings.editorDensity"],
@@ -495,6 +552,19 @@ function ThemeEditorBody({
             >
               42
             </div>
+            {/* 渐变数字预览：与 .grad-accent 同一 token，编辑器里改什么立即看到 */}
+            <div
+              className="num mt-1 text-[20px] font-semibold"
+              style={{
+                backgroundImage: tokens.vars["--gradient-accent"],
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                color: "transparent",
+                fontFamily: tokens.vars["--font-mono"],
+              }}
+            >
+              42
+            </div>
           </div>
           <div
             className="flex-1 p-2"
@@ -522,8 +592,9 @@ function ThemeEditorBody({
           <span
             className="px-2 py-0.5 text-[10.5px]"
             style={{
-              background: local.accent,
-              color: local.bg,
+              backgroundImage: tokens.vars["--gradient-accent"],
+              backgroundColor: local.accent,
+              color: tokens.vars["--color-on-accent"],
               borderRadius: local.radiusBtn,
             }}
           >

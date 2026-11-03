@@ -43,6 +43,28 @@ export interface ThemeInput {
    * 密度只改间距，不改字号；4K 屏与 1080p 笔记本需要的是后者。
    */
   textScale?: number;
+  /**
+   * 渐变第二强调色。
+   * 缺省 = accent 色相 +36°（见 deriveAccent2），再过与 accent 同一道 AA 门槛。
+   */
+  accent2?: string;
+  /**
+   * 渐变强调色开关（默认开，总监拍板）。
+   * 关掉时 --gradient-accent 退化为 accent 纯色，消费方（按钮/数字）无感知。
+   */
+  gradientAccent?: boolean;
+  /**
+   * 氛围光强度 0-100（0 = 关）。
+   * glow 原本是 glass 材质的专属装饰，现在独立成主题参数：
+   * 非玻璃主题也能有光晕气质。缺省 = glass 材质 55，其余 0。
+   */
+  glow?: number;
+  /**
+   * 卡片层级 0-3（0 = 无阴影）。
+   * 「精密仪器」语言靠表面 + 描边分层，阴影是辅助而非主角，所以只给四档；
+   * 缺省 = flat 材质 1（旧规则「flat 一律无阴影」已废除），其余 2。
+   */
+  elevation?: 0 | 1 | 2 | 3;
   /** 是否内置（内置不可删除） */
   builtin?: boolean;
 }
@@ -325,7 +347,7 @@ export function buildTheme(input: ThemeInput): ThemeTokens {
   // 同一比例在深色底和浅色底上的实际对比度差很多（浅色主题上会掉到 4.3:1）。
   // 目标：dim ≥ 6.0:1、faint ≥ 4.7:1（高于 WCAG AA 的 4.5，留一点抗渲染误差余量）。
   // 文字可能落在页面底、面板底、次级面板底（表格斑马纹）三种表面上。
-  const { text, dim, faint, accent, okSafe, warnSafe, dangerSafe } = semantic;
+  const { text, dim, faint, accent, accent2, okSafe, warnSafe, dangerSafe } = semantic;
   const panel2 = mix(input.panel, input.bg, 0.45);
   const line = mix(text, input.bg, 1 - LINE_STRENGTH[input.density]);
   const accentsoft = softAccent(input.panel, accent, input.dark);
@@ -338,6 +360,7 @@ export function buildTheme(input: ThemeInput): ThemeTokens {
     dim,
     faint,
     accent,
+    accent2,
     accentsoft,
     okSafe,
     warnSafe,
@@ -382,12 +405,22 @@ function resolveSemantic(input: ThemeInput) {
   const toward = input.dark ? "#ffffff" : "#000000";
   const surfaces = [input.bg, input.panel, mix(input.panel, input.bg, 0.45)];
   const text = ensureTextContrast(input.text, surfaces, toward, 4.6);
+  const accent = ensureTextContrast(input.accent, surfaces, toward, 4.6);
   return {
     surfaces,
     text,
     dim: mixUntilContrast(text, input.bg, surfaces, 6.0).color,
     faint: mixUntilContrast(text, input.bg, surfaces, 4.7).color,
-    accent: ensureTextContrast(input.accent, surfaces, toward, 4.6),
+    accent,
+    // accent2 与 accent 同一道门槛（4.6）：渐变两端都是安全色，
+    // 渐变中段的对比度才不会跌破 AA（两端达标 ≠ 中间达标，但两端
+    // 都是 4.6 时插值最坏也就略低，实际渐变只用于大面积文字/按钮）。
+    accent2: ensureTextContrast(
+      input.accent2 ?? deriveAccent2(input.accent),
+      surfaces,
+      toward,
+      4.6
+    ),
     okSafe: ensureTextContrast(ok, surfaces, toward, 4.6),
     warnSafe: ensureTextContrast(warn, surfaces, toward, 4.6),
     dangerSafe: ensureTextContrast(danger, surfaces, toward, 4.6),
@@ -401,6 +434,7 @@ interface DerivedColors {
   dim: string;
   faint: string;
   accent: string;
+  accent2: string;
   accentsoft: string;
   okSafe: string;
   warnSafe: string;
@@ -416,6 +450,14 @@ function themeVars(input: ThemeInput, c: DerivedColors): Record<string, string> 
     ensureTextContrast("#ffffff", [c.accent], c.accent, 4.5) === "#ffffff"
       ? "#ffffff"
       : ensureTextContrast("#000000", [c.accent], c.accent, 4.5);
+  // 渐变强调色：两端都是过了 AA 的安全色。关档时不直接给纯色值 ——
+  // 消费方写的是 background-image，纯色值会被静默丢弃；退化为
+  // 「accent → accent」的零跨度渐变，视觉等同纯色且单一代码路径。
+  const gradientAccent =
+    input.gradientAccent === false
+      ? `linear-gradient(120deg, ${c.accent}, ${c.accent})`
+      : `linear-gradient(120deg, ${c.accent}, ${c.accent2})`;
+  const shadows = cardShadows(input);
   return {
     "--color-bg": input.bg,
     "--color-panel": input.panel,
@@ -425,8 +467,10 @@ function themeVars(input: ThemeInput, c: DerivedColors): Record<string, string> 
     "--color-dim": c.dim,
     "--color-faint": c.faint,
     "--color-accent": c.accent,
+    "--color-accent2": c.accent2,
     "--color-on-accent": onAccent,
     "--color-accentsoft": c.accentsoft,
+    "--gradient-accent": gradientAccent,
     "--color-ok": c.okSafe,
     "--color-warn": c.warnSafe,
     "--color-danger": c.dangerSafe,
@@ -435,7 +479,8 @@ function themeVars(input: ThemeInput, c: DerivedColors): Record<string, string> 
     "--font-mono": c.fonts.mono,
     "--radius-card": `${input.radiusCard}px`,
     "--radius-btn": `${input.radiusBtn}px`,
-    "--shadow-card": cardShadow(input),
+    "--shadow-card": shadows.rest,
+    "--shadow-card-hover": shadows.hover,
     "--space-card": SPACE[input.density],
     "--line-height-body": LINE_HEIGHT[input.density],
     "--tracking-heading": input.font === "serif" ? "0.005em" : "-0.02em",
@@ -444,7 +489,9 @@ function themeVars(input: ThemeInput, c: DerivedColors): Record<string, string> 
     "--panel-opacity": String(Math.max(0.2, Math.min(1, input.panelOpacity))),
     "--panel-blur": input.material === "glass" ? "20px" : "0px",
     "--grid-strength": String(Math.max(0, Math.min(1, input.grid))),
-    "--glow": input.material === "glass" ? "1" : "0",
+    // 氛围光由主题参数 glow 决定（0-100 → 0-1），不再绑定材质；
+    // 颜色仍取主题 accent，所以每套主题的渐变背景都不同。
+    "--glow": String(clampGlow(input.glow, input.material) / 100),
     // 浅色底上给卡片加白色高光只会把它洗灰，所以浅色主题一律关掉
     "--card-sheen": input.dark ? "3.5" : "0",
     "--text-scale": String(clampTextScale(input.textScale)),
@@ -455,6 +502,41 @@ function themeVars(input: ThemeInput, c: DerivedColors): Record<string, string> 
 export function clampTextScale(v: number | undefined): number {
   if (typeof v !== "number" || !Number.isFinite(v)) return 1;
   return Math.max(0.85, Math.min(1.2, v));
+}
+
+/**
+ * 氛围光 0-100，越界夹取；缺省值跟随材质（glass 55，其余 0）。
+ * 导入 JSON / 编辑器滑杆都可能给出任意数值，这里集中收口。
+ */
+export function clampGlow(v: number | undefined, material: Material): number {
+  if (typeof v !== "number" || !Number.isFinite(v)) {
+    return material === "glass" ? 55 : 0;
+  }
+  return Math.max(0, Math.min(100, Math.round(v)));
+}
+
+/**
+ * 卡片层级 0-3，越界夹取；缺省 flat 材质 1、其余 2。
+ * 「flat = 无阴影」的旧规则已废除：亮色主题上一档浅阴影反而更像实体卡片。
+ */
+export function clampElevation(v: number | undefined, material: Material): 0 | 1 | 2 | 3 {
+  if (typeof v !== "number" || !Number.isFinite(v)) {
+    return material === "flat" ? 1 : 2;
+  }
+  return Math.max(0, Math.min(3, Math.round(v))) as 0 | 1 | 2 | 3;
+}
+
+/**
+ * 渐变第二色：accent 色相 +36°，饱和度/明度保持。
+ * 相邻色相 = 「同族渐变」，比撞色渐变更贴合「精密仪器」的克制气质；
+ * 用户嫌不够可以显式指定 accent2，派生值只兜底。
+ */
+export function deriveAccent2(accent: string): string {
+  const rgb = parseHex(accent);
+  const [h, s] = rgbToHsl(rgb);
+  // rgbToHsl 只返回 (h, s)；HSL 明度 = (max+min)/2，在这里补算
+  const l = (Math.max(...rgb) + Math.min(...rgb)) / 2 / 255;
+  return hslToHex((h + 36) % 360, s, l);
 }
 
 /**
@@ -520,10 +602,32 @@ function hslToHex(h: number, s: number, l: number): string {
   ]);
 }
 
-function cardShadow(input: ThemeInput): string {
-  if (input.material === "flat") return "none";
-  if (input.dark) {
-    return `0 1px 2px ${withAlpha("#000000", 0.5)}, 0 18px 40px -24px ${withAlpha("#000000", 0.9)}`;
-  }
-  return `0 1px 2px ${withAlpha("#101828", 0.06)}, 0 14px 30px -22px ${withAlpha("#101828", 0.28)}`;
+/**
+ * 卡片阴影：由 elevation（0-3）求解，而不是按材质一刀切。
+ *
+ * 「material=flat 一律 none」的旧规则被废除：亮色 flat 主题给一档浅阴影
+ * 反而更像实体卡片；真正的开关是 elevation=0（Terminal/Ink/Void/Mono Brutal
+ * 这类「印刷品」主题显式关闭）。
+ *
+ * 暗色主题的阴影天然偏「黑块」：用低透明大阴影 + 1px 内描边补偿轮廓，
+ * 否则深底上卡片边界只能靠猜。hover 档取 elevation+1，配合 CSS 的
+ * translateY(-2px) 组成「微抬升」；已到顶档则维持原档（不再加深）。
+ */
+function cardShadows(input: ThemeInput): { rest: string; hover: string } {
+  const level = clampElevation(input.elevation, input.material);
+  if (level === 0) return { rest: "none", hover: "none" };
+  const ring = input.dark ? `inset 0 0 0 1px ${withAlpha(input.text, 0.1)}, ` : "";
+  const dark: Record<1 | 2 | 3, string> = {
+    1: `0 1px 2px ${withAlpha("#000000", 0.35)}, 0 10px 24px -20px ${withAlpha("#000000", 0.7)}`,
+    2: `0 1px 2px ${withAlpha("#000000", 0.5)}, 0 18px 40px -24px ${withAlpha("#000000", 0.9)}`,
+    3: `0 2px 4px ${withAlpha("#000000", 0.5)}, 0 28px 60px -28px ${withAlpha("#000000", 0.95)}`,
+  };
+  const light: Record<1 | 2 | 3, string> = {
+    1: `0 1px 2px ${withAlpha("#101828", 0.05)}, 0 8px 18px -16px ${withAlpha("#101828", 0.2)}`,
+    2: `0 1px 2px ${withAlpha("#101828", 0.06)}, 0 14px 30px -22px ${withAlpha("#101828", 0.28)}`,
+    3: `0 2px 4px ${withAlpha("#101828", 0.07)}, 0 24px 48px -26px ${withAlpha("#101828", 0.34)}`,
+  };
+  const table = input.dark ? dark : light;
+  const hoverLevel = Math.min(3, level + 1) as 1 | 2 | 3;
+  return { rest: ring + table[level], hover: ring + table[hoverLevel] };
 }

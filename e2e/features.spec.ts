@@ -19,7 +19,12 @@ async function gotoPage(page: Page, label: string) {
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     try {
-      localStorage.removeItem("workbench-ui-v1");
+      // 从干净偏好开始，但预置 onboardingDone：否则首启引导浮层
+      // 会盖住命令面板与导航，用例全部被拦截。
+      localStorage.setItem(
+        "workbench-ui-v1",
+        JSON.stringify({ state: { onboardingDone: true }, version: 4 })
+      );
     } catch {
       /* ignore */
     }

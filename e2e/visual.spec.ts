@@ -21,6 +21,15 @@ const THEMES = [
   "ink",
   "void",
   "jade",
+  // 视觉 2.0 新增八套（4 暗 4 亮）
+  "midnight-aurora",
+  "ember",
+  "matcha",
+  "grape-soda",
+  "nordic-light",
+  "sakura",
+  "mono-brutal",
+  "sky",
 ] as const;
 
 const LAYOUTS = [
@@ -80,9 +89,13 @@ test.describe("布局稳定性", () => {
     await page.clock.install({ time: new Date("2026-10-21T12:00:00Z") });
     // 每个用例从干净偏好开始：布局/主题/组件顺序都会持久化，
     // 否则一条用例改了布局会污染下一条（Playwright 复用同一 origin 的 storage）。
+    // 预置 onboardingDone：首启引导浮层会盖住导航，点击全被拦截。
     await page.addInitScript(() => {
       try {
-        localStorage.removeItem("workbench-ui-v1");
+        localStorage.setItem(
+          "workbench-ui-v1",
+          JSON.stringify({ state: { onboardingDone: true }, version: 4 })
+        );
       } catch {
         /* ignore */
       }
@@ -105,9 +118,9 @@ test.describe("布局稳定性", () => {
     });
   });
 
-  // 八套主题 × (设置页→点主题→概览→截图) 单轮约 3s，默认 30s 不够。
-  test("overview 在八种主题下都保持结构", async ({ page }) => {
-    test.setTimeout(120_000);
+  // 十六套主题 × (设置页→点主题→概览→截图) 单轮约 3s，默认 30s 不够。
+  test("overview 在十六种主题下都保持结构", async ({ page }) => {
+    test.setTimeout(240_000);
     for (const theme of THEMES) {
       await pickTheme(page, themeName(theme));
       await expect(page).toHaveScreenshot(`overview-${theme}.png`, {
@@ -196,6 +209,14 @@ function themeName(id: string): string {
     ink: "Ink",
     void: "Void",
     jade: "Jade",
+    "midnight-aurora": "Midnight Aurora",
+    ember: "Ember",
+    matcha: "Matcha",
+    "grape-soda": "Grape Soda",
+    "nordic-light": "Nordic Light",
+    sakura: "Sakura",
+    "mono-brutal": "Mono Brutal",
+    sky: "Sky",
   };
   return map[id] ?? id;
 }
@@ -407,7 +428,7 @@ test.describe("图标渲染", () => {
         try {
           localStorage.setItem(
             "workbench-ui-v1",
-            JSON.stringify({ state: { theme: id }, version: 3 })
+            JSON.stringify({ state: { theme: id, onboardingDone: true }, version: 4 })
           );
         } catch {
           /* ignore */

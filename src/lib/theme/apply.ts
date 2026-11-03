@@ -4,6 +4,23 @@ import { registerChartTheme } from "../chartTheme";
 import type { ShellId, OverviewLayoutId } from "../layout";
 
 /**
+ * 动效档位。off = 全部断闸；standard = 默认节奏；rich = 更长更满。
+ * 组件不感知档位，只消费 <html data-motion>（CSS 唯一开关），
+ * useCountUp 是唯一的 JS 例外（它需要按档位改时长）。
+ */
+export type MotionLevel = "off" | "standard" | "rich";
+
+/**
+ * 把生效动效档位写到 DOM。
+ *
+ * 与主题变量一样落在 <html> 上：一个属性开关全站动效，
+ * CSS 侧在 global.css 末尾集中断闸，组件零条件渲染。
+ */
+export function applyMotion(level: MotionLevel): void {
+  document.documentElement.dataset.motion = level;
+}
+
+/**
  * 把主题 token 写到 DOM。
  *
  * 为什么改成写内联变量：主题现在是用户可编辑的数据，不能为每一种组合

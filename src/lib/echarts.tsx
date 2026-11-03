@@ -29,6 +29,7 @@ export interface EChartProps {
 /**
  * 占位块：保持与图表相同的高度，避免图表加载完成时页面跳动。
  * 用同一个尺寸而不是固定 150px —— 调用方传的高度各不相同。
+ * shimmer 与骨架屏同一语言（transform 位移高光），且可被 data-motion 断闸。
  */
 function ChartPlaceholder({
   style,
@@ -37,7 +38,7 @@ function ChartPlaceholder({
   return (
     <div
       style={style}
-      className={`animate-pulse rounded-[var(--radius-btn)] bg-line/40 ${className ?? ""}`}
+      className={`shimmer rounded-[var(--radius-btn)] bg-line/40 ${className ?? ""}`}
       aria-hidden="true"
     />
   );

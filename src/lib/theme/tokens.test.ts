@@ -3,8 +3,11 @@ import { BUILTIN_THEMES } from "./presets";
 import {
   buildTheme,
   chartSeries,
+  clampElevation,
+  clampGlow,
   clampTextScale,
   contrastRatio,
+  deriveAccent2,
   luminance,
   mix,
   parseHex,
@@ -72,7 +75,9 @@ describe("buildTheme", () => {
       "--color-dim",
       "--color-faint",
       "--color-accent",
+      "--color-accent2",
       "--color-accentsoft",
+      "--gradient-accent",
       "--color-ok",
       "--color-warn",
       "--color-danger",
@@ -82,6 +87,7 @@ describe("buildTheme", () => {
       "--radius-card",
       "--radius-btn",
       "--shadow-card",
+      "--shadow-card-hover",
       "--space-card",
       "--line-height-body",
       "--hairline",
@@ -234,5 +240,106 @@ describe("clampTextScale", () => {
     expect(clampTextScale(0.5)).toBe(0.85);
     expect(clampTextScale(2)).toBe(1.2);
     expect(clampTextScale(1.1)).toBeCloseTo(1.1, 5);
+  });
+});
+
+/**
+ * 视觉 2.0 新增 token：accent2 / 渐变 / glow / elevation。
+ * 与旧 token 同一原则——用户只给意图，求解集中在这里，页面不感知细节。
+ */
+describe("accent2 与渐变（视觉 2.0）", () => {
+  it("deriveAccent2 = accent 色相 +36°（青→蓝绿分量下降，红→橙绿分量上升）", () => {
+    // #22d3ee ≈ 188°（青），+36° ≈ 224°（蓝）：绿分量下降
+    const cyan = parseHex(deriveAccent2("#22d3ee"));
+    expect(cyan[1]).toBeLessThan(parseHex("#22d3ee")[1]);
+    // #ff2222 ≈ 0°（红），+36° ≈ 36°（橙）：绿分量上升
+    const red = parseHex(deriveAccent2("#ff2222"));
+    expect(red[1]).toBeGreaterThan(parseHex("#ff2222")[1]);
+  });
+
+  it("accent2 缺省派生且与 accent 同门槛过 AA（三个表面全部达标）", () => {
+    const t = buildTheme(base);
+    const accent2 = t.vars["--color-accent2"];
+    const surfaces = [base.bg, base.panel, t.vars["--color-panel2"]];
+    for (const s of surfaces) {
+      expect(contrastRatio(accent2, s)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("用户指定的 accent2 低对比时被拉回 AA（与 accent 同一求解器）", () => {
+    const weak = buildTheme({ ...base, accent2: "#2a3a44" });
+    expect(contrastRatio(weak.vars["--color-accent2"], base.bg)).toBeGreaterThanOrEqual(
+      4.5
+    );
+  });
+
+  it("渐变默认开启且两端是 accent 与 accent2；关档退化为零跨度（纯色）", () => {
+    const on = buildTheme(base);
+    expect(on.vars["--gradient-accent"]).toBe(
+      `linear-gradient(120deg, ${on.vars["--color-accent"]}, ${on.vars["--color-accent2"]})`
+    );
+    const off = buildTheme({ ...base, gradientAccent: false });
+    expect(off.vars["--gradient-accent"]).toBe(
+      `linear-gradient(120deg, ${off.vars["--color-accent"]}, ${off.vars["--color-accent"]})`
+    );
+  });
+});
+
+describe("glow（视觉 2.0）", () => {
+  it("clampGlow 越界夹取，缺省跟随材质（glass 55 / 其它 0）", () => {
+    expect(clampGlow(undefined, "glass")).toBe(55);
+    expect(clampGlow(undefined, "flat")).toBe(0);
+    expect(clampGlow(200, "flat")).toBe(100);
+    expect(clampGlow(-5, "glass")).toBe(0);
+    expect(clampGlow(30.6, "line")).toBe(31);
+    expect(clampGlow(Number.NaN, "glass")).toBe(55);
+  });
+
+  it("--glow 输出 0-1 字符串，不再绑定材质", () => {
+    expect(buildTheme({ ...base, glow: 40 }).vars["--glow"]).toBe("0.4");
+    expect(buildTheme({ ...base, material: "glass" }).vars["--glow"]).toBe("0.55");
+    expect(buildTheme({ ...base, material: "glass", glow: 0 }).vars["--glow"]).toBe("0");
+  });
+});
+
+describe("elevation 与卡片阴影（视觉 2.0）", () => {
+  it("clampElevation 越界夹取，缺省 flat=1 / 其它=2", () => {
+    expect(clampElevation(undefined, "flat")).toBe(1);
+    expect(clampElevation(undefined, "line")).toBe(2);
+    expect(clampElevation(9, "line")).toBe(3);
+    expect(clampElevation(-1, "flat")).toBe(0);
+    expect(clampElevation(2.6, "line")).toBe(3);
+  });
+
+  it("flat 材质不再一律无阴影；elevation=0 才是 none", () => {
+    expect(buildTheme({ ...base, material: "flat" }).vars["--shadow-card"]).not.toBe(
+      "none"
+    );
+    expect(buildTheme({ ...base, elevation: 0 }).vars["--shadow-card"]).toBe("none");
+    expect(buildTheme({ ...base, elevation: 0 }).vars["--shadow-card-hover"]).toBe(
+      "none"
+    );
+  });
+
+  it("暗色高程带 1px 内描边补偿；hover 档 = rest +1（顶档维持）", () => {
+    const dark = buildTheme(base);
+    expect(dark.vars["--shadow-card"]).toContain("inset");
+    const e1 = buildTheme({ ...base, elevation: 1 });
+    const e2 = buildTheme({ ...base, elevation: 2 });
+    expect(e1.vars["--shadow-card-hover"]).toBe(e2.vars["--shadow-card"]);
+    const e3 = buildTheme({ ...base, elevation: 3 });
+    expect(e3.vars["--shadow-card-hover"]).toBe(e3.vars["--shadow-card"]);
+  });
+
+  it("每套内置主题的 accent2 都达到 AA（16 套全量）", () => {
+    for (const theme of BUILTIN_THEMES) {
+      const t = buildTheme(theme);
+      const accent2 = t.vars["--color-accent2"];
+      const ratio = contrastRatio(accent2, theme.bg);
+      expect(
+        ratio,
+        `${theme.name}(${theme.id}) accent2 仅 ${ratio.toFixed(2)}:1`
+      ).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });

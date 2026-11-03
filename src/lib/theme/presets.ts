@@ -72,6 +72,8 @@ export const BUILTIN_THEMES: ThemeInput[] = [
     material: "glass",
     grid: 0,
     panelOpacity: 0.58,
+    // 玻璃主题的默认 glow 是 55，Aurora 原本就是满档光晕，显式给 60 保住气质
+    glow: 60,
     builtin: true,
   },
   {
@@ -89,6 +91,9 @@ export const BUILTIN_THEMES: ThemeInput[] = [
     material: "flat",
     grid: 0,
     panelOpacity: 1,
+    // 「印刷品」三兄弟显式关阴影：elevation 求解后 flat 默认是 1，
+    // 不写 0 的话这套极简主题会凭空多出浅阴影。
+    elevation: 0,
     builtin: true,
   },
   {
@@ -106,6 +111,7 @@ export const BUILTIN_THEMES: ThemeInput[] = [
     material: "line",
     grid: 0,
     panelOpacity: 1,
+    elevation: 0,
     builtin: true,
   },
   {
@@ -123,6 +129,7 @@ export const BUILTIN_THEMES: ThemeInput[] = [
     material: "line",
     grid: 0,
     panelOpacity: 1,
+    elevation: 0,
     builtin: true,
   },
   {
@@ -140,6 +147,153 @@ export const BUILTIN_THEMES: ThemeInput[] = [
     material: "flat",
     grid: 0.3,
     panelOpacity: 1,
+    builtin: true,
+  },
+  // ── 视觉 2.0 新增八套（4 暗 4 亮）──
+  // 全部与旧八套同管线：过 buildTheme 的 AA 求解，缺省 token 不写、由派生兜底。
+  {
+    id: "midnight-aurora",
+    name: "Midnight Aurora",
+    dark: true,
+    bg: "#050b10",
+    panel: "#0a141d",
+    text: "#ddeee9",
+    accent: "#2fe6c0",
+    radiusCard: 14,
+    radiusBtn: 9,
+    density: "cozy",
+    font: "sans",
+    material: "glass",
+    grid: 0,
+    panelOpacity: 0.56,
+    glow: 45,
+    builtin: true,
+  },
+  {
+    id: "ember",
+    name: "Ember",
+    dark: true,
+    bg: "#0d0806",
+    panel: "#170e0a",
+    text: "#f4e8df",
+    accent: "#ff8a5c",
+    radiusCard: 8,
+    radiusBtn: 6,
+    density: "cozy",
+    font: "sans",
+    material: "line",
+    grid: 0.45,
+    panelOpacity: 1,
+    glow: 30,
+    builtin: true,
+  },
+  {
+    id: "matcha",
+    name: "Matcha",
+    dark: true,
+    bg: "#0b100c",
+    panel: "#121a13",
+    text: "#e9f1e4",
+    accent: "#a6c96a",
+    radiusCard: 10,
+    radiusBtn: 7,
+    density: "cozy",
+    font: "sans",
+    material: "flat",
+    grid: 0.3,
+    panelOpacity: 1,
+    glow: 0,
+    builtin: true,
+  },
+  {
+    id: "grape-soda",
+    name: "Grape Soda",
+    dark: true,
+    bg: "#0e0a1a",
+    panel: "#181028",
+    text: "#efe9fc",
+    accent: "#b78bff",
+    radiusCard: 16,
+    radiusBtn: 10,
+    density: "cozy",
+    font: "sans",
+    material: "glass",
+    grid: 0,
+    panelOpacity: 0.6,
+    glow: 40,
+    builtin: true,
+  },
+  {
+    id: "nordic-light",
+    name: "Nordic Light",
+    dark: false,
+    bg: "#edf1f5",
+    panel: "#ffffff",
+    text: "#1c2733",
+    accent: "#2e6da4",
+    radiusCard: 12,
+    radiusBtn: 8,
+    density: "cozy",
+    font: "sans",
+    material: "flat",
+    grid: 0.5,
+    panelOpacity: 1,
+    glow: 0,
+    builtin: true,
+  },
+  {
+    id: "sakura",
+    name: "Sakura",
+    dark: false,
+    bg: "#faf1f3",
+    panel: "#fffdfd",
+    text: "#3c2b31",
+    accent: "#b04a75",
+    radiusCard: 14,
+    radiusBtn: 9,
+    density: "roomy",
+    font: "serif",
+    material: "flat",
+    grid: 0.3,
+    panelOpacity: 1,
+    glow: 0,
+    builtin: true,
+  },
+  {
+    id: "mono-brutal",
+    name: "Mono Brutal",
+    dark: false,
+    bg: "#ffffff",
+    panel: "#ffffff",
+    text: "#000000",
+    accent: "#000000",
+    radiusCard: 0,
+    radiusBtn: 0,
+    density: "compact",
+    font: "sans",
+    material: "line",
+    grid: 0,
+    panelOpacity: 1,
+    glow: 0,
+    elevation: 0,
+    builtin: true,
+  },
+  {
+    id: "sky",
+    name: "Sky",
+    dark: false,
+    bg: "#eff6f9",
+    panel: "#ffffff",
+    text: "#132b35",
+    accent: "#0f7fa8",
+    radiusCard: 12,
+    radiusBtn: 8,
+    density: "cozy",
+    font: "sans",
+    material: "flat",
+    grid: 0.45,
+    panelOpacity: 1,
+    glow: 0,
     builtin: true,
   },
 ];
@@ -221,6 +375,13 @@ export function parseTheme(raw: unknown): ThemeInput | null {
     ok: nonEmpty(o.ok),
     warn: nonEmpty(o.warn),
     danger: nonEmpty(o.danger),
+    // 视觉 2.0 新字段：只 clamp / 落默认，不因缺失拒绝（旧 JSON 零迁移成本）。
+    // accent2 非法时丢弃（回退派生值）而不是整体拒绝：渐变第二色坏了
+    // 有安全兜底，不值得让整份主题导入失败。
+    accent2: hexOrUndefined(o.accent2),
+    gradientAccent: typeof o.gradientAccent === "boolean" ? o.gradientAccent : undefined,
+    glow: clampOpt(o.glow, 0, 100),
+    elevation: clampOpt(o.elevation, 0, 3) as 0 | 1 | 2 | 3 | undefined,
     radiusCard: clamp(o.radiusCard, 0, 40, 10),
     radiusBtn: clamp(o.radiusBtn, 0, 24, 7),
     density,
@@ -249,6 +410,19 @@ function clamp(v: unknown, lo: number, hi: number, dflt: number): number {
   return typeof v === "number" && Number.isFinite(v)
     ? Math.min(hi, Math.max(lo, v))
     : dflt;
+}
+
+/** 缺省返回 undefined（让 buildTheme 按材质/规则派生），存在则夹到区间内并取整。 */
+function clampOpt(v: unknown, lo: number, hi: number): number | undefined {
+  return typeof v === "number" && Number.isFinite(v)
+    ? Math.round(Math.min(hi, Math.max(lo, v)))
+    : undefined;
+}
+
+/** 可选颜色字段：空/非法一律 undefined（回退派生），绝不抛出半截字符串。 */
+function hexOrUndefined(v: unknown): string | undefined {
+  const s = nonEmpty(v);
+  return s && HEX.test(s) ? s : undefined;
 }
 
 function pick<T extends string>(v: unknown, allowed: readonly T[], dflt: T): T {

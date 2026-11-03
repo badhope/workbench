@@ -20,6 +20,15 @@ const THEMES = [
   "Ink",
   "Void",
   "Jade",
+  // 视觉 2.0 新增八套（4 暗 4 亮）
+  "Midnight Aurora",
+  "Ember",
+  "Matcha",
+  "Grape Soda",
+  "Nordic Light",
+  "Sakura",
+  "Mono Brutal",
+  "Sky",
 ];
 const PAGES = [
   ["概览", "overview"],
@@ -100,7 +109,12 @@ test.describe("可读性（WCAG AA）", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.removeItem("workbench-ui-v1");
+        // 从干净偏好开始，但预置 onboardingDone：否则首启引导浮层
+        // 会盖住导航按钮，后面的点击全被拦截。
+        localStorage.setItem(
+          "workbench-ui-v1",
+          JSON.stringify({ state: { onboardingDone: true }, version: 4 })
+        );
       } catch {
         /* ignore */
       }
@@ -127,7 +141,7 @@ test.describe("可读性（WCAG AA）", () => {
     }
   });
 
-  test("八套内置主题在概览页零失败", async ({ page }) => {
+  test("十六套内置主题在概览页零失败", async ({ page }) => {
     for (const theme of THEMES) {
       await page.locator('aside button[title="设置"]').first().click();
       await page.waitForTimeout(500);

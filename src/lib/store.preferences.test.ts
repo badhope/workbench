@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useStore } from "./store";
+import { effectiveMotion, migratePersisted, prefersReducedMotion } from "./store";
 import type { ThemeInput } from "./theme/tokens";
 import { BUILTIN_THEMES, DEFAULT_THEME_ID } from "./theme/presets";
 import { DEFAULT_ORDER } from "./layout";
@@ -15,6 +16,9 @@ function reset() {
   useStore.setState({
     theme: DEFAULT_THEME_ID,
     customThemes: [],
+    motion: "standard",
+    motionExplicit: false,
+    onboardingDone: false,
     shell: "rail",
     layout: "bento",
     widgetOrder: DEFAULT_ORDER,
@@ -23,6 +27,7 @@ function reset() {
   document.documentElement.dataset.theme = DEFAULT_THEME_ID;
   document.documentElement.dataset.shell = "rail";
   document.documentElement.dataset.layout = "bento";
+  document.documentElement.dataset.motion = "standard";
 }
 
 const customTheme = (over: Partial<ThemeInput> = {}): ThemeInput => ({
@@ -200,5 +205,101 @@ describe("外壳 / 布局 / 组件摆放", () => {
     useStore.getState().resetWidgets();
     expect(useStore.getState().widgetOrder).toEqual(DEFAULT_ORDER);
     expect(useStore.getState().widgetHidden).toEqual([]);
+  });
+});
+
+/**
+ * 动效档位与首启引导（视觉 2.0，persist v4）。
+ *
+ * 三档设置是「即时生效 + 持久化」的承诺：生效逻辑只此一处
+ * （effectiveMotion），档位落 DOM 只有 data-motion 一个属性。
+ */
+describe("动效与引导偏好", () => {
+  beforeEach(reset);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("默认档位是 standard，motionExplicit / onboardingDone 为 false", () => {
+    const s = useStore.getState();
+    expect(s.motion).toBe("standard");
+    expect(s.motionExplicit).toBe(false);
+    expect(s.onboardingDone).toBe(false);
+  });
+
+  it("setMotion 立即写入 data-motion 并标记为显式选择", () => {
+    useStore.getState().setMotion("rich");
+    expect(useStore.getState().motion).toBe("rich");
+    expect(useStore.getState().motionExplicit).toBe(true);
+    expect(document.documentElement.dataset.motion).toBe("rich");
+  });
+
+  it("setOnboardingDone 置 true 后不再回头（重启也不复弹由 persist 保证）", () => {
+    useStore.getState().setOnboardingDone();
+    expect(useStore.getState().onboardingDone).toBe(true);
+  });
+
+  it("effectiveMotion：未显式选择时系统 reduced-motion 压成 off", () => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockReturnValue({ matches: true }) as unknown as typeof matchMedia
+    );
+    expect(prefersReducedMotion()).toBe(true);
+    expect(effectiveMotion({ motion: "standard", motionExplicit: false })).toBe("off");
+    // 用户显式选过档位 → 允许覆盖系统设置
+    expect(effectiveMotion({ motion: "standard", motionExplicit: true })).toBe(
+      "standard"
+    );
+    expect(effectiveMotion({ motion: "rich", motionExplicit: true })).toBe("rich");
+  });
+
+  it("effectiveMotion：显式选 off 永远是 off，无 matchMedia 的环境视为系统未要求", () => {
+    expect(effectiveMotion({ motion: "off", motionExplicit: true })).toBe("off");
+    expect(effectiveMotion({ motion: "off", motionExplicit: false })).toBe("off");
+    // jsdom 默认没有 matchMedia —— 不允许这里抛错
+    expect(prefersReducedMotion()).toBe(false);
+    expect(effectiveMotion({ motion: "rich", motionExplicit: false })).toBe("rich");
+  });
+});
+
+/** persist v3 → v4 迁移：只补默认值，不覆盖用户数据。 */
+describe("persist 迁移 v3→v4", () => {
+  it("旧版 payload（v3）补齐动效与引导默认值", () => {
+    const migrated = migratePersisted({
+      theme: "frost",
+      shell: "dock",
+      layout: "ledger",
+      procView: "tree",
+    });
+    expect(migrated.theme).toBe("frost");
+    expect(migrated.shell).toBe("dock");
+    expect(migrated.layout).toBe("ledger");
+    expect(migrated.procView).toBe("tree");
+    expect(migrated.motion).toBe("standard");
+    expect(migrated.motionExplicit).toBe(false);
+    expect(migrated.onboardingDone).toBe(false);
+  });
+
+  it("用户已保存的偏好不被覆盖，非法档位回退 standard", () => {
+    const migrated = migratePersisted({
+      motion: "off",
+      motionExplicit: true,
+      onboardingDone: true,
+    });
+    expect(migrated.motion).toBe("off");
+    expect(migrated.motionExplicit).toBe(true);
+    expect(migrated.onboardingDone).toBe(true);
+
+    const bad = migratePersisted({ motion: "turbo" });
+    expect(bad.motion).toBe("standard");
+  });
+
+  it("null / undefined payload 不抛错，全部落默认", () => {
+    for (const input of [null, undefined, {}]) {
+      const migrated = migratePersisted(input);
+      expect(migrated.motion).toBe("standard");
+      expect(migrated.motionExplicit).toBe(false);
+      expect(migrated.onboardingDone).toBe(false);
+    }
   });
 });

@@ -1,18 +1,23 @@
 import { Suspense, useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import { useStore } from "./lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { useT } from "./lib/i18n";
 import { AppHeader, DockHeader } from "./components/AppHeader";
 import { KillDialog, Toast } from "./components/KillDialog";
 import { CommandPalette } from "./components/CommandPalette";
+import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { Sidebar } from "./components/Nav";
 import { Spinner } from "./ui";
 import { PAGE_COMPONENTS } from "./pages/registry";
 import { useBreakpoint } from "./lib/useBreakpoint";
 import { useAppRuntime } from "./lib/useAppRuntime";
+import { effectiveMotion } from "./lib/store";
+import { applyMotion } from "./lib/theme/apply";
 import { findTheme } from "./lib/theme/presets";
 import { shellLayout } from "./lib/useShellLayout";
 import { installGlobalDiagnostics, setViewResolver } from "./lib/diagnostics";
+import type { ViewKey } from "./types";
 
 /** 当前视图的页面组件。注册表由 pages/registry 统一维护。 */
 function CurrentPage({ view }: { view: keyof typeof PAGE_COMPONENTS }) {
@@ -27,11 +32,13 @@ export default function App() {
   // 折叠是用户偏好，抽屉是临时交互，混用一个布尔会在跨断点时表现错乱。
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { view, setView, shell } = useStore(
+  const { view, setView, shell, motion, motionExplicit } = useStore(
     useShallow((s) => ({
       view: s.view,
       setView: s.setView,
       shell: s.shell,
+      motion: s.motion,
+      motionExplicit: s.motionExplicit,
     }))
   );
 
@@ -46,6 +53,31 @@ export default function App() {
   useEffect(() => {
     setViewResolver(() => useStore.getState().view);
   }, []);
+
+  // 动效档位变化（含首启引导里选的档）→ 立即落到 <html data-motion>。
+  // main.tsx 启动时也写过一次；这里覆盖「运行中改档位」的路径。
+  useEffect(() => {
+    applyMotion(effectiveMotion({ motion, motionExplicit }));
+  }, [motion, motionExplicit]);
+
+  /**
+   * 视图切换：standard/rich 档用 View Transitions 包一层（旧页淡出、新页就位），
+   * off 档或不支持 startViewTransition 的 WebView 直接瞬时切换。
+   * flushSync 让 React 的 DOM 提交落在过渡回调内部，否则截图的是切换前的 DOM。
+   */
+  const changeView = (k: ViewKey) => {
+    const doc = document as Document & {
+      startViewTransition?: (cb: () => void) => unknown;
+    };
+    if (
+      document.documentElement.dataset.motion !== "off" &&
+      typeof doc.startViewTransition === "function"
+    ) {
+      doc.startViewTransition(() => flushSync(() => setView(k)));
+    } else {
+      setView(k);
+    }
+  };
 
   const layout = shellLayout(bp, shell, collapsed);
   // 网格强度来自主题数据（不是读 DOM）：主题里 grid=0 时完全不铺网格。
@@ -72,7 +104,7 @@ export default function App() {
           drawerOpen={drawerOpen}
           view={view}
           onPick={(k) => {
-            setView(k);
+            changeView(k);
             setDrawerOpen(false);
           }}
           onToggleCollapse={() => setCollapsed(!collapsed)}
@@ -82,7 +114,7 @@ export default function App() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {layout.dock ? (
-          <DockHeader view={view} onPick={setView} />
+          <DockHeader view={view} onPick={changeView} />
         ) : (
           <AppHeader
             compact={bp === "compact"}
@@ -124,6 +156,7 @@ export default function App() {
 
       <KillDialog />
       <CommandPalette />
+      <OnboardingOverlay />
       <Toast />
     </div>
   );

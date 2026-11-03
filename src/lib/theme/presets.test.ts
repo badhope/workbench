@@ -11,6 +11,7 @@ import {
   swatchOf,
   tokensFor,
 } from "./presets";
+import { contrastRatio } from "./tokens";
 
 describe("内置主题", () => {
   it("id 唯一，且都标了 builtin", () => {
@@ -19,11 +20,50 @@ describe("内置主题", () => {
     for (const t of BUILTIN_THEMES) expect(t.builtin).toBe(true);
   });
 
+  it("视觉 2.0：内置主题扩到 16 套（8 暗 8 亮）", () => {
+    expect(BUILTIN_THEMES).toHaveLength(16);
+    expect(BUILTIN_THEMES.filter((t) => t.dark)).toHaveLength(8);
+    expect(BUILTIN_THEMES.filter((t) => !t.dark)).toHaveLength(8);
+    // 新八套的 id 一个都不能少：e2e 与引导流程按 id/名称定位
+    const ids = new Set(BUILTIN_THEMES.map((t) => t.id));
+    for (const id of [
+      "midnight-aurora",
+      "ember",
+      "matcha",
+      "grape-soda",
+      "nordic-light",
+      "sakura",
+      "mono-brutal",
+      "sky",
+    ]) {
+      expect(ids.has(id), `缺少新主题 ${id}`).toBe(true);
+    }
+  });
+
   it("每套内置主题都能被 buildTheme 展开", () => {
     for (const t of BUILTIN_THEMES) {
       const tokens = tokensFor(t.id, []);
       expect(tokens.vars["--color-bg"]).toBeTruthy();
       expect(tokens.chart.series.length).toBeGreaterThanOrEqual(5);
+    }
+  });
+
+  it("每套内置主题的关键色都过 AA（accent / accent2 / text 对 bg）", () => {
+    for (const t of BUILTIN_THEMES) {
+      const tokens = tokensFor(t.id, []);
+      const bg = tokens.vars["--color-bg"];
+      expect(
+        contrastRatio(tokens.vars["--color-accent"], bg),
+        `${t.id} accent`
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(tokens.vars["--color-accent2"], bg),
+        `${t.id} accent2`
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(tokens.vars["--color-text"], bg),
+        `${t.id} text`
+      ).toBeGreaterThanOrEqual(4.5);
     }
   });
 });
@@ -73,6 +113,40 @@ describe("parseTheme", () => {
   it("未给 dark 时按底色亮度推断", () => {
     expect(parseTheme({ ...good, bg: "#ffffff", panel: "#ffffff" })!.dark).toBe(false);
     expect(parseTheme({ ...good, bg: "#000000", panel: "#000000" })!.dark).toBe(true);
+  });
+
+  /**
+   * 视觉 2.0 新字段：只 clamp / 落默认，不因缺失拒绝（旧 JSON 零迁移成本）。
+   */
+  it("新字段缺失时落 undefined（由 buildTheme 派生），主题整体仍被接受", () => {
+    const t = parseTheme(good)!;
+    expect(t.accent2).toBeUndefined();
+    expect(t.gradientAccent).toBeUndefined();
+    expect(t.glow).toBeUndefined();
+    expect(t.elevation).toBeUndefined();
+  });
+
+  it("glow / elevation 越界被夹到合法区间", () => {
+    const t = parseTheme({ ...good, glow: 250, elevation: 9 })!;
+    expect(t.glow).toBe(100);
+    expect(t.elevation).toBe(3);
+    const low = parseTheme({ ...good, glow: -3, elevation: -2 })!;
+    expect(low.glow).toBe(0);
+    expect(low.elevation).toBe(0);
+  });
+
+  it("非法 accent2 被丢弃（回退派生值）而不是拒绝整份主题", () => {
+    const t = parseTheme({ ...good, accent2: "not-a-color" })!;
+    expect(t.accent2).toBeUndefined();
+    const ok = parseTheme({ ...good, accent2: "#0ff" })!;
+    expect(ok.accent2).toBe("#0ff");
+  });
+
+  it("gradientAccent 只接受布尔", () => {
+    expect(parseTheme({ ...good, gradientAccent: false })!.gradientAccent).toBe(false);
+    expect(
+      parseTheme({ ...good, gradientAccent: "yes" })!.gradientAccent
+    ).toBeUndefined();
   });
 });
 

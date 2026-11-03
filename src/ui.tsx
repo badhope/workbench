@@ -89,10 +89,12 @@ export function Btn({
   type = "button",
 }: BtnProps) {
   const base =
-    "t-btn inline-flex items-center gap-1.5 px-3 py-[5px] text-[12.5px] font-medium transition-colors disabled:opacity-40";
+    "t-btn inline-flex items-center gap-1.5 px-3 py-[5px] text-[12.5px] font-medium disabled:opacity-40";
   const styles: Record<string, string> = {
+    // 渐变由 .t-btn-primary 消费 --gradient-accent：关档时退化为纯色，
+    // 这里不写任何条件样式（消费方无感知）。
     primary:
-      "bg-accent text-[var(--color-on-accent)] hover:brightness-110 active:brightness-95 font-semibold",
+      "t-btn-primary text-[var(--color-on-accent)] hover:brightness-110 active:brightness-95 font-semibold",
     ghost:
       "border border-line bg-panel2/70 text-text hover:border-line hover:bg-panel2 hover:text-text",
     danger: "border border-danger/40 bg-danger/10 text-danger hover:bg-danger/18",
@@ -268,8 +270,21 @@ export function ConfirmDialog({
   );
 }
 
+/**
+ * 动效档位 → 数字滚动时长（ms）。
+ *
+ * useCountUp 是全站唯一的 JS 动效例外：CSS 断闸管不到 rAF，
+ * 所以它自己读 data-motion（组件不读 store 的 motion 字段，约定见设计文档）。
+ * off = 0（直接落值）；rich 略长于 standard，制造「更满」的观感。
+ */
+function countUpDuration(): number {
+  const level = document.documentElement.dataset.motion;
+  if (level === "off") return 0;
+  return level === "rich" ? 800 : 600;
+}
+
 /** 数字滚动动画：目标值变化时从旧值平滑过渡到新值。 */
-function useCountUp(target: number, duration = 600): number {
+function useCountUp(target: number): number {
   const [val, setVal] = useState(target);
   const prevRef = useRef(target);
   useEffect(() => {
@@ -279,6 +294,13 @@ function useCountUp(target: number, duration = 600): number {
     if (from === to) {
       setVal(to);
       return;
+    }
+    const duration = countUpDuration();
+    if (duration <= 0) {
+      // 关档：不给 rAF 循环，下一帧直接落值（不在 effect 里同步 setState，
+      // 避免级联渲染；rAF 回调本身就是「外部系统回调」）。
+      const raf = requestAnimationFrame(() => setVal(to));
+      return () => cancelAnimationFrame(raf);
     }
     let raf = 0;
     const start = performance.now();
@@ -290,7 +312,7 @@ function useCountUp(target: number, duration = 600): number {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
+  }, [target]);
   return val;
 }
 
@@ -304,9 +326,9 @@ const STAT_TONES: Record<"text" | Tone, string> = {
 };
 
 /**
- * 统计单元：标签在上、数字在下，数字用等宽表格数字。
- * 刻意没有彩色顶条、没有图标底块——那两样是任何仪表盘都会有的默认装饰。
- * 需要的只有一个东西：数字本身站得住。
+ * 统计单元（视觉 2.0 重做）：图标有 accent-soft 圆角底座做「锚点」，
+ * accent 档数字用 accent→accent2 渐变（.grad-accent）+ 等宽表格数字。
+ * 对外 props 不变：CostDashboard 等调用点零改动。
  */
 export function StatCard({
   icon: Icon,
@@ -321,22 +343,24 @@ export function StatCard({
   hint?: string;
   tone?: "text" | Tone;
 }) {
-  const color = STAT_TONES[tone];
   const numeric = typeof value === "number";
   const shown = useCountUp(numeric ? value : 0);
   return (
     <Card className="card-hover group relative overflow-hidden px-4 py-3.5">
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-[11px] font-medium text-dim">{label}</span>
-        <Icon
-          size={13}
-          className="shrink-0 text-faint transition-colors group-hover:text-accent"
-        />
+        {/* 底座只换底色与圆角，不放大图标：锚点的作用是固定视线，
+            抢戏的图标块反而降低信息密度 */}
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] bg-accentsoft text-accent">
+          <Icon size={13} />
+        </span>
       </div>
       {/* 数值字号随屏幕收缩：390px 下两列卡片只有 ~160px 宽，
           text-3xl 的 "17.66M" 会溢出卡片边界。 */}
       <div
-        className={`num mt-2 truncate text-[26px] font-semibold leading-none sm:text-[30px] ${color}`}
+        className={`num mt-2 truncate text-[26px] font-semibold leading-none sm:text-[30px] ${
+          tone === "accent" ? "grad-accent" : STAT_TONES[tone]
+        }`}
         title={String(numeric ? shown : value)}
       >
         {numeric ? shown : value}
@@ -409,6 +433,8 @@ export function ErrorState({
  * 骨架占位：形状与真实内容一致，避免「加载时一片空白、数据到了突然跳动」。
  *
  * 只在首次加载时用（数据已存在就不再显示），否则每次轮询都会闪一下。
+ * 视觉 2.0 起用 shimmer（transform 位移的高光条）替代 animate-pulse：
+ * 位移只在伪元素的合成层上跑，且能被 [data-motion="off"] 集中断闸。
  */
 export function Skeleton({
   className = "",
@@ -418,11 +444,11 @@ export function Skeleton({
   lines?: number;
 }) {
   return (
-    <div className={`animate-pulse space-y-2 ${className}`} aria-hidden="true">
+    <div className={`space-y-2 ${className}`} aria-hidden="true">
       {Array.from({ length: lines }).map((_, i) => (
         <div
           key={i}
-          className="h-3 rounded-[3px] bg-line/70"
+          className="shimmer h-3 rounded-[3px] bg-line/70"
           style={{ width: `${100 - (i % 3) * 18}%` }}
         />
       ))}
@@ -434,7 +460,7 @@ export function Skeleton({
 export function SkeletonCard({ rows = 4 }: { rows?: number }) {
   return (
     <div className="t-card t-panel border border-line/90">
-      <div className="mb-3 h-3 w-24 animate-pulse rounded-[3px] bg-line/80" />
+      <div className="shimmer mb-3 h-3 w-24 rounded-[3px] bg-line/80" />
       <Skeleton lines={rows} />
     </div>
   );

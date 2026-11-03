@@ -8,7 +8,7 @@ import {
   tokensFor,
 } from "./theme/presets";
 import type { ThemeInput } from "./theme/tokens";
-import { applyTheme } from "./theme/apply";
+import { applyMotion, applyTheme, type MotionLevel } from "./theme/apply";
 import {
   DEFAULT_ORDER,
   normalizeHidden,
@@ -86,6 +86,19 @@ interface UiState {
   theme: string;
   /** 用户自建主题（内置主题不存这里，升级时自动获得新内置主题） */
   customThemes: ThemeInput[];
+  /**
+   * 动效档位：off / standard / rich。
+   * 注意「设置的档位」≠「生效的档位」：生效值见 effectiveMotion()。
+   */
+  motion: MotionLevel;
+  /**
+   * 用户是否显式选过档位。
+   * false 时系统 prefers-reduced-motion 会把生效档压成 off；
+   * true 时用户的显式选择优先（「允许覆盖系统设置」的语义）。
+   */
+  motionExplicit: boolean;
+  /** 首启 3 步引导是否已完成/跳过（true 后永不复弹） */
+  onboardingDone: boolean;
   /** 外壳：侧栏 / 顶部坞 / 专注 */
   shell: ShellId;
   /** 概览页布局 */
@@ -150,6 +163,10 @@ interface Store extends UiState, RuntimeState {
   killTarget: ProcInfo | null;
   setView: (v: ViewKey) => void;
   setTheme: (id: string) => void;
+  /** 设置动效档位（视为用户显式选择，覆盖系统 reduced-motion） */
+  setMotion: (m: MotionLevel) => void;
+  /** 完成或跳过首启引导（二者同义：都永久关闭） */
+  setOnboardingDone: () => void;
   /** 新建/覆盖一个自定义主题；返回它的 id */
   upsertTheme: (theme: ThemeInput) => string;
   deleteTheme: (id: string) => void;
@@ -203,6 +220,65 @@ function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
+/** 系统是否要求减弱动效。jsdom / 老旧 WebView 没有 matchMedia，视为否。 */
+export function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+/**
+ * 生效动效档位 = 显式选择优先，否则尊重系统 reduced-motion。
+ *
+ * 这是「允许覆盖」语义的唯一实现点：CSS 不再读 prefers-reduced-motion，
+ * 全部动效断闸都走 data-motion 这一个属性。
+ */
+export function effectiveMotion(s: {
+  motion: MotionLevel;
+  motionExplicit: boolean;
+}): MotionLevel {
+  if (s.motion === "off") return "off";
+  if (!s.motionExplicit && prefersReducedMotion()) return "off";
+  return s.motion;
+}
+
+const MOTION_LEVELS: MotionLevel[] = ["off", "standard", "rich"];
+
+function normalizeMotion(v: unknown): MotionLevel {
+  return MOTION_LEVELS.includes(v as MotionLevel) ? (v as MotionLevel) : "standard";
+}
+
+/**
+ * persist 迁移主体（导出仅为单测可直接断言迁移行为）。
+ *
+ * 版本 3 → 4：新增动效档位与首启引导偏好。迁移只补默认值，
+ * 不覆盖用户已显式保存的值——丢偏好的事故比缺默认值严重得多。
+ */
+export function migratePersisted(persisted: unknown): Record<string, unknown> {
+  const state = (persisted ?? {}) as Record<string, unknown>;
+  const customThemes: ThemeInput[] = Array.isArray(state.customThemes)
+    ? state.customThemes
+        .map((x) => parseTheme(x))
+        .filter((x): x is ThemeInput => Boolean(x))
+    : [];
+  return {
+    ...state,
+    customThemes,
+    theme: migrateThemeId(state.theme, allThemes(customThemes)),
+    shell: normalizeShell(state.shell),
+    layout: normalizeLayout(state.layout),
+    widgetOrder: normalizeOrder(state.widgetOrder),
+    widgetHidden: normalizeHidden(state.widgetHidden),
+    widgetSpans: normalizeSpans(state.widgetSpans),
+    procView: state.procView === "tree" ? "tree" : "flat",
+    motion: normalizeMotion(state.motion),
+    motionExplicit: state.motionExplicit === true,
+    onboardingDone: state.onboardingDone === true,
+  };
+}
+
 // 模块级防抖计时器（仅用于持久化，toast 由 TTL 自动清理）
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingData: WorkbenchData | null = null;
@@ -238,6 +314,10 @@ export const useStore = create<Store>()(
     (set, get) => ({
       theme: DEFAULT_THEME_ID,
       customThemes: [],
+      // 动效默认「标准」（总监拍板）：第一印象有生命感，又不至于满档功耗
+      motion: "standard",
+      motionExplicit: false,
+      onboardingDone: false,
       shell: "rail",
       layout: "bento",
       widgetOrder: DEFAULT_ORDER,
@@ -287,6 +367,13 @@ export const useStore = create<Store>()(
       killTarget: null,
 
       setView: (v) => set({ view: v }),
+      setMotion: (m) => {
+        // 显式选档 = 覆盖系统 reduced-motion；立即落到 DOM，
+        // 否则三档切换要等下一次主题应用才生效（实测会「点了没反应」）。
+        set({ motion: m, motionExplicit: true });
+        applyMotion(effectiveMotion(get()));
+      },
+      setOnboardingDone: () => set({ onboardingDone: true }),
       setTheme: (id) => {
         set({ theme: id });
         const s = get();
@@ -1017,30 +1104,16 @@ export const useStore = create<Store>()(
       name: "workbench-ui-v1",
       // 版本 1 → 2：theme 从 "dark"/"light" 变成风格 id。
       // 版本 3：主题变成可编辑数据（+ customThemes）、新增 shell / layout / 组件摆放。
+      // 版本 4：新增动效档位（motion/motionExplicit）与首启引导标记。
       // 迁移只做「补齐与清洗」，不覆盖用户的显式选择。
-      version: 3,
-      migrate: (persisted: unknown) => {
-        const state = (persisted ?? {}) as Record<string, unknown>;
-        const customThemes: ThemeInput[] = Array.isArray(state.customThemes)
-          ? state.customThemes
-              .map((x) => parseTheme(x))
-              .filter((x): x is ThemeInput => Boolean(x))
-          : [];
-        return {
-          ...state,
-          customThemes,
-          theme: migrateThemeId(state.theme, allThemes(customThemes)),
-          shell: normalizeShell(state.shell),
-          layout: normalizeLayout(state.layout),
-          widgetOrder: normalizeOrder(state.widgetOrder),
-          widgetHidden: normalizeHidden(state.widgetHidden),
-          widgetSpans: normalizeSpans(state.widgetSpans),
-          procView: state.procView === "tree" ? "tree" : "flat",
-        } as never;
-      },
+      version: 4,
+      migrate: (persisted: unknown) => migratePersisted(persisted) as never,
       partialize: (s) => ({
         theme: s.theme,
         customThemes: s.customThemes,
+        motion: s.motion,
+        motionExplicit: s.motionExplicit,
+        onboardingDone: s.onboardingDone,
         shell: s.shell,
         layout: s.layout,
         widgetOrder: s.widgetOrder,

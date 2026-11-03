@@ -36,6 +36,12 @@
   --tracking-heading: -0.02em;
   --hairline: color-mix(in srgb, var(--color-text) 8%, transparent);
   --hairline-strong: color-mix(in srgb, var(--color-text) 14%, transparent);
+
+  /* 视觉 2.0 新增 token 的首帧兜底（JS 加载前的一帧）。
+     只补背景/动效相关，不写死新颜色值——真值全部来自主题数据。
+     渐变兜底用零跨度渐变：消费方写的是 background-image，纯色会被丢弃。 */
+  --gradient-accent: linear-gradient(120deg, var(--color-accent), var(--color-accent));
+  --glow: 0;
 }
 
 /*
@@ -56,9 +62,9 @@ body::before {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  /* 光晕强度由主题的 material 决定：玻璃材质给 1，其它材质给 0。
-     颜色取主题自己的 accent，所以每套玻璃主题的渐变都不同。 */
-  opacity: calc(var(--glow, 0) * 1);
+  /* 光晕强度由主题参数 glow（0-100 → 0-1）决定，不再绑定玻璃材质：
+     非玻璃主题也能有氛围；0 档主题整层透明，不产生额外合成开销。 */
+  opacity: var(--glow, 0);
   background:
     radial-gradient(
       58rem 38rem at 8% -6%,
@@ -295,6 +301,33 @@ tbody tr:nth-child(even) {
 
 .t-btn {
   border-radius: var(--radius-btn);
+  /* transform（active 微缩）与颜色过渡并列声明：直接写 transition: transform
+     会整段覆盖 Tailwind 的 transition-colors 工具类（未分层样式优先级更高），
+     ghost/danger 的 hover 变色就会瞬间跳变。 */
+  transition:
+    transform 0.12s ease,
+    color 0.12s ease,
+    background-color 0.12s ease,
+    border-color 0.12s ease;
+}
+/* 按下微缩：反馈来自位移而非 filter，属于可断闸的 transform 动效 */
+.t-btn:active {
+  transform: scale(0.97);
+}
+
+/* 主按钮的渐变强调色：--gradient-accent 关档时退化为 accent→accent 零跨度
+   渐变（视觉等同纯色），因此这里不需要任何「渐变开/关」条件样式。 */
+.t-btn-primary {
+  background-color: var(--color-accent);
+  background-image: var(--gradient-accent);
+}
+
+/* 渐变文字（统计大数字）：两端都过了 AA 求解的安全色。 */
+.grad-accent {
+  background-image: var(--gradient-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .t-heading {
@@ -326,13 +359,21 @@ tbody tr:nth-child(even) {
   text-transform: uppercase;
 }
 
+/*
+ * 卡片 hover 微抬升：translateY(-2px) + 阴影升一档（--shadow-card-hover）。
+ * 只动 transform 与 box-shadow 预声明的切换，不触发 layout。
+ */
 .card-hover {
   transition:
     border-color 0.15s ease,
-    background-color 0.15s ease;
+    background-color 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .card-hover:hover {
   border-color: color-mix(in srgb, var(--color-accent) 32%, var(--color-line));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover, var(--shadow-card));
 }
 
 input:focus-visible,
@@ -348,7 +389,9 @@ input[type="checkbox"] {
   accent-color: var(--color-accent);
 }
 
-/* ── 唯一的编排动效：进入页面时内容自下而上就位 ───────────── */
+/* ── 动效区：全部 keyframes 只动 transform 与 opacity（GPU 合成层） ── */
+
+/* 唯一的编排动效：进入页面时内容自下而上就位 */
 @keyframes rise-in {
   from {
     opacity: 0;
@@ -375,15 +418,98 @@ input[type="checkbox"] {
   animation: fade-in 0.18s ease both;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .animate-in,
-  .animate-fade {
-    animation: none;
+/*
+ * 纯 opacity 淡入，不参与关档断闸。
+ * 首启引导这类「无障碍浮层」即使动效关档也要有可感知的出现过程，
+ * 而 opacity 动画对前庭障碍用户无害——所以单独开一个豁免类，
+ * 不与会被 [data-motion="off"] 杀掉的 .animate-fade 混用。
+ */
+.motion-safe-fade {
+  animation: fade-in 0.18s ease both;
+}
+
+/* 骨架屏 shimmer：一条渐变高光横扫过去，只位移伪元素（transform） */
+@keyframes shimmer {
+  from {
+    transform: translateX(-100%);
   }
-  .t-panel {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
+  to {
+    transform: translateX(100%);
   }
+}
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--color-text) 10%, transparent),
+    transparent
+  );
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* View Transitions：视图切换时旧页淡出上移、新页淡入下落归位 */
+@keyframes vt-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes vt-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* 不支持的 WebView 看不到这些伪元素，瞬时切换，零降级成本 */
+@supports (view-transition-name: root) {
+  ::view-transition-old(root) {
+    animation: vt-out 0.16s ease both;
+  }
+  ::view-transition-new(root) {
+    animation: vt-in 0.2s ease both;
+  }
+}
+
+/*
+ * ── 关档集中断闸（视觉 2.0 起）──
+ *
+ * prefers-reduced-motion 不再直接断闸 CSS：生效档位由 store 的
+ * effectiveMotion() 决定（用户显式选择可覆盖系统设置），写入
+ * <html data-motion>，这里是唯一的断闸点。新增任何动画都必须
+ * 能被这个块杀掉，否则就是隐性的无障碍回归。
+ */
+[data-motion="off"] .animate-in,
+[data-motion="off"] .animate-fade,
+[data-motion="off"] .shimmer::after,
+[data-motion="off"] .card-hover,
+[data-motion="off"] .t-btn,
+/* Tailwind 内置的 animate-spin / animate-pulse 也在动效管辖范围内 */
+[data-motion="off"] .animate-pulse,
+[data-motion="off"] .animate-spin {
+  animation: none;
+  transition-duration: 0s;
+  transform: none;
+}
+[data-motion="off"]::view-transition-group(*),
+[data-motion="off"]::view-transition-old(*),
+[data-motion="off"]::view-transition-new(*) {
+  animation: none !important;
 }
 
 /* 正文字高由主题密度决定（--line-height-body 在 applyTheme 里写入） */
