@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { BUILTIN_THEMES } from "./presets";
 import {
   buildTheme,
   chartSeries,
   clampTextScale,
+  contrastRatio,
   luminance,
   mix,
   parseHex,
@@ -141,6 +143,44 @@ describe("buildTheme", () => {
     // dim/faint 是 text 与 bg 之间，必然比 text 浅、比 bg 深
     expect(luminance(light.vars["--color-dim"])).toBeGreaterThan(luminance("#111111"));
     expect(luminance(light.vars["--color-dim"])).toBeLessThan(luminance("#ffffff"));
+  });
+
+  /**
+   * 选中态：`bg-accentsoft text-accent`（筛选 chip、视图切换、侧栏当前项）。
+   *
+   * 这条来自真实事故：accentsoft 原本只是「面板混 12% accent」的固定比例，
+   * 从未校验过压在上面的 accent 文字。Frost 上实测 4.45:1，差 0.05 没过
+   * AA —— 相邻的 4.6:1 求解管住了正文与 dim/faint，唯独漏了这一个组合。
+   * 现在八个内置主题必须全部达标，且这是从 token 反解出来的，不是特调。
+   */
+  it("每套内置主题的选中态（accent on accentsoft）都达到 AA", () => {
+    for (const theme of BUILTIN_THEMES) {
+      const t = buildTheme(theme);
+      const accent = t.vars["--color-accent"];
+      const soft = t.vars["--color-accentsoft"];
+      const ratio = contrastRatio(accent, soft);
+      expect(
+        ratio,
+        `${theme.name}(${theme.id}) 选中态仅 ${ratio.toFixed(2)}:1`
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("自定义主题换上低对比 accent 时，选中态仍被拉回 AA", () => {
+    // 用户把 accent 设成接近面板色的灰蓝 —— 这是最容易把选中态做糊的输入
+    const weak = buildTheme({
+      ...base,
+      dark: false,
+      bg: "#f6f7f9",
+      panel: "#ffffff",
+      text: "#111111",
+      accent: "#9aa8bb",
+    });
+    const ratio = contrastRatio(
+      weak.vars["--color-accent"],
+      weak.vars["--color-accentsoft"]
+    );
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
   });
 });
 

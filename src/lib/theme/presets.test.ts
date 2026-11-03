@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BUILTIN_THEMES,
+  DEFAULT_THEME_ID,
   allThemes,
   deriveTheme,
   editableTheme,
@@ -88,11 +89,24 @@ describe("主题列表与迁移", () => {
   });
 
   it("migrateThemeId 映射旧的 dark/light 并保留已知 id", () => {
+    // 断言的是「映射到哪一套」而不是「等于某个写死的 id」：
+    // 默认主题会随产品决策变化（0.5.0 起默认亮色 Frost），
+    // 而 "dark"→Midnight、"light"→Frost 这两条语义映射不应随之改变。
     expect(migrateThemeId("dark", BUILTIN_THEMES)).toBe("midnight");
     expect(migrateThemeId("light", BUILTIN_THEMES)).toBe("frost");
     expect(migrateThemeId("aurora", BUILTIN_THEMES)).toBe("aurora");
-    expect(migrateThemeId("deleted-custom", BUILTIN_THEMES)).toBe("midnight");
-    expect(migrateThemeId(42, BUILTIN_THEMES)).toBe("midnight");
+    // 已删除/损坏的 id 回退到「当前默认」
+    expect(migrateThemeId("deleted-custom", BUILTIN_THEMES)).toBe(DEFAULT_THEME_ID);
+    expect(migrateThemeId(42, BUILTIN_THEMES)).toBe(DEFAULT_THEME_ID);
+  });
+
+  it("默认主题是亮色的 Frost", () => {
+    // 产品定位：面向白天在工位上长时间盯着屏幕的开发者，默认亮色。
+    // 暗色仍然是一等公民（八套内置里四暗四亮），只是不再是出厂值。
+    expect(DEFAULT_THEME_ID).toBe("frost");
+    const def = BUILTIN_THEMES.find((t) => t.id === DEFAULT_THEME_ID);
+    expect(def, "默认主题必须存在于内置列表").toBeTruthy();
+    expect(def!.dark).toBe(false);
   });
 
   it("deriveTheme 产出可编辑副本", () => {

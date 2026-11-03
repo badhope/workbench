@@ -2,11 +2,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "useDefineForClassFields": true,
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -19,15 +15,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "types": [
-      "vite/client",
-      "vitest/globals",
-      "@testing-library/jest-dom",
-      "node"
-    ]
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom", "node"]
   },
-  "include": [
-    "src",
-    "vitest.config.mts"
-  ]
+  "include": ["src", "vitest.config.mts"]
 }

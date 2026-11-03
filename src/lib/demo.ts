@@ -48,7 +48,11 @@ interface DemoStrings {
 const STRINGS: Record<DemoLang, DemoStrings> = {
   en: {
     osName: "Windows 11 (demo)",
-    projectShop: { name: "Storefront rewrite", note: "Demo project", tags: ["frontend", "v2"] },
+    projectShop: {
+      name: "Storefront rewrite",
+      note: "Demo project",
+      tags: ["frontend", "v2"],
+    },
     projectApi: { name: "Data platform API", tags: ["backend"] },
     taskLogin: "Redesign the sign-in page (demo)",
     taskLoad: "Load-test the API (demo)",
@@ -71,7 +75,8 @@ const STRINGS: Record<DemoLang, DemoStrings> = {
       "2026-10-24T10:12:12.771Z  DEBUG workbench::ipc_guard: refused to open an unregistered path: C:\\Users\\me\\secrets",
       "2026-10-24T10:12:15.203Z  INFO  workbench::commands: self-check finished 9 ok / 3 warn / 0 fail",
     ],
-    logFooter: "(the above is browser demo data; real logs are written by the desktop app only)",
+    logFooter:
+      "(the above is browser demo data; real logs are written by the desktop app only)",
   },
   zh: {
     osName: "Windows 11 (演示)",
@@ -102,7 +107,11 @@ const STRINGS: Record<DemoLang, DemoStrings> = {
   },
   ja: {
     osName: "Windows 11 (デモ)",
-    projectShop: { name: "ストアフロント刷新", note: "デモプロジェクト", tags: ["フロントエンド", "v2"] },
+    projectShop: {
+      name: "ストアフロント刷新",
+      note: "デモプロジェクト",
+      tags: ["フロントエンド", "v2"],
+    },
     projectApi: { name: "データ基盤 API", tags: ["バックエンド"] },
     taskLogin: "ログイン画面の刷新（デモ）",
     taskLoad: "API 負荷試験（デモ）",
@@ -125,7 +134,8 @@ const STRINGS: Record<DemoLang, DemoStrings> = {
       "2026-10-24T10:12:12.771Z  DEBUG workbench::ipc_guard: 未登録のパスを開くことを拒否: C:\\Users\\me\\secrets",
       "2026-10-24T10:12:15.203Z  INFO  workbench::commands: セルフチェック完了 9 ok / 3 warn / 0 fail",
     ],
-    logFooter: "（以上はブラウザのデモデータです。実際のログはデスクトップ版のみが書き込みます）",
+    logFooter:
+      "（以上はブラウザのデモデータです。実際のログはデスクトップ版のみが書き込みます）",
   },
 };
 
@@ -403,8 +413,8 @@ const demoTrendInput = [
   316_000, 462_000, 480_000, 367_000, 388_000,
 ];
 const demoTrendOutput = [
-  90_000, 110_000, 83_000, 130_000, 123_000, 52_000, 33_000, 109_000, 112_000,
-  86_000, 126_000, 131_000, 101_000, 106_000,
+  90_000, 110_000, 83_000, 130_000, 123_000, 52_000, 33_000, 109_000, 112_000, 86_000,
+  126_000, 131_000, 101_000, 106_000,
 ];
 const demoTrendCounts = [18, 22, 15, 27, 9, 6, 21, 25, 19, 28, 23, 17, 24, 20];
 
@@ -454,7 +464,6 @@ export const demoCostModelBreakdown: ModelBreakdownRow[] = [
     record_count: 18,
   },
 ];
-
 
 /**
  * 演示数据的唯一入口：按界面语言返回一整套一致的样例。

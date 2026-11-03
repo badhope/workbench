@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { AlertTriangle, CheckCircle2, CircleHelp, RefreshCw } from "lucide-react";
 import { runDiagnostics } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { Badge, Btn, Card, SectionTitle, Spinner } from "../ui";
+import {
+  clearDiagnostics,
+  diagnosticsReport,
+  getDiagnostics,
+  subscribeDiagnostics,
+} from "../lib/diagnostics";
 import type { DiagnosticCheck, DiagnosticsReport } from "../types";
 
 const LEVEL_TONE = {
@@ -20,6 +26,11 @@ const LEVEL_TONE = {
  */
 export function DiagnosticsPanel() {
   const t = useT();
+  const frontendErrors = useSyncExternalStore(
+    subscribeDiagnostics,
+    getDiagnostics,
+    getDiagnostics
+  );
   const [report, setReport] = useState<DiagnosticsReport | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -51,6 +62,9 @@ export function DiagnosticsPanel() {
       ...report.checks.map(
         (c) => `[${c.level}] ${c.id}: ${c.detail}${c.hint ? ` — ${c.hint}` : ""}`
       ),
+      "",
+      "— 前端错误记录 —",
+      diagnosticsReport(),
     ];
     void navigator.clipboard?.writeText(lines.join("\n"));
   };
@@ -99,7 +113,65 @@ export function DiagnosticsPanel() {
           ))}
         </ul>
       )}
+
+      <FrontendErrors entries={frontendErrors} />
     </Card>
+  );
+}
+
+/**
+ * 前端错误记录。
+ *
+ * 后端自检只能证明「环境与磁盘没问题」；页面白屏、按钮点了没反应这类
+ * 问题全在渲染进程，如果没有这一块，用户看到的诊断报告是"全部通过"，
+ * 而实际功能是坏的 —— 那比没有诊断更误导。
+ */
+function FrontendErrors({ entries }: { entries: ReturnType<typeof getDiagnostics> }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  if (entries.length === 0) {
+    return (
+      <p className="mt-3 flex items-center gap-1.5 text-[11px] text-faint">
+        <CheckCircle2 size={12} className="text-ok" />
+        {t("diag.noFrontendErrors")}
+      </p>
+    );
+  }
+  return (
+    <div className="mt-3">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-1.5 text-[11.5px] font-medium text-warn"
+        >
+          <AlertTriangle size={12} />
+          {t("diag.frontendErrors", { count: entries.length })}
+        </button>
+        <Btn className="!py-0.5 !text-[10px]" onClick={() => clearDiagnostics()}>
+          {t("diag.clearFrontendErrors")}
+        </Btn>
+      </div>
+      {open && (
+        <ul className="mt-2 flex flex-col gap-1.5">
+          {entries.map((e) => (
+            <li
+              key={e.id}
+              className="rounded-[var(--radius-btn)] border border-line/60 bg-panel2/40 px-2.5 py-2"
+            >
+              <div className="flex items-center gap-2 text-[10.5px] text-faint">
+                <code>{e.id}</code>
+                <span>{new Date(e.at).toLocaleString()}</span>
+                <Badge tone="warn">{e.kind}</Badge>
+                {e.view && <span>@{e.view}</span>}
+              </div>
+              <div className="mt-0.5 break-words text-[11.5px] text-text">
+                {e.message}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

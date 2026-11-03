@@ -37,7 +37,11 @@ const BASE = argUrl || "http://localhost:4173";
 const langArg = process.argv.find((a) => a.startsWith("--lang="));
 const LANG = langArg ? langArg.split("=")[1] : "en";
 const OUT_DIR = path.resolve(
-  HERE, "..", "docs", "screenshots", LANG === "en" ? "" : LANG
+  HERE,
+  "..",
+  "docs",
+  "screenshots",
+  LANG === "en" ? "" : LANG
 );
 const CDP_PORT = 9222;
 const VIEW = { width: 1440, height: 900, deviceScaleFactor: 1 };
@@ -169,8 +173,7 @@ async function main() {
   // 断言确实处于演示模式：否则拒绝截图，避免泄漏真实数据。
   // 标记随界面语言变化，三种都要认，否则英文/日文截图永远被拒。
   const probe = await cdp.send("Runtime.evaluate", {
-    expression:
-      "['演示','Demo','デモ'].some((m) => document.body.innerText.includes(m))",
+    expression: "['演示','Demo','デモ'].some((m) => document.body.innerText.includes(m))",
     returnByValue: true,
   });
   if (!probe.result.value) {
@@ -209,7 +212,10 @@ async function main() {
     format: "png",
     clip: { x: 236, y: 56, width: 820, height: 120, scale: 1 },
   });
-  fs.writeFileSync(path.join(OUT_DIR, "12-brand-hero.png"), Buffer.from(hero.data, "base64"));
+  fs.writeFileSync(
+    path.join(OUT_DIR, "12-brand-hero.png"),
+    Buffer.from(hero.data, "base64")
+  );
   console.log("  12-brand-hero.png");
 
   for (const shot of SHOTS) {

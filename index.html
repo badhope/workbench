@@ -1,9 +1,79 @@
 <!doctype html>
-<html lang="zh-CN" class="dark">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>工作台 Workbench</title>
+    <style>
+      /*
+       * 首帧兜底配色（默认亮色 Frost）。
+       *
+       * 为什么需要：真正的主题是运行时由 applyTheme() 把 26 个变量写到
+       * <html> 上的，那要等 JS bundle 下载并执行完。在这之间浏览器已经
+       * 画了第一帧 —— 用 global.css 的暗色默认值，于是亮色用户会看到
+       * 一次「黑闪白」。这里先把最影响观感的底色与文字色钉成默认主题值，
+       * 等 JS 接管后被内联样式覆盖。
+       *
+       * 只同步 3 个变量而不是整套 token：这里的职责是「别闪」，不是
+       * 复刻派生逻辑。复刻会在主题算法改动后悄悄漂移。
+       */
+      :root {
+        color-scheme: light;
+        --color-bg: #f2f4f7;
+        --color-panel: #ffffff;
+        --color-text: #10141b;
+        background: var(--color-bg);
+      }
+      body {
+        background: var(--color-bg);
+        color: var(--color-text);
+      }
+    </style>
+    <script>
+      /*
+       * 在首次绘制前把已保存的主题明暗同步到 <html>，避免「亮闪暗」。
+       * 只读 localStorage 里的 theme id 与内置表做最小映射；解析失败就
+       * 用 light（产品默认），绝不因为存储损坏而白屏。
+       */
+      (function () {
+        try {
+          var raw = localStorage.getItem("workbench-ui-v1");
+          var dark = false;
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            var id = parsed && parsed.state && parsed.state.theme;
+            var DARK = ["midnight", "aurora", "terminal", "void"];
+            var LIGHT = ["frost", "paper", "ink", "jade"];
+            if (DARK.indexOf(id) >= 0) dark = true;
+            else if (LIGHT.indexOf(id) >= 0) dark = false;
+            // 自定义主题：按保存的 bg 亮度判断，与 tokens.ts 的 luminanceOf 同口径
+            else if (id && parsed.state.customThemes) {
+              var custom = parsed.state.customThemes.filter(function (t) {
+                return t && t.id === id;
+              })[0];
+              if (custom && typeof custom.bg === "string") {
+                var hex = custom.bg.replace("#", "");
+                if (hex.length === 6) {
+                  var r = parseInt(hex.slice(0, 2), 16) / 255;
+                  var g = parseInt(hex.slice(2, 4), 16) / 255;
+                  var b = parseInt(hex.slice(4, 6), 16) / 255;
+                  dark = 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.4;
+                }
+              }
+            }
+          }
+          var root = document.documentElement;
+          root.style.colorScheme = dark ? "dark" : "light";
+          if (dark) {
+            root.style.setProperty("--color-bg", "#07080b");
+            root.style.setProperty("--color-panel", "#0c0f15");
+            root.style.setProperty("--color-text", "#e8ecf2");
+          }
+        } catch (e) {
+          /* 存储不可用（隐私模式）：保持亮色默认，不阻塞渲染 */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

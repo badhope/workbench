@@ -1,4 +1,4 @@
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useStore } from "./lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { useT } from "./lib/i18n";
@@ -12,6 +12,7 @@ import { useBreakpoint } from "./lib/useBreakpoint";
 import { useAppRuntime } from "./lib/useAppRuntime";
 import { findTheme } from "./lib/theme/presets";
 import { shellLayout } from "./lib/useShellLayout";
+import { installGlobalDiagnostics, setViewResolver } from "./lib/diagnostics";
 
 /** 当前视图的页面组件。注册表由 pages/registry 统一维护。 */
 function CurrentPage({ view }: { view: keyof typeof PAGE_COMPONENTS }) {
@@ -35,6 +36,16 @@ export default function App() {
   );
 
   useAppRuntime();
+
+  // 全局错误钩子只装一次：ErrorBoundary 只管渲染期异常，事件回调、
+  // 定时器、未处理的 Promise 拒绝都会绕过它直接冒到 window。
+  // 不装的话这些异常在生产里完全无声，用户只能说"它坏了"。
+  useEffect(() => installGlobalDiagnostics(), []);
+
+  // 让诊断记录带上当前页面，排障时能立刻知道是哪个页面炸的。
+  useEffect(() => {
+    setViewResolver(() => useStore.getState().view);
+  }, []);
 
   const layout = shellLayout(bp, shell, collapsed);
   // 网格强度来自主题数据（不是读 DOM）：主题里 grid=0 时完全不铺网格。

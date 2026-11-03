@@ -284,6 +284,35 @@ const FONTS: Record<FontChoice, { sans: string; display: string; mono: string }>
 };
 
 /**
+ * 选中态底色（`--color-accentsoft`）。
+ *
+ * 这个值不能只是「面板色混一点强调色」：它在 UI 里专门给
+ * `bg-accentsoft text-accent` 这组搭配用（筛选 chip、视图切换、侧栏当前项）。
+ * 混色比例写死时，浅色主题上 12% 的 accent 会把底色压得几乎和文字同亮度，
+ * 实测 Frost 上「全部/列表」只有 4.45:1 —— 差 0.05 没过 AA，肉眼也是糊的。
+ *
+ * 所以按「accent 文字压在这个底色上必须达标」反解混色量：从设计意图的
+ * 比例出发，不够就往「远离 accent」的方向加深/减淡，够了立刻停手，
+ * 尽量保住原本的淡色观感。
+ */
+function softAccent(panel: string, accent: string, dark: boolean): string {
+  const target = 4.6; // 4.5 + 抗锯齿余量，与正文同一门槛
+  const base = dark ? 0.18 : 0.12;
+  // 深色主题：底色越暗越能衬出浅色 accent，所以先按基准，再逐步减少混入量。
+  // 浅色主题：反过来，混得越少底色越浅；两种方向都试，取第一个达标的。
+  const steps = dark
+    ? [base, base - 0.04, base - 0.08, base - 0.12, 0]
+    : [base, base - 0.03, base - 0.06, 0.06, 0.03, 0];
+  for (const amount of steps) {
+    if (amount < 0) continue;
+    const candidate = mix(panel, accent, amount);
+    if (contrastRatio(accent, candidate) >= target) return candidate;
+  }
+  // 全部不达标：退到纯面板色，这是能保证的最浅/最深底。
+  return panel;
+}
+
+/**
  * 把用户输入展开成完整 token。
  *
  * 只让用户填「六个颜色 + 五个旋钮」的原因：完整 token 有二十多个，
@@ -299,7 +328,7 @@ export function buildTheme(input: ThemeInput): ThemeTokens {
   const { text, dim, faint, accent, okSafe, warnSafe, dangerSafe } = semantic;
   const panel2 = mix(input.panel, input.bg, 0.45);
   const line = mix(text, input.bg, 1 - LINE_STRENGTH[input.density]);
-  const accentsoft = mix(input.panel, accent, input.dark ? 0.18 : 0.12);
+  const accentsoft = softAccent(input.panel, accent, input.dark);
   const fonts = FONTS[input.font];
 
   const vars = themeVars(input, {

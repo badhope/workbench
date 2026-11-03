@@ -144,7 +144,7 @@ export const BUILTIN_THEMES: ThemeInput[] = [
   },
 ];
 
-export const DEFAULT_THEME_ID = "midnight";
+export const DEFAULT_THEME_ID = "frost";
 
 /** 旧版本持久化的 "dark"/"light"，以及已删除的自定义主题 id。 */
 export function migrateThemeId(raw: unknown, known: ThemeInput[]): string {

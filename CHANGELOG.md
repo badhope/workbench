@@ -3,6 +3,61 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Frontend diagnostics buffer.** `src/lib/diagnostics.ts` captures global
+  `error` and `unhandledrejection` events — the ones an `ErrorBoundary` cannot
+  see (event callbacks, timers, unawaited promises). The most recent 50 entries
+  persist in `localStorage` with a short id (`E001`…), timestamp, kind, stack and
+  the page where the error happened; identical consecutive messages are
+  collapsed so a repeating chart cannot flood the buffer. Nothing leaves the
+  device.
+- **The error boundary now hands the user something to report.** A crash shows
+  the message plus expandable stack details and a one-click copy (message +
+  stack + UA) that pastes straight into an issue. Every render crash is also
+  written into the diagnostics buffer.
+- **Settings → Diagnostics shows frontend errors.** The panel previously could
+  report "all checks passed" while the UI itself was broken; it now lists
+  recorded frontend errors, offers a clear button, and appends them to the
+  copyable report.
+- **Log page filtering.** The logs page gains a keyword search, a level filter
+  (all / error / warn / info / debug, parsed from the Rust tracing output) with
+  per-level counts, and a shown/total line counter. Filtering happens in the
+  render layer only — no extra file reads.
+
+### Changed
+
+- **The default theme is now the light Frost, not the dark Midnight.** The
+  product targets developers staring at the screen in a lit office; dark stays
+  a first-class citizen (four of the eight built-ins). `index.html` pins the
+  three most visible tokens and syncs the saved theme's polarity before first
+  paint, so light-theme users no longer get a dark flash on launch and dark
+  users no longer get a light one.
+- **Selected-state backgrounds are solved, not fixed-ratio.** `--color-accentsoft`
+  was "panel mixed with 12–18 % accent" and was never checked against the
+  accent text on top of it — Frost measured 4.45:1, just under AA. The mix ratio
+  is now solved from the 4.6:1 target per theme, for built-ins and user themes
+  alike, with a regression test over all eight built-ins.
+- **The theme editor says when a color was adjusted.** When a chosen accent
+  fails AA and the theme system will darken it on save, the row shows an
+  "auto-adjusted" badge with the effective value in its tooltip — instead of
+  silently saving a different color than the user picked.
+- **The log pane uses theme-derived `panel2`** instead of a hardcoded
+  `color-mix(bg 82%, black)`, which dropped timestamps to 4.02:1 on the new
+  light default.
+
+### Fixed
+
+- **A half-finished edit to the logs page** (a string literal split across
+  lines, an unimported `LogLevel` type and a missing `levelOf` helper) is
+  completed as the feature it was meant to be; the filter UI the change had
+  already prepared state and memos for is now actually rendered.
+- **E2E custom-theme assertion** now checks that the accent keeps its hue and
+  meets AA after the contrast solve, instead of asserting the raw input
+  survives; visual baselines were regenerated for the light default.
+
 ## [0.4.0] - 2026-11-02
 
 ### Added

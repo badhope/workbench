@@ -3,6 +3,7 @@ import { useT } from "../lib/i18n";
 import {
   buildTheme,
   contrastRatio,
+  ensureTextContrast,
   type Density,
   type FontChoice,
   type Material,
@@ -282,6 +283,20 @@ function ColorRow({
   const value = String(local[field] ?? fallback ?? "#000000");
   const ratio = against ? contrastRatio(value, against) : null;
   const ok = ratio === null || ratio >= 4.5;
+
+  /*
+   * 对比度不足时主题系统会把这个色往深/往浅调一档（见 tokens.ts 的
+   * ensureTextContrast）。这本身是对的——不能让用户保存一套看不清的主题。
+   * 但先前 UI 只显示「输入值 + 输入值的理论对比度」，用户看到 3.2:1 红了、
+   * 保存后却发现颜色跟自己选的不一样，不知道发生了什么。
+   *
+   * 所以在颜色被调整时补一行「实际生效 #xxxxxx」，把这件事说出来，
+   * 而不是让它变成一个谜。只有真的被调过才显示，避免噪音。
+   */
+  const t = useT();
+  const effective =
+    against && !ok ? ensureTextContrast(value, [against], against, 4.6) : value;
+  const adjusted = effective.toLowerCase() !== value.toLowerCase();
   return (
     <label className="flex items-center gap-2">
       <input
@@ -292,15 +307,28 @@ function ColorRow({
         className="h-7 w-9 shrink-0 cursor-pointer rounded border border-line bg-transparent"
       />
       <span className="min-w-0 flex-1 truncate text-[11.5px] text-dim">{label}</span>
-      <span className="num shrink-0 text-[10.5px] text-faint">{value}</span>
+      <span
+        className="num shrink-0 text-[10.5px] text-faint"
+        title={adjusted ? `实际生效 ${effective}` : value}
+      >
+        {value}
+      </span>
       {ratio !== null && (
         <span
           className={`num w-11 shrink-0 text-right text-[10.5px] ${
             ok ? "text-ok" : "text-danger"
           }`}
-          title={ok ? "WCAG AA ✓" : "低于 AA 4.5:1"}
+          title={ok ? "WCAG AA ✓" : "低于 AA 4.5:1，保存时会自动调深/调浅"}
         >
           {ratio.toFixed(1)}:1
+        </span>
+      )}
+      {adjusted && (
+        <span
+          className="shrink-0 rounded bg-warn/15 px-1 text-[10px] text-warn"
+          title={`实际生效 ${effective}`}
+        >
+          {t("settings.editorAdjusted")}
         </span>
       )}
     </label>
