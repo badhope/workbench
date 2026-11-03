@@ -3,6 +3,41 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added — 视觉 2.0（体验与个性化专项）
+
+- **动效系统（三档）**：设置页新增 动效强度 关/标准/丰富。视图切换走 View
+  Transitions API（`@supports` + API 双守卫，不支持时瞬时切换）；统计数字
+  count-up 滚动；骨架屏 shimmer；卡片 hover 抬升。全部只用
+  transform/opacity（GPU 合成层），`html[data-motion]` 一处集中断闸；
+  未显式选择时尊重系统 prefers-reduced-motion（自动降为关）。
+- **卡片深度**：废除全局 `--shadow-card: none`。每主题可配 elevation
+  0–3 求解出静态阴影与 hover 阴影两档，Mono Brutal/Terminal 等直角主题
+  显式 elevation 0 保持粗野风。
+- **渐变强调色**：`ThemeInput` 新增 `accent2`（缺省为 accent 色相 +36°，
+  过与主色同一道 4.6:1 AA 求解）与 `gradientAccent` 开关（默认开）；
+  统计卡数字与主按钮消费渐变，全部主题（含自定义）经求解器兜底。
+- **主题库 8 → 16 套**：新增 4 暗（Midnight Aurora / Ember / Matcha /
+  Grape Soda）与 4 亮（Nordic Light / Sakura / Mono Brutal / Sky），
+  每套有性格（材质/氛围/层级各异），全部经 AA 求解器与 16 主题 e2e
+  对比度门禁实测。
+- **氛围强度**：glow 从「玻璃材质才有」改为 0–100 主题参数（玻璃默认
+  55，Aurora 显式 60），亮色主题也可用低饱和光晕。
+- **统计卡重做**：图标放进 accent 圆角底座、数字用渐变、hover 微反馈；
+  组件 props 不变，调用方零改动。
+- **首次启动引导**：3 步浮层（功能一览 → 16 主题即点即换 → 动效档位），
+  完成/跳过/ESC 均记忆到 localStorage 永不再弹。旧版本（persist v3）
+  升级后也会看到一次——这是有意行为：它同时是新版功能导览，一键可跳过。
+- **持久化 v3 → v4**：只补默认值（motion=standard、motionExplicit=false、
+  onboardingDone=false），自定义主题、组件摆放、布局全部保留（迁移有
+  单测与 e2e 双重验证）。
+- 新增 `scripts/shot_pages.mjs`：按主题 × 页面批量截图的自检工具，
+  视觉改动前后人眼对比用。
+
+e2e 基线已随本次变更整体重生成；16 套主题的 WCAG AA 对比度用 canvas
+逐像素实测通过。
+
 ## [0.5.0] - 2026-11-03
 
 ### Added
