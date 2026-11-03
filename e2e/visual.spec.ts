@@ -57,6 +57,28 @@ async function gotoAppearance(page: Page) {
   await page.waitForTimeout(300);
 }
 
+// 首启引导浮层（OnboardingOverlay）会盖住全屏并拦截所有点击。
+// 只在「布局稳定性」里种 onboardingDone 不够 —— 本文件所有用例都要导航，
+// 统一在文件级 beforeEach 预置（对已种过的用例重复写入无副作用）。
+//
+// 注意：addInitScript 在每次导航（含 page.reload()）都会执行。
+// 种子必须是「key 不存在才写」，否则 reload 时固定种子会把用例中途
+// 保存的 widgetOrder/widgetHidden 等偏好抹掉，持久化断言必然假失败。
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    try {
+      if (!localStorage.getItem("workbench-ui-v1")) {
+        localStorage.setItem(
+          "workbench-ui-v1",
+          JSON.stringify({ state: { onboardingDone: true }, version: 4 })
+        );
+      }
+    } catch {
+      /* ignore */
+    }
+  });
+});
+
 /** 主题卡片没有稳定 id，用可见名称点击 + 等待应用。 */
 async function pickTheme(page: Page, name: string) {
   await gotoAppearance(page);

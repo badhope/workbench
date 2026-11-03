@@ -27,7 +27,15 @@ const PAGES = String(
   args.pages || "overview,processes,servers,costs,tasks,settings"
 ).split(",");
 
-const NAV = { overview: "总览", processes: "进程", servers: "服务", costs: "成本", tasks: "任务", settings: "设置", logs: "日志" };
+const NAV = {
+  overview: "总览",
+  processes: "进程",
+  servers: "服务",
+  costs: "成本",
+  tasks: "任务",
+  settings: "设置",
+  logs: "日志",
+};
 
 mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch();
@@ -38,11 +46,16 @@ const page = await browser.newPage({
 
 for (const theme of THEMES) {
   // 先进一次首页写种子，再刷新让主题管线（applyTheme）完整跑一遍
+  // 注意 persist 已升 v4；onboardingDone 必须预置，否则首启引导浮层
+  // 会盖住导航把脚本卡死（视觉 2.0 起）。
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
   await page.evaluate((t) => {
     localStorage.setItem(
       "workbench-ui-v1",
-      JSON.stringify({ state: { theme: t, lang: "zh" }, version: 3 })
+      JSON.stringify({
+        state: { theme: t, lang: "zh", onboardingDone: true },
+        version: 4,
+      })
     );
   }, theme);
   await page.reload({ waitUntil: "networkidle" });
