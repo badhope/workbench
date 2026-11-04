@@ -138,4 +138,75 @@ describe("createParticleField", () => {
     );
     expect(() => field.destroy()).not.toThrow();
   });
+
+  it("窗口尺寸变化时按新面积重设画布并继续绘制", () => {
+    const { canvas, calls } = fakeCanvas();
+    let roCb: (() => void) | null = null;
+    class RO {
+      constructor(cb: () => void) {
+        roCb = cb;
+      }
+      observe() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", RO);
+    const rafCbs: Array<(t: number) => void> = [];
+    const raf = vi.fn((cb: (t: number) => void) => {
+      rafCbs.push(cb);
+      return rafCbs.length;
+    });
+    const field = createParticleField(
+      canvas,
+      { intensity: 65, getColors: () => ["#fff", "#fff", "#fff"] },
+      {
+        raf: raf as unknown as (cb: (t: number) => void) => number,
+        cancel: vi.fn(),
+        visibility: () => true,
+        onVisibilityChange: () => () => {},
+      }
+    );
+    // 模拟容器尺寸变化 → resize 用新 clientWidth/Height 重设画布
+    (canvas as unknown as { clientWidth: number }).clientWidth = 800;
+    roCb!();
+    (rafCbs[rafCbs.length - 1] as (t: number) => void)(16);
+    expect(canvas.width).toBe(800 * (window.devicePixelRatio || 1));
+    expect(calls.fill).toBeGreaterThan(0);
+    field.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it("visibility 回调：隐藏时暂停，恢复时重新调度", () => {
+    const { canvas } = fakeCanvas();
+    let visible = true;
+    let visCb: (() => void) | null = null;
+    const rafCbs: Array<(t: number) => void> = [];
+    const raf = vi.fn((cb: (t: number) => void) => {
+      rafCbs.push(cb);
+      return rafCbs.length;
+    });
+    const cancel = vi.fn();
+    const field = createParticleField(
+      canvas,
+      { intensity: 50, getColors: () => ["#fff", "#fff", "#fff"] },
+      {
+        raf: raf as unknown as (cb: (t: number) => void) => number,
+        cancel,
+        visibility: () => visible,
+        onVisibilityChange: (cb) => {
+          visCb = cb;
+          return () => {};
+        },
+      }
+    );
+    const scheduledAtStart = raf.mock.calls.length;
+    // 隐藏 → stop（rAF 被取消）
+    visible = false;
+    visCb!();
+    expect(cancel).toHaveBeenCalled();
+    // 恢复 → start 重新调度
+    visible = true;
+    visCb!();
+    expect(raf.mock.calls.length).toBeGreaterThan(scheduledAtStart);
+    field.destroy();
+  });
 });

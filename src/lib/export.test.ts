@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { csvCell, toCsv } from "./export";
+import { describe, expect, it, vi } from "vitest";
+import { csvCell, downloadText, toCsv } from "./export";
 
 describe("csvCell", () => {
   it("leaves plain values alone", () => {
@@ -33,5 +33,42 @@ describe("toCsv", () => {
         [1, 2],
       ])
     ).toBe("a,b\r\n1,2\r\n");
+  });
+});
+
+describe("downloadText", () => {
+  it("创建 Blob 链接触发下载并回收 URL", async () => {
+    const created: string[] = [];
+    const revoked: string[] = [];
+    vi.stubGlobal(
+      "URL",
+      Object.assign(URL, {
+        createObjectURL: vi.fn(() => {
+          const u = `blob:fake-${created.length}`;
+          created.push(u);
+          return u;
+        }),
+        revokeObjectURL: vi.fn((u: string) => revoked.push(u)),
+      })
+    );
+    const clicks: string[] = [];
+    const origCreate = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      const el = origCreate(tag);
+      if (tag === "a") {
+        (el as HTMLAnchorElement).click = () =>
+          clicks.push((el as HTMLAnchorElement).download);
+      }
+      return el;
+    });
+
+    downloadText("costs.csv", "a,b\r\n", "text/csv");
+
+    expect(created).toHaveLength(1);
+    expect(clicks).toEqual(["costs.csv"]);
+    await new Promise((r) => setTimeout(r, 1100));
+    expect(revoked).toEqual(created);
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 });
