@@ -802,9 +802,7 @@ pub async fn get_model_breakdown(app: AppHandle) -> Result<Vec<ModelBreakdownRow
 
 /// 按项目目录归因成本（"哪个仓库花钱最多"）
 #[tauri::command(async)]
-pub async fn get_project_breakdown(
-    app: AppHandle,
-) -> Result<Vec<ProjectBreakdownRow>, String> {
+pub async fn get_project_breakdown(app: AppHandle) -> Result<Vec<ProjectBreakdownRow>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _scan_guard = lock_ledger_operation()?;
         cost_store::build_project_breakdown(&app)
@@ -815,10 +813,7 @@ pub async fn get_project_breakdown(
 
 /// 扩展趋势：最近 `days` 天按日，更早的按月聚合
 #[tauri::command(async)]
-pub async fn get_cost_trend_extended(
-    app: AppHandle,
-    days: usize,
-) -> Result<ExtendedTrend, String> {
+pub async fn get_cost_trend_extended(app: AppHandle, days: usize) -> Result<ExtendedTrend, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _scan_guard = lock_ledger_operation()?;
         cost_store::build_trend_extended(&app, days)

@@ -119,7 +119,7 @@ jobs:
             local matches=( $pattern )
             shopt -u nullglob
             if [ "${#matches[@]}" -ne 1 ]; then
-              echo "::error::期望恰好 1 个 ${label}（$pattern），实际 ${#matches[@]} 个"
+              echo "::error::期望恰好 1 个 ${label}（${pattern}），实际 ${#matches[@]} 个"
               ls -la release-assets || true
               exit 1
             fi
@@ -138,43 +138,46 @@ jobs:
               expect_one "release-assets/*-setup.exe" "NSIS 安装包"
               case "$FOUND" in
                 *"$version"*) echo "ok 文件名包含版本号" ;;
-                *) echo "::error::NSIS 文件名不含版本 $version：$FOUND"; exit 1 ;;
+                *) echo "::error::NSIS 文件名不含版本 ${version}：${FOUND}"; exit 1 ;;
               esac
               ;;
             deb)
               expect_one "release-assets/*.deb" "deb 包"
               case "$FOUND" in
                 *"$version"*) echo "ok 文件名包含版本号" ;;
-                *) echo "::error::deb 文件名不含版本 $version：$FOUND"; exit 1 ;;
+                *) echo "::error::deb 文件名不含版本 ${version}：${FOUND}"; exit 1 ;;
               esac
               ;;
             app)
               app="$(ls -d src-tauri/target/release/bundle/macos/*.app 2>/dev/null | head -1 || true)"
-              if [ -z "$app" ] || [ ! -d "$app" ]; then
+              if [ -z "${app}" ] || [ ! -d "${app}" ]; then
                 echo "::error::.app 目录不存在"
                 ls -la src-tauri/target/release/bundle/macos 2>/dev/null || true
                 exit 1
               fi
-              if [ ! -s "$app/Contents/Info.plist" ]; then
-                echo "::error::缺少 Info.plist：$app"
+              if [ ! -s "${app}/Contents/Info.plist" ]; then
+                echo "::error::缺少 Info.plist：${app}"
                 exit 1
               fi
               # 以 Info.plist 声明的 CFBundleExecutable 为准，确认主程序真的
               # 存在且非空；只检查 .app 目录存在会把空壳当成功。
-              exe_name=$(awk '/<key>CFBundleExecutable<\/key>/{getline; gsub(/.*<string>|<\/string>.*/,""); print; exit}' "$app/Contents/Info.plist")
-              if [ -z "$exe_name" ]; then
-                echo "::error::Info.plist 缺少 CFBundleExecutable：$app"
+              exe_name=$(awk '/<key>CFBundleExecutable<\/key>/{getline; gsub(/.*<string>|<\/string>.*/,""); print; exit}' "${app}/Contents/Info.plist")
+              if [ -z "${exe_name}" ]; then
+                echo "::error::Info.plist 缺少 CFBundleExecutable：${app}"
                 exit 1
               fi
-              if [ ! -s "$app/Contents/MacOS/$exe_name" ]; then
-                echo "::error::主程序缺失或为空：$app/Contents/MacOS/$exe_name"
-                ls -la "$app/Contents/MacOS" || true
+              if [ ! -s "${app}/Contents/MacOS/${exe_name}" ]; then
+                echo "::error::主程序缺失或为空：${app}/Contents/MacOS/${exe_name}"
+                ls -la "${app}/Contents/MacOS" || true
                 exit 1
               fi
-              echo "ok .app: $app（CFBundleExecutable=$exe_name）"
+              # 注意：$app 之类的展开必须加花括号 —— macOS runner 的 bash 3.2
+              # 会把紧跟其后的全角字符（如 $app（ ）吞进变量名，set -u 下
+              # 直接 unbound 报错（v0.6.0 的 Release 就挂在第 63 行）。
+              echo "ok .app: ${app}（CFBundleExecutable=${exe_name}）"
               expect_one "release-assets/*.zip" "macOS zip"
-              unzip -l "$FOUND" | grep -q "Contents/MacOS/" || {
-                echo "::error::zip 内缺少 Contents/MacOS/：$FOUND"
+              unzip -l "${FOUND}" | grep -q "Contents/MacOS/" || {
+                echo "::error::zip 内缺少 Contents/MacOS/：${FOUND}"
                 exit 1
               }
               ;;

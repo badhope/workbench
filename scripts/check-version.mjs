@@ -61,7 +61,15 @@ if (distinct.length > 1) {
 
 const args = process.argv.slice(2);
 const tagIndex = args.indexOf("--tag");
-const tag = tagIndex >= 0 ? args[tagIndex + 1] : process.env.GITHUB_REF_NAME;
+// 只在「显式传参」或「真实 tag 推送」时校验 tag。push 分支时
+// GITHUB_REF_NAME 是分支名（如 "main"），拿它当 tag 校验会把
+// main 分支的每次 CI 都误杀（实测 v0.6.0 的 CI 就是这么红的）。
+const tag =
+  tagIndex >= 0
+    ? args[tagIndex + 1]
+    : process.env.GITHUB_REF_TYPE === "tag"
+      ? process.env.GITHUB_REF_NAME
+      : undefined;
 if (tag) {
   const expected = tag.replace(/^v/, "");
   if (expected !== distinct[0]) {

@@ -966,8 +966,7 @@ fn month_trend_sql(
 /// 原始账目导出：包含估算行（`cost_source` 自己说明来源），
 /// 按天、文件排序保证同一次会话的多条记录在导出里相邻。
 fn export_records_sql(conn: &Connection, limit: usize) -> Result<Vec<CostExportRow>, String> {
-    let sql =
-        "SELECT day, project, tool, model, input_tokens, output_tokens, cache_read_tokens,
+    let sql = "SELECT day, project, tool, model, input_tokens, output_tokens, cache_read_tokens,
                 cache_creation_tokens, cost_input, cost_output, cost_total, cost_source, file_path
          FROM records ORDER BY day, file_path LIMIT ?1";
     let mut stmt = conn
@@ -1489,7 +1488,10 @@ mod tests {
 
         let limited = export_records_sql(&conn, 2).unwrap();
         assert_eq!(limited.len(), 2, "limit 生效");
-        assert_eq!(limited[0].day, "2026-05-01", "限长时保留最早的天（与趋势的『最近』互补）");
+        assert_eq!(
+            limited[0].day, "2026-05-01",
+            "限长时保留最早的天（与趋势的『最近』互补）"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
