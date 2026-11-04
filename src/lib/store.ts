@@ -104,6 +104,13 @@ interface UiState {
    * 生效动效档为 off 时停用、页面隐藏时自动暂停（见 ParticleBackdrop）。
    */
   particles: boolean;
+  /** 粒子氛围强度 0-100（默认 65：看得见但不吵） */
+  particlesIntensity: number;
+  /**
+   * 自定义背景图（dataURL，仅存本机）。写入前必须经
+   * isBackgroundDataUrl 校验——只接受 data:image/*，其它一律拒收。
+   */
+  backgroundImage: string | null;
   /** 外壳：侧栏 / 顶部坞 / 专注 */
   shell: ShellId;
   /** 概览页布局 */
@@ -174,6 +181,10 @@ interface Store extends UiState, RuntimeState {
   setOnboardingDone: () => void;
   /** 开关氛围粒子背景 */
   setParticles: (v: boolean) => void;
+  /** 设置粒子氛围强度 0-100（自动钳制取整） */
+  setParticlesIntensity: (v: number) => void;
+  /** 设置/清除自定义背景图（调用方负责先压缩与校验） */
+  setBackground: (dataUrl: string | null) => void;
   /** 新建/覆盖一个自定义主题；返回它的 id */
   upsertTheme: (theme: ThemeInput) => string;
   deleteTheme: (id: string) => void;
@@ -257,6 +268,22 @@ function normalizeMotion(v: unknown): MotionLevel {
   return MOTION_LEVELS.includes(v as MotionLevel) ? (v as MotionLevel) : "standard";
 }
 
+/** 粒子/氛围强度统一钳制：非数字落默认 65，越界截断，取整。 */
+export function normalizeIntensity(v: unknown, fallback = 65): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+/**
+ * 背景图白名单：只接受 data:image/* URL。
+ * localStorage 一旦存进 script: 之类的东西，任何「把它当 CSS 用」的
+ * 路径都是注入面——在写入源头就拒收，比在每个消费点防御便宜得多。
+ */
+export function isBackgroundDataUrl(v: unknown): v is string {
+  return typeof v === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(v);
+}
+
 /**
  * persist 迁移主体（导出仅为单测可直接断言迁移行为）。
  *
@@ -284,6 +311,10 @@ export function migratePersisted(persisted: unknown): Record<string, unknown> {
     motionExplicit: state.motionExplicit === true,
     onboardingDone: state.onboardingDone === true,
     particles: state.particles === true,
+    particlesIntensity: normalizeIntensity(state.particlesIntensity),
+    backgroundImage: isBackgroundDataUrl(state.backgroundImage)
+      ? state.backgroundImage
+      : null,
   };
 }
 
@@ -327,6 +358,8 @@ export const useStore = create<Store>()(
       motionExplicit: false,
       onboardingDone: false,
       particles: false,
+      particlesIntensity: 65,
+      backgroundImage: null,
       shell: "rail",
       layout: "bento",
       widgetOrder: DEFAULT_ORDER,
@@ -384,6 +417,12 @@ export const useStore = create<Store>()(
       },
       setOnboardingDone: () => set({ onboardingDone: true }),
       setParticles: (v) => set({ particles: v }),
+      setParticlesIntensity: (v) => set({ particlesIntensity: normalizeIntensity(v) }),
+      setBackground: (dataUrl) =>
+        set({
+          backgroundImage:
+            dataUrl === null ? null : isBackgroundDataUrl(dataUrl) ? dataUrl : null,
+        }),
       setTheme: (id) => {
         set({ theme: id });
         const s = get();
@@ -1116,8 +1155,9 @@ export const useStore = create<Store>()(
       // 版本 3：主题变成可编辑数据（+ customThemes）、新增 shell / layout / 组件摆放。
       // 版本 4：新增动效档位（motion/motionExplicit）与首启引导标记。
       // 版本 5：新增氛围粒子开关（particles，默认关）。
+      // 版本 6：新增粒子强度（默认 65）与自定义背景图（默认 null）。
       // 迁移只做「补齐与清洗」，不覆盖用户的显式选择。
-      version: 5,
+      version: 6,
       migrate: (persisted: unknown) => migratePersisted(persisted) as never,
       partialize: (s) => ({
         theme: s.theme,
@@ -1126,6 +1166,8 @@ export const useStore = create<Store>()(
         motionExplicit: s.motionExplicit,
         onboardingDone: s.onboardingDone,
         particles: s.particles,
+        particlesIntensity: s.particlesIntensity,
+        backgroundImage: s.backgroundImage,
         shell: s.shell,
         layout: s.layout,
         widgetOrder: s.widgetOrder,

@@ -380,6 +380,63 @@ export function StatCard({
  * `action` 是可选的下一步操作：只说「还没有数据」而不给按钮，
  * 用户得自己去找入口（Raycast/Datadog 的空状态都带引导）。
  */
+/**
+ * 空态插画：虚线托盘上一只轻轻悬浮的盒子，语义图标嵌在盒面。
+ * 颜色全部走主题 token——自定义主题/亮暗切换都自动成立，不用出参调色。
+ * 动效是 1.5px 的缓浮（.empty-float，data-motion=off 时被集中断闸）。
+ */
+function EmptyArt({ icon: Icon }: { icon?: typeof Inbox }) {
+  return (
+    <div className="empty-float relative h-12 w-28" aria-hidden="true">
+      <svg
+        viewBox="0 0 112 48"
+        className="absolute inset-0 h-full w-full overflow-visible"
+      >
+        {/* 地面阴影：虚线椭圆，示意"这里本该有东西" */}
+        <ellipse
+          cx="56"
+          cy="44"
+          rx="24"
+          ry="3.5"
+          fill="none"
+          stroke="var(--color-line)"
+          strokeWidth="1.5"
+          strokeDasharray="3 4"
+        />
+        {/* 悬浮盒：panel2 填充 + faint 描边，微微倾斜打破呆板 */}
+        <g transform="rotate(-3 56 22)">
+          <rect
+            x="38"
+            y="9"
+            width="36"
+            height="26"
+            rx="6"
+            fill="var(--color-panel2)"
+            stroke="var(--color-faint)"
+            strokeWidth="1.5"
+          />
+        </g>
+        {/* 环绕光点：一颗 accent 一颗 accent2，呼应主题强调色 */}
+        <circle cx="18" cy="14" r="2" fill="var(--color-accent)" opacity="0.65" />
+        <circle
+          cx="96"
+          cy="26"
+          r="1.6"
+          fill="var(--color-accent2, var(--color-accent))"
+          opacity="0.55"
+        />
+        <circle cx="90" cy="8" r="1" fill="var(--color-faint)" />
+      </svg>
+      {Icon && (
+        <Icon
+          size={13}
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[58%] text-accent opacity-80"
+        />
+      )}
+    </div>
+  );
+}
+
 export function Empty({
   children,
   icon: Icon,
@@ -390,8 +447,8 @@ export function Empty({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex h-32 flex-col items-center justify-center gap-2.5 rounded-[6px] border border-dashed border-line/80 text-[12px] text-faint">
-      {Icon && <Icon size={18} className="opacity-50" />}
+    <div className="flex h-32 flex-col items-center justify-center gap-1.5 rounded-[6px] border border-dashed border-line/80 text-[12px] text-faint">
+      <EmptyArt icon={Icon} />
       <span className="max-w-[46ch] px-3 text-center">{children}</span>
       {action}
     </div>

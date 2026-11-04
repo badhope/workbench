@@ -16,6 +16,7 @@ import { effectiveMotion, useStore } from "../lib/store";
 export function ParticleBackdrop() {
   const ref = useRef<HTMLCanvasElement>(null);
   const particles = useStore((s) => s.particles);
+  const particlesIntensity = useStore((s) => s.particlesIntensity);
   const motion = useStore((s) => effectiveMotion(s));
   const active = particles && motion !== "off";
 
@@ -24,8 +25,9 @@ export function ParticleBackdrop() {
     const canvas = ref.current;
     if (!canvas) return;
     const field: ParticleField = createParticleField(canvas, {
-      // 氛围强度固定 65：拉满会抢监控数据的注意力，这里「看得见但不吵」。
-      intensity: 65,
+      // 强度由用户滑杆控制（0-100）；内部再封顶 0.55 全局透明度，
+      // 拉满也只是「明显」，不会变成屏保。
+      intensity: particlesIntensity,
       getColors: () => {
         // 每次取色走 CSS 变量：换主题/自定义主题改色后粒子自动跟随，
         // 不需要在 applyTheme 里增加回调管线。
@@ -40,7 +42,7 @@ export function ParticleBackdrop() {
       },
     });
     return () => field.destroy();
-  }, [active]);
+  }, [active, particlesIntensity]);
 
   if (!active) return null;
   return (

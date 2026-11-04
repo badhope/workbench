@@ -39,6 +39,8 @@ import {
 import { LayoutWireframe, ThemeEditor } from "./ThemeEditorPanel";
 import { readableOn } from "../lib/theme/readable";
 import { buildShareUrl } from "../lib/theme/share";
+import { downscaleDimensions, fitsLocalStorage, pickOutputMime } from "../lib/image";
+import { isBackgroundDataUrl } from "../lib/store";
 import { Btn, Card, Field, SectionTitle } from "../ui";
 
 /** 动效三档（关/标准/满格）。顺序即展示顺序，off 在最前。 */
@@ -69,6 +71,10 @@ export function AppearancePanel() {
     setMotion,
     particles,
     setParticles,
+    particlesIntensity,
+    setParticlesIntensity,
+    backgroundImage,
+    setBackground,
     shell,
     setShell,
     layout,
@@ -93,6 +99,10 @@ export function AppearancePanel() {
       setMotion: s.setMotion,
       particles: s.particles,
       setParticles: s.setParticles,
+      particlesIntensity: s.particlesIntensity,
+      setParticlesIntensity: s.setParticlesIntensity,
+      backgroundImage: s.backgroundImage,
+      setBackground: s.setBackground,
       shell: s.shell,
       setShell: s.setShell,
       layout: s.layout,
@@ -111,6 +121,51 @@ export function AppearancePanel() {
   const [editing, setEditing] = useState<ThemeInput | null>(null);
   const [dragId, setDragId] = useState<WidgetId | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const bgFileRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * 背景图导入：解码 → 等比压到最长边 1920 → 重编码（JPEG 原样、
+   * 其余转 PNG）→ 容量校验 → 入 store。全链路在本机完成，图片不出设备。
+   * 任何一步失败只弹 toast，绝不上半截背景。
+   */
+  const importBackground = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("read failed"));
+        reader.readAsDataURL(file);
+      });
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("decode failed"));
+        img.src = dataUrl;
+      });
+      const { width, height } = downscaleDimensions(img.naturalWidth, img.naturalHeight);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("no 2d context");
+      ctx.drawImage(img, 0, 0, width, height);
+      const out = canvas.toDataURL(pickOutputMime(file.type), 0.85);
+      if (!fitsLocalStorage(out)) {
+        setToast(t("settings.backgroundTooLarge"));
+        return;
+      }
+      if (!isBackgroundDataUrl(out)) {
+        setToast(t("settings.backgroundInvalid"));
+        return;
+      }
+      setBackground(out);
+    } catch {
+      setToast(t("settings.backgroundInvalid"));
+    } finally {
+      if (bgFileRef.current) bgFileRef.current.value = "";
+    }
+  };
 
   const themes = useMemo(() => allThemes(customThemes), [customThemes]);
   const current = findTheme(theme, customThemes);
@@ -238,8 +293,66 @@ export function AppearancePanel() {
             </button>
           ))}
         </div>
+        {particles && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between text-[11px] text-dim">
+              <label htmlFor="particles-intensity">
+                {t("settings.particlesIntensity")}
+              </label>
+              <span className="num">{particlesIntensity}</span>
+            </div>
+            <input
+              id="particles-intensity"
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={particlesIntensity}
+              onChange={(e) => setParticlesIntensity(Number(e.target.value))}
+              className="mt-1 w-full accent-[var(--color-accent)]"
+            />
+          </div>
+        )}
         <p className="mt-2 text-[11px] leading-relaxed text-dim">
           {t("settings.particlesHint")}
+        </p>
+      </Card>
+
+      <Card>
+        <SectionTitle>{t("settings.backgroundSection")}</SectionTitle>
+        <input
+          ref={bgFileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => void importBackground(e.target.files?.[0])}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Btn onClick={() => bgFileRef.current?.click()}>
+            <Upload size={14} /> {t("settings.backgroundChoose")}
+          </Btn>
+          {backgroundImage && (
+            <>
+              {/* 缩略图：确认当前是哪张图，避免"存了但忘了" */}
+              <img
+                src={backgroundImage}
+                alt=""
+                className="h-14 w-24 rounded-[var(--radius-btn)] border border-line object-cover"
+              />
+              <Btn
+                onClick={() => {
+                  setBackground(null);
+                  if (bgFileRef.current) bgFileRef.current.value = "";
+                }}
+                className="!py-1 !text-xs"
+              >
+                <Trash2 size={12} /> {t("settings.backgroundClear")}
+              </Btn>
+            </>
+          )}
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-dim">
+          {t("settings.backgroundHint")}
         </p>
       </Card>
 

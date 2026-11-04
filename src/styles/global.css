@@ -418,6 +418,20 @@ input[type="checkbox"] {
   animation: fade-in 0.18s ease both;
 }
 
+/* 空态插画的缓浮：1.5px 的呼吸感，让"空"显得是刻意的留白而不是坏掉 */
+@keyframes empty-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.5px);
+  }
+}
+.empty-float > svg {
+  animation: empty-float 3.2s ease-in-out infinite;
+}
+
 /*
  * 纯 opacity 淡入，不参与关档断闸。
  * 首启引导这类「无障碍浮层」即使动效关档也要有可感知的出现过程，
@@ -499,6 +513,7 @@ input[type="checkbox"] {
 [data-motion="off"] .shimmer::after,
 [data-motion="off"] .card-hover,
 [data-motion="off"] .t-btn,
+[data-motion="off"] .empty-float > svg,
 /* Tailwind 内置的 animate-spin / animate-pulse 也在动效管辖范围内 */
 [data-motion="off"] .animate-pulse,
 [data-motion="off"] .animate-spin {

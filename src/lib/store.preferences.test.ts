@@ -317,4 +317,25 @@ describe("persist 迁移 v3→v4", () => {
     expect(migrated.motion).toBe("rich");
     expect(migrated.particles).toBe(false);
   });
+
+  it("persist v5 → v6：粒子强度默认 65 且钳制，背景图只收 data:image/*", () => {
+    // 合法强度保留取整，越界截断
+    expect(migratePersisted({ particlesIntensity: 80 }).particlesIntensity).toBe(80);
+    expect(migratePersisted({ particlesIntensity: 250 }).particlesIntensity).toBe(100);
+    expect(migratePersisted({ particlesIntensity: -3 }).particlesIntensity).toBe(0);
+    expect(migratePersisted({}).particlesIntensity).toBe(65);
+    expect(migratePersisted({ particlesIntensity: "abc" }).particlesIntensity).toBe(65);
+
+    // 背景图白名单：data:image/* 放行，其它（含 script: 和 http:）一律 null
+    const good = "data:image/png;base64,iVBORw0KGgo=";
+    expect(migratePersisted({ backgroundImage: good }).backgroundImage).toBe(good);
+    expect(
+      migratePersisted({ backgroundImage: "data:text/html;base64,PGI+" }).backgroundImage
+    ).toBeNull();
+    expect(
+      migratePersisted({ backgroundImage: "https://evil.example/x.png" }).backgroundImage
+    ).toBeNull();
+    expect(migratePersisted({ backgroundImage: 42 }).backgroundImage).toBeNull();
+    expect(migratePersisted({}).backgroundImage).toBeNull();
+  });
 });

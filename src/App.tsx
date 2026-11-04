@@ -8,6 +8,7 @@ import { KillDialog, Toast } from "./components/KillDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { ParticleBackdrop } from "./components/ParticleBackdrop";
+import { BackgroundImage } from "./components/BackgroundImage";
 import { Sidebar } from "./components/Nav";
 import { Spinner } from "./ui";
 import { PAGE_COMPONENTS } from "./pages/registry";
@@ -33,13 +34,14 @@ export default function App() {
   // 折叠是用户偏好，抽屉是临时交互，混用一个布尔会在跨断点时表现错乱。
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { view, setView, shell, motion, motionExplicit } = useStore(
+  const { view, setView, shell, motion, motionExplicit, backgroundImage } = useStore(
     useShallow((s) => ({
       view: s.view,
       setView: s.setView,
       shell: s.shell,
       motion: s.motion,
       motionExplicit: s.motionExplicit,
+      backgroundImage: s.backgroundImage,
     }))
   );
 
@@ -157,6 +159,7 @@ export default function App() {
 
       <KillDialog />
       <CommandPalette />
+      <BackgroundImage dataUrl={backgroundImage} />
       <ParticleBackdrop />
       <OnboardingOverlay />
       <Toast />

@@ -15,6 +15,15 @@ export const dict = {
     "settings.particlesOff": "Off",
     "settings.particlesHint":
       "Theme-colored particles drifting behind the UI, recolored automatically when you change themes. Pauses when the window is hidden and switches off with motion “Off”. Off by default to save power.",
+    "settings.particlesIntensity": "Intensity",
+    "settings.backgroundSection": "Background image",
+    "settings.backgroundChoose": "Choose image…",
+    "settings.backgroundClear": "Clear",
+    "settings.backgroundHint":
+      "The picture stays on this machine — downscaled to 1920px and stored in local settings, never uploaded. A theme-colored veil keeps text readable on any wallpaper.",
+    "settings.backgroundTooLarge":
+      "Image too large even after compression — pick a smaller one.",
+    "settings.backgroundInvalid": "Could not read that image.",
     "pricing.title": "Model pricing overrides",
     "pricing.hint":
       "Built-in prices are a snapshot of public list prices (USD per 1M tokens). Override any model here; the override wins over the built-in value and is stored in pricing_overrides.json next to your data.",
@@ -228,6 +237,14 @@ export const dict = {
     "settings.particlesOff": "关闭",
     "settings.particlesHint":
       "跟随主题强调色的粒子在界面底层缓缓上浮，换主题时自动重新取色。窗口隐藏时自动暂停；动效设为「关」时同步停用。默认关闭以省电。",
+    "settings.particlesIntensity": "强度",
+    "settings.backgroundSection": "背景图片",
+    "settings.backgroundChoose": "选择图片…",
+    "settings.backgroundClear": "清除",
+    "settings.backgroundHint":
+      "图片只保存在本机：压缩到最长边 1920px 后存进本地设置，绝不上传。上面会垫一层主题色遮罩，任何壁纸上文字都保持可读。",
+    "settings.backgroundTooLarge": "图片压缩后仍然过大，请换一张小些的。",
+    "settings.backgroundInvalid": "无法读取这张图片。",
     "pricing.title": "模型价格覆盖",
     "pricing.hint":
       "内置价格是公开标价的快照（USD / 百万 tokens）。可在这里覆盖任意型号；覆盖值优先于内置值，保存在数据目录的 pricing_overrides.json。",
@@ -430,6 +447,15 @@ export const dict = {
     "settings.particlesOff": "オフ",
     "settings.particlesHint":
       "テーマのアクセント色に合わせた粒子が界面の奥でゆっくり浮遊し、テーマ変更時に自動で色を追従します。ウィンドウ非表示時は自動停止し、モーション「オフ」では無効化。省電力のため既定はオフ。",
+    "settings.particlesIntensity": "強さ",
+    "settings.backgroundSection": "背景画像",
+    "settings.backgroundChoose": "画像を選択…",
+    "settings.backgroundClear": "クリア",
+    "settings.backgroundHint":
+      "画像は端末内だけに保存されます（長辺 1920px に圧縮しローカル設定へ、アップロードは一切ありません）。テーマ色のベールで文字の可読性を確保します。",
+    "settings.backgroundTooLarge":
+      "圧縮後も画像が大きすぎます。小さい画像をお選びください。",
+    "settings.backgroundInvalid": "その画像は読み込めませんでした。",
     "pricing.title": "モデル価格の上書き",
     "pricing.hint":
       "組み込み価格は公開価格のスナップショットです（USD / 100万トークン）。任意のモデルを上書きできます。上書き値は組み込み値より優先され、データフォルダの pricing_overrides.json に保存されます。",

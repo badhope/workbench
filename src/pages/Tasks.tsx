@@ -191,9 +191,7 @@ export default function Tasks() {
               </div>
             </>
           ) : (
-            <div className="text-xs text-dim py-6 text-center">
-              {t("tasks.emptyTasks")}
-            </div>
+            <Empty>{t("tasks.emptyTasks")}</Empty>
           )}
         </Card>
 
