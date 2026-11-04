@@ -2,10 +2,10 @@
 
 [English](README.md) | **简体中文** | [日本語](README.ja.md)
 
-[![Version](https://img.shields.io/badge/version-0.5.0-22d3ee)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.6.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.zh-CN.md#系统要求)
-[![Tests](https://img.shields.io/badge/tests-441%20unit%20%2B%20136%20backend-8b5cf6)](#质量门禁)
+[![Tests](https://img.shields.io/badge/tests-489%20unit%20%2B%20136%20backend-8b5cf6)](#质量门禁)
 
 ![工作台](docs/screenshots/12-brand-hero.png)
 
@@ -46,6 +46,23 @@
 |----------|----------|
 | ![成本账本](docs/screenshots/zh/05-costs.png) | ![任务看板](docs/screenshots/zh/08-tasks.png) |
 | 预算进度、趋势、模型分解 | 拖拽看板，待办 / 进行中 / 已完成 |
+
+### 视觉 2.0 —— 主题、特效与个性化
+
+| 氛围粒子 | 自定义背景 |
+|----------|------------|
+| ![氛围粒子](docs/screenshots/zh/19-particles.png) | ![自定义背景](docs/screenshots/zh/20-background.png) |
+| 跟随主题取色的上浮粒子，强度 0-100 可调 | 本机壁纸垫可读性遮罩，图片只存本机 |
+
+| 首启引导 | 空态插画 |
+|----------|----------|
+| ![首启引导](docs/screenshots/zh/22-onboarding.png) | ![空态插画](docs/screenshots/zh/21-empty-art.png) |
+| 三步：功能一览 → 16 套主题 → 动效档位 | 全站空态共享的主题化插画 |
+
+| Midnight（暗色） | Midnight Aurora（玻璃） |
+|------------------|-------------------------|
+| ![暗色](docs/screenshots/zh/23-dark-overview.png) | ![玻璃](docs/screenshots/zh/24-glass-aurora.png) |
+| 16 套内置主题：4 暗 + 4 亮 + 有性格的其它 | 玻璃材质 + 每主题专属氛围光晕 |
 
 ### 30 秒演示
 

@@ -115,7 +115,10 @@ export default function App() {
         />
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* 内容列必须显式 z-10：背景图层（fixed z-0，DOM 靠后）按画家算法
+          会盖过 z-auto 的 relative 兄弟——实测壁纸直接糊在正文上。
+          侧栏自带 z-40 幸免，这里把内容列也提到壁纸之上。 */}
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
         {layout.dock ? (
           <DockHeader view={view} onPick={changeView} />
         ) : (

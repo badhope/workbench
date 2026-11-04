@@ -2,10 +2,10 @@
 
 **English** | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-[![Version](https://img.shields.io/badge/version-0.5.0-22d3ee)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.6.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.md#system-requirements)
-[![Tests](https://img.shields.io/badge/tests-441%20unit%20%2B%20136%20backend-8b5cf6)](#quality-gates)
+[![Tests](https://img.shields.io/badge/tests-489%20unit%20%2B%20136%20backend-8b5cf6)](#quality-gates)
 
 ![Workbench](docs/screenshots/12-brand-hero.png)
 
@@ -48,6 +48,23 @@ to configure.
 |-------------|-------|
 | ![Costs](docs/screenshots/05-costs.png) | ![Tasks](docs/screenshots/08-tasks.png) |
 | Budget progress, trend, model split | Drag-and-drop kanban |
+
+### Visual 2.0 — themes, effects, personalization
+
+| Ambient particles | Custom background |
+|-------------------|-------------------|
+| ![Particles](docs/screenshots/19-particles.png) | ![Background](docs/screenshots/20-background.png) |
+| Theme-colored drifting particles, 0–100 intensity | Any local wallpaper under a readability veil, stored on-device |
+
+| First-run tour | Empty-state art |
+|----------------|-----------------|
+| ![Onboarding](docs/screenshots/22-onboarding.png) | ![Empty art](docs/screenshots/21-empty-art.png) |
+| 3 steps: features → 16 themes → motion level | Shared illustration across every empty view |
+
+| Midnight (dark) | Midnight Aurora (glass) |
+|-----------------|-------------------------|
+| ![Dark](docs/screenshots/23-dark-overview.png) | ![Glass](docs/screenshots/24-glass-aurora.png) |
+| 16 built-in themes, 4 dark + 4 light + … | Glass material with per-theme ambient glow |
 
 ### 30-second tour
 

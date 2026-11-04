@@ -3,7 +3,7 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.6.0] - 2026-11-04
 
 ### Added — 视觉 2.0（体验与个性化专项）
 

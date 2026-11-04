@@ -2,10 +2,10 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | **日本語**
 
-[![Version](https://img.shields.io/badge/version-0.5.0-22d3ee)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.6.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.ja.md#システム要件)
-[![Tests](https://img.shields.io/badge/tests-441%20unit%20%2B%20136%20backend-8b5cf6)](#品質ゲート)
+[![Tests](https://img.shields.io/badge/tests-489%20unit%20%2B%20136%20backend-8b5cf6)](#品質ゲート)
 
 ![Workbench](docs/screenshots/12-brand-hero.png)
 
@@ -48,6 +48,22 @@
 | ![コスト](docs/screenshots/ja/05-costs.png) | ![タスク](docs/screenshots/ja/08-tasks.png) |
 | 予算進捗、推移、モデル内訳 | ドラッグ＆ドロップのカンバン |
 
+### ビジュアル 2.0 — テーマ・エフェクト・カスタマイズ
+
+| アンビエント粒子 | 背景画像 |
+|------------------|----------|
+| ![粒子](docs/screenshots/ja/19-particles.png) | ![背景](docs/screenshots/ja/20-background.png) |
+| テーマ追従の浮遊粒子、強度 0-100 | 可読性ベール付きの壁紙、画像は端末内のみ |
+
+| 初回ツアー | 空状態アート |
+|------------|--------------|
+| ![ツアー](docs/screenshots/ja/22-onboarding.png) | ![空状態](docs/screenshots/ja/21-empty-art.png) |
+| 3 ステップ：機能 → 16 テーマ → モーション | 全画面共通のテーマ連動イラスト |
+
+| Midnight（ダーク） | Midnight Aurora（グラス） |
+|--------------------|---------------------------|
+| ![ダーク](docs/screenshots/ja/23-dark-overview.png) | ![グラス](docs/screenshots/ja/24-glass-aurora.png) |
+| 内蔵 16 テーマ：ダーク 4 + ライト 4 + 個性派 | グラス素材 + テーマ別アンビエント グロー |
 ### 30 秒ツアー
 
 [![デモ](docs/screenshots/ja/01-overview.png)](docs/screenshots/workbench-demo.mp4)
