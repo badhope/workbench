@@ -7,6 +7,16 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added — 视觉 2.0（体验与个性化专项）
 
+- **氛围粒子背景**：Canvas 2D 轻量粒子场（零依赖），跟随主题强调色取色、
+  换主题自动重新上色。默认关闭；开启后仍受三重省电约束——页面隐藏自动
+  暂停 rAF、动效档位「关」时同步停用、粒子数按窗口面积钳制在 24–72。
+  设置 → 外观新增「氛围粒子」开关。
+
+### Changed
+
+- persist v4 → v5：新增 `particles` 偏好（迁移只补默认值 `false`，不覆盖
+  用户已有设置）。
+
 - **动效系统（三档）**：设置页新增 动效强度 关/标准/丰富。视图切换走 View
   Transitions API（`@supports` + API 双守卫，不支持时瞬时切换）；统计数字
   count-up 滚动；骨架屏 shimmer；卡片 hover 抬升。全部只用

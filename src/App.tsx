@@ -7,6 +7,7 @@ import { AppHeader, DockHeader } from "./components/AppHeader";
 import { KillDialog, Toast } from "./components/KillDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
+import { ParticleBackdrop } from "./components/ParticleBackdrop";
 import { Sidebar } from "./components/Nav";
 import { Spinner } from "./ui";
 import { PAGE_COMPONENTS } from "./pages/registry";
@@ -156,6 +157,7 @@ export default function App() {
 
       <KillDialog />
       <CommandPalette />
+      <ParticleBackdrop />
       <OnboardingOverlay />
       <Toast />
     </div>

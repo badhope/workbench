@@ -278,6 +278,7 @@ describe("persist 迁移 v3→v4", () => {
     expect(migrated.motion).toBe("standard");
     expect(migrated.motionExplicit).toBe(false);
     expect(migrated.onboardingDone).toBe(false);
+    expect(migrated.particles).toBe(false);
   });
 
   it("用户已保存的偏好不被覆盖，非法档位回退 standard", () => {
@@ -285,10 +286,12 @@ describe("persist 迁移 v3→v4", () => {
       motion: "off",
       motionExplicit: true,
       onboardingDone: true,
+      particles: true,
     });
     expect(migrated.motion).toBe("off");
     expect(migrated.motionExplicit).toBe(true);
     expect(migrated.onboardingDone).toBe(true);
+    expect(migrated.particles).toBe(true);
 
     const bad = migratePersisted({ motion: "turbo" });
     expect(bad.motion).toBe("standard");
@@ -300,6 +303,18 @@ describe("persist 迁移 v3→v4", () => {
       expect(migrated.motion).toBe("standard");
       expect(migrated.motionExplicit).toBe(false);
       expect(migrated.onboardingDone).toBe(false);
+      expect(migrated.particles).toBe(false);
     }
+  });
+
+  it("persist v4 payload（无 particles 字段）升到 v5 时补默认关", () => {
+    // 模拟上一版（v4）用户的真实存储：有动效偏好、没有粒子字段
+    const migrated = migratePersisted({
+      motion: "rich",
+      motionExplicit: true,
+      onboardingDone: true,
+    });
+    expect(migrated.motion).toBe("rich");
+    expect(migrated.particles).toBe(false);
   });
 });

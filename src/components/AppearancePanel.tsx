@@ -67,6 +67,8 @@ export function AppearancePanel() {
     importTheme,
     motion,
     setMotion,
+    particles,
+    setParticles,
     shell,
     setShell,
     layout,
@@ -89,6 +91,8 @@ export function AppearancePanel() {
       importTheme: s.importTheme,
       motion: s.motion,
       setMotion: s.setMotion,
+      particles: s.particles,
+      setParticles: s.setParticles,
       shell: s.shell,
       setShell: s.setShell,
       layout: s.layout,
@@ -206,6 +210,36 @@ export function AppearancePanel() {
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-dim">
           {t("settings.motionHint")}
+        </p>
+      </Card>
+
+      <Card>
+        <SectionTitle>{t("settings.particlesSection")}</SectionTitle>
+        <div className="flex flex-wrap gap-1.5">
+          {(
+            [
+              { id: true, key: "settings.particlesOn" },
+              { id: false, key: "settings.particlesOff" },
+            ] as const
+          ).map((o) => (
+            <button
+              key={String(o.id)}
+              type="button"
+              data-particles={String(o.id)}
+              aria-pressed={particles === o.id}
+              onClick={() => setParticles(o.id)}
+              className={`t-btn border px-2.5 py-1 text-[11.5px] font-medium ${
+                particles === o.id
+                  ? "border-accent bg-accent text-[var(--color-on-accent)]"
+                  : "border-line bg-panel2/70 text-dim hover:text-text"
+              }`}
+            >
+              {t(o.key)}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-dim">
+          {t("settings.particlesHint")}
         </p>
       </Card>
 

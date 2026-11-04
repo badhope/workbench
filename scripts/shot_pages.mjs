@@ -49,15 +49,18 @@ for (const theme of THEMES) {
   // 注意 persist 已升 v4；onboardingDone 必须预置，否则首启引导浮层
   // 会盖住导航把脚本卡死（视觉 2.0 起）。
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
-  await page.evaluate((t) => {
-    localStorage.setItem(
-      "workbench-ui-v1",
-      JSON.stringify({
-        state: { theme: t, lang: "zh", onboardingDone: true },
-        version: 4,
-      })
-    );
-  }, theme);
+  await page.evaluate(
+    ({ t, particles }) => {
+      localStorage.setItem(
+        "workbench-ui-v1",
+        JSON.stringify({
+          state: { theme: t, lang: "zh", onboardingDone: true, particles },
+          version: 5,
+        })
+      );
+    },
+    { t: theme, particles: Boolean(args.particles) }
+  );
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForTimeout(800);
 

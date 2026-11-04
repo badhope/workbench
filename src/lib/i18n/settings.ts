@@ -10,6 +10,11 @@ export const dict = {
     "settings.motionOff": "Off",
     "settings.motionStandard": "Standard",
     "settings.motionRich": "Full",
+    "settings.particlesSection": "Ambient particles",
+    "settings.particlesOn": "On",
+    "settings.particlesOff": "Off",
+    "settings.particlesHint":
+      "Theme-colored particles drifting behind the UI, recolored automatically when you change themes. Pauses when the window is hidden and switches off with motion “Off”. Off by default to save power.",
     "pricing.title": "Model pricing overrides",
     "pricing.hint":
       "Built-in prices are a snapshot of public list prices (USD per 1M tokens). Override any model here; the override wins over the built-in value and is stored in pricing_overrides.json next to your data.",
@@ -218,6 +223,11 @@ export const dict = {
     "settings.motionOff": "关",
     "settings.motionStandard": "标准",
     "settings.motionRich": "满格",
+    "settings.particlesSection": "氛围粒子",
+    "settings.particlesOn": "开启",
+    "settings.particlesOff": "关闭",
+    "settings.particlesHint":
+      "跟随主题强调色的粒子在界面底层缓缓上浮，换主题时自动重新取色。窗口隐藏时自动暂停；动效设为「关」时同步停用。默认关闭以省电。",
     "pricing.title": "模型价格覆盖",
     "pricing.hint":
       "内置价格是公开标价的快照（USD / 百万 tokens）。可在这里覆盖任意型号；覆盖值优先于内置值，保存在数据目录的 pricing_overrides.json。",
@@ -415,6 +425,11 @@ export const dict = {
     "settings.motionOff": "オフ",
     "settings.motionStandard": "標準",
     "settings.motionRich": "フル",
+    "settings.particlesSection": "アンビエント粒子",
+    "settings.particlesOn": "オン",
+    "settings.particlesOff": "オフ",
+    "settings.particlesHint":
+      "テーマのアクセント色に合わせた粒子が界面の奥でゆっくり浮遊し、テーマ変更時に自動で色を追従します。ウィンドウ非表示時は自動停止し、モーション「オフ」では無効化。省電力のため既定はオフ。",
     "pricing.title": "モデル価格の上書き",
     "pricing.hint":
       "組み込み価格は公開価格のスナップショットです（USD / 100万トークン）。任意のモデルを上書きできます。上書き値は組み込み値より優先され、データフォルダの pricing_overrides.json に保存されます。",

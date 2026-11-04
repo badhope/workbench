@@ -99,6 +99,11 @@ interface UiState {
   motionExplicit: boolean;
   /** 首启 3 步引导是否已完成/跳过（true 后永不复弹） */
   onboardingDone: boolean;
+  /**
+   * 氛围粒子背景。默认关（省电）；开启后仍受双重约束：
+   * 生效动效档为 off 时停用、页面隐藏时自动暂停（见 ParticleBackdrop）。
+   */
+  particles: boolean;
   /** 外壳：侧栏 / 顶部坞 / 专注 */
   shell: ShellId;
   /** 概览页布局 */
@@ -167,6 +172,8 @@ interface Store extends UiState, RuntimeState {
   setMotion: (m: MotionLevel) => void;
   /** 完成或跳过首启引导（二者同义：都永久关闭） */
   setOnboardingDone: () => void;
+  /** 开关氛围粒子背景 */
+  setParticles: (v: boolean) => void;
   /** 新建/覆盖一个自定义主题；返回它的 id */
   upsertTheme: (theme: ThemeInput) => string;
   deleteTheme: (id: string) => void;
@@ -276,6 +283,7 @@ export function migratePersisted(persisted: unknown): Record<string, unknown> {
     motion: normalizeMotion(state.motion),
     motionExplicit: state.motionExplicit === true,
     onboardingDone: state.onboardingDone === true,
+    particles: state.particles === true,
   };
 }
 
@@ -318,6 +326,7 @@ export const useStore = create<Store>()(
       motion: "standard",
       motionExplicit: false,
       onboardingDone: false,
+      particles: false,
       shell: "rail",
       layout: "bento",
       widgetOrder: DEFAULT_ORDER,
@@ -374,6 +383,7 @@ export const useStore = create<Store>()(
         applyMotion(effectiveMotion(get()));
       },
       setOnboardingDone: () => set({ onboardingDone: true }),
+      setParticles: (v) => set({ particles: v }),
       setTheme: (id) => {
         set({ theme: id });
         const s = get();
@@ -1105,8 +1115,9 @@ export const useStore = create<Store>()(
       // 版本 1 → 2：theme 从 "dark"/"light" 变成风格 id。
       // 版本 3：主题变成可编辑数据（+ customThemes）、新增 shell / layout / 组件摆放。
       // 版本 4：新增动效档位（motion/motionExplicit）与首启引导标记。
+      // 版本 5：新增氛围粒子开关（particles，默认关）。
       // 迁移只做「补齐与清洗」，不覆盖用户的显式选择。
-      version: 4,
+      version: 5,
       migrate: (persisted: unknown) => migratePersisted(persisted) as never,
       partialize: (s) => ({
         theme: s.theme,
@@ -1114,6 +1125,7 @@ export const useStore = create<Store>()(
         motion: s.motion,
         motionExplicit: s.motionExplicit,
         onboardingDone: s.onboardingDone,
+        particles: s.particles,
         shell: s.shell,
         layout: s.layout,
         widgetOrder: s.widgetOrder,
