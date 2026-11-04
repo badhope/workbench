@@ -1182,7 +1182,10 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn scan_skips_fifo_without_opening_it() {
+    fn scan_rejects_fifo_without_opening_it() {
+        // 扫描对非普通文件 fail-loud（防链接攻击遮蔽），FIFO 也一样：
+        // 断言 Err 而不是 Ok。测试本身同时验证「没有打开 FIFO」——
+        // 若实现真的 open 了 FIFO，这里会阻塞而不是立刻返回 Err。
         let fixture = ScanFixture::new();
         let root = fixture.0.join(".claude").join("projects");
         fs::create_dir_all(&root).unwrap();
@@ -1191,7 +1194,7 @@ mod tests {
             .status()
             .unwrap()
             .success());
-        assert!(collect_all_session_files(&fixture.0).unwrap().is_empty());
+        assert!(collect_all_session_files(&fixture.0).is_err());
     }
 
     #[test]
