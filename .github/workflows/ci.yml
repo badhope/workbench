@@ -109,9 +109,10 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
 
       # Rust 供应链门禁：RUSTSEC 有已知漏洞即失败。cargo-audit 不随工具链
-      # 预装，钉版本避免上游更新让门禁行为漂移。
+      # 预装，钉版本避免上游更新让门禁行为漂移。0.22.x 起支持解析
+      # advisory-db 里的 CVSS 4.0 公告（0.21.2 会直接 parse error）。
       - name: Install cargo-audit
-        run: cargo install cargo-audit --locked --version 0.21.2
+        run: cargo install cargo-audit --locked --version 0.22.2
 
       - name: Audit (Rust deps)
         working-directory: src-tauri
