@@ -291,7 +291,7 @@
       <!-- ── Hero ─────────────────────────────── -->
       <div class="hero">
         <div class="wrap hero-inner">
-          <div class="pill"><span class="dot"></span> <span data-i18n="hero.pill">v0.4.0 · Windows x64 · MIT licensed</span></div>
+          <div class="pill"><span class="dot"></span> <span data-i18n="hero.pill">v0.7.0 · Windows x64 · MIT licensed</span></div>
           <h1>
             <span data-i18n="hero.h1a">Your machine, at a glance</span><br />
             <span class="grad" data-i18n="hero.h1b">with AI session cost metering</span>
@@ -311,7 +311,7 @@
       <!-- ── Features ─────────────────────────── -->
       <section id="features" class="wrap">
         <h2 class="sec-title" data-i18n="feat.title">Features</h2>
-        <p class="sec-sub" data-i18n="feat.sub">Nine modules plus a keyboard-first command palette — see it, find it, count it.</p>
+        <p class="sec-sub" data-i18n="feat.sub">Nine modules, a keyboard-first command palette, and three ways to run it — see it, find it, count it.</p>
         <div class="grid g3">
           <div class="card">
             <div class="ico">🖥</div>
@@ -357,6 +357,16 @@
             <div class="ico">⌘</div>
             <h3 data-i18n="f10t">Command palette</h3>
             <p data-i18n="f10p">Ctrl/Cmd+K searches every page, process, port, project and task; ports link straight to the process that owns them.</p>
+          </div>
+          <div class="card">
+            <div class="ico">🌍</div>
+            <h3 data-i18n="f11t">Web mode</h3>
+            <p data-i18n="f11p"><code>workbench serve</code> runs the same backend headless and serves this UI to a browser on the same machine — real process, port and cost data, not a demo. Loopback only, no kill endpoint, no account.</p>
+          </div>
+          <div class="card">
+            <div class="ico">⌨</div>
+            <h3 data-i18n="f12t">Scriptable CLI</h3>
+            <p data-i18n="f12p"><code>ps</code>, <code>ports</code>, <code>diag</code>, <code>cost</code> — all with <code>--json</code>. One binary, no window, safe to put in a pipeline.</p>
           </div>
           <div class="card">
             <div class="ico">🔒</div>
@@ -576,14 +586,14 @@
             title: "Workbench — Local system dashboard & AI session cost metering",
             "nav.features": "Features", "nav.screenshots": "Screenshots", "nav.download": "Download",
             "nav.faq": "FAQ", "nav.source": "Source",
-            "hero.pill": "v0.4.0 · Windows x64 · MIT licensed",
+            "hero.pill": "v0.7.0 · Windows x64 · MIT licensed",
             "hero.h1a": "Your machine, at a glance",
             "hero.h1b": "with AI session cost metering",
             "hero.sub": 'Live view of processes, ports and dev servers; token usage and spend for Claude Code / Codex / opencode. <strong>All data stays on your device</strong> — nothing is uploaded.',
             "hero.cta1": "Download installer", "hero.cta2": "Portable exe",
             "hero.meta": "Windows 10 / 11 (NSIS) · Linux (.deb) · macOS (.app, CI-built) · no admin rights required",
             "feat.title": "Features",
-            "feat.sub": 'Nine modules plus a keyboard-first command palette — see it, find it, count it.',
+            "feat.sub": 'Nine modules, a keyboard-first command palette, and three ways to run it — see it, find it, count it.',
             "f1t": "Overview", "f1p": "Live CPU / memory trends, disk usage donut, process group stats and system info in one screen.",
             "f2t": "Processes", "f2p": "Flat table or parent/child tree, virtual scrolling for thousands of rows, CSV export, and a kill confirmation that re-verifies the target before acting.",
             "f3t": "Servers & ports", "f3p": "Parses netstat for listening ports and auto-tags 30+ dev frameworks such as Vite / Next / uvicorn.",
@@ -592,9 +602,9 @@
             "f6t": "Projects & tasks", "f6p": "Local project registry with automatic Git branch detection; kanban task board, drag to change status.",
             "f7t": "Logs", "f7p": "Built-in log viewer with per-launch rotation, tail reading and auto refresh.",
             "f8t": "Settings", "f8p": "Dark / light themes, refresh interval, budget and alert thresholds, JSON import & export.",
-            "f10t": "Command palette",
-            "f10p": "Ctrl/Cmd+K searches every page, process, port, project and task; a port links straight to the process that owns it.",
             "f10t": "Command palette", "f10p": "Ctrl/Cmd+K searches every page, process, port, project and task; a port links straight to the process that owns it.",
+            "f11t": "Web mode", "f11p": "<code>workbench serve</code> runs the same backend headless and serves this UI to a browser on the same machine — real process, port and cost data, not a demo. Loopback only, no kill endpoint, no account.",
+            "f12t": "Scriptable CLI", "f12p": "<code>ps</code>, <code>ports</code>, <code>diag</code>, <code>cost</code> — all with <code>--json</code>. One binary, no window, safe to put in a pipeline.",
             "f9t": "Privacy first", "f9p": "Everything lands in the local app data directory; CSP locked to self; opened paths go through a backend whitelist.",
             "shots.title": "Screenshots",
             "shots.sub": 'Captured in browser demo mode (<code>npm run preview</code>) — paths and host names are placeholders.',
@@ -653,14 +663,14 @@
             title: "工作台 Workbench — 本机运维仪表盘与 AI 会话成本计量",
             "nav.features": "功能", "nav.screenshots": "截图", "nav.download": "下载",
             "nav.faq": "常见问题", "nav.source": "源码",
-            "hero.pill": "v0.4.0 · Windows x64 · MIT 开源",
+            "hero.pill": "v0.7.0 · Windows x64 · MIT 开源",
             "hero.h1a": "本机运维仪表盘",
             "hero.h1b": "与 AI 会话成本计量",
             "hero.sub": '进程、端口、开发服务器实时可视；统计 Claude Code / Codex / opencode 的 token 消耗与花费。<strong>数据仅存本机</strong>，不上传任何信息。',
             "hero.cta1": "下载安装包", "hero.cta2": "免安装版 exe",
             "hero.meta": "Windows 10 / 11（NSIS）· Linux（.deb）· macOS（.app，CI 构建）· 无需管理员权限",
             "feat.title": "功能",
-            "feat.sub": "九个模块 + 键盘优先的命令面板：看得见、找得到、算得清。",
+            "feat.sub": "九个模块 + 键盘优先的命令面板 + 三种运行方式：看得见、找得到、算得清。",
             "f1t": "概览", "f1p": "CPU / 内存实时趋势曲线、磁盘占用环形图、进程分类统计与系统信息一屏总览。",
             "f2t": "进程监控", "f2p": "列表与父子树双视图，虚拟滚动支撑上千行，一键导出 CSV；结束进程前重新校验目标身份。",
             "f3t": "服务与端口", "f3p": "解析 netstat 找出监听端口，自动标注 Vite / Next / uvicorn 等 30+ 开发框架。",
@@ -670,6 +680,10 @@
             "f7t": "运行日志", "f7p": "内置日志查看器，按启动滚动归档，支持尾部读取与自动刷新。",
             "f8t": "设置", "f8p": "深浅双主题、刷新间隔调节、预算与告警阈值、数据 JSON 导入导出。",
             "f10t": "命令面板", "f10p": "Ctrl/Cmd+K 一次搜索全部页面、进程、端口、项目与任务；端口可直接跳到占用它的进程。",
+            "f11t": "Web 模式",
+            "f11p": "<code>workbench serve</code> 用同一个后端无界面运行，并把本界面临给同机浏览器——进程、端口、成本都是真实数据，不是演示。仅回环地址，不提供结束进程的端点，无需账号。",
+            "f12t": "可脚本化 CLI",
+            "f12p": "<code>ps</code>、<code>ports</code>、<code>diag</code>、<code>cost</code>，全部支持 <code>--json</code>。一个可执行文件，不弹窗口，可直接进流水线。",
             "f9t": "隐私优先", "f9p": "全部数据落本机 app data 目录；CSP 收紧到 self，打开路径走后端白名单校验。",
             "shots.title": "界面",
             "shots.sub": "截自浏览器演示模式（<code>npm run preview</code>），路径与主机名均为占位数据。",
@@ -728,14 +742,14 @@
             title: "Workbench — ローカル運用ダッシュボード & AI セッションコスト計測",
             "nav.features": "機能", "nav.screenshots": "スクリーンショット", "nav.download": "ダウンロード",
             "nav.faq": "FAQ", "nav.source": "ソース",
-            "hero.pill": "v0.4.0 · Windows x64 · MIT ライセンス",
+            "hero.pill": "v0.7.0 · Windows x64 · MIT ライセンス",
             "hero.h1a": "ローカル運用ダッシュボード",
             "hero.h1b": "AI セッションコスト計測と一体に",
             "hero.sub": "プロセス・ポート・開発サーバーをリアルタイム可視化。Claude Code / Codex / opencode のトークン消費と費用を集計。<strong>データは端末内にのみ保存</strong>され、一切アップロードされません。",
             "hero.cta1": "インストーラーを入手", "hero.cta2": "ポータブル exe",
             "hero.meta": "Windows 10 / 11（NSIS）· Linux（.deb）· macOS（.app、CI ビルド）· 管理者権限不要",
             "feat.title": "機能",
-            "feat.sub": "9 つのモジュールとキーボード優先のコマンドパレット。見つけて、数える。",
+            "feat.sub": "9 つのモジュール、キーボード優先のコマンドパレット、3 つの実行形態。見つけて、数える。",
             "f1t": "概要", "f1p": "CPU / メモリのリアルタイム推移、ディスク使用率ドーナツ、プロセス分類とシステム情報を 1 画面で。",
             "f2t": "プロセス", "f2p": "リストと親子ツリーの 2 表示、数千行に耐える仮想スクロール、CSV 書き出し、終了前の再検証。",
             "f3t": "サーバー & ポート", "f3p": "netstat を解析してリッスンポートを検出し、Vite / Next / uvicorn など 30+ の開発フレームワークを自動判定。",
@@ -745,6 +759,10 @@
             "f7t": "ログ", "f7p": "内蔵ログビューア。起動単位でローテーションし、末尾読み取りと自動更新に対応。",
             "f8t": "設定", "f8p": "ダーク / ライトテーマ、更新間隔、予算とアラートしきい値、JSON インポート & エクスポート。",
             "f10t": "コマンドパレット", "f10p": "Ctrl/Cmd+K でページ・プロセス・ポート・プロジェクト・タスクを横断検索。ポートから所有プロセスへ直接移動できます。",
+            "f11t": "Web モード",
+            "f11p": "<code>workbench serve</code> が同じバックエンドをヘッドレスで動かし、この UI を同一マシンのブラウザに配信します。プロセス・ポート・コストは実データで、デモではありません。ループバック限定、終了エンドポイントなし、アカウント不要。",
+            "f12t": "スクリプト可能な CLI",
+            "f12p": "<code>ps</code>、<code>ports</code>、<code>diag</code>、<code>cost</code> はすべて <code>--json</code> 対応。1 つの実行ファイル、ウィンドウなし、パイプラインにそのまま使えます。",
             "f9t": "プライバシー第一", "f9p": "データはすべてローカルの app data ディレクトリへ。CSP は self に固定、パスを開く際はバックエンドのホワイトリストで検証。",
             "shots.title": "スクリーンショット",
             "shots.sub": "ブラウザデモモード（<code>npm run preview</code>）で撮影。パスとホスト名はすべてプレースホルダーです。",
