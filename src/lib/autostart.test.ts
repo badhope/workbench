@@ -28,6 +28,7 @@ afterEach(() => {
 
 describe("autostart", () => {
   it("浏览器模式下读取返回 null 且不调用插件", async () => {
+    setTauri(false);
     expect(await api.autostart.read()).toBeNull();
     expect(isEnabled).not.toHaveBeenCalled();
   });

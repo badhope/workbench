@@ -33,3 +33,13 @@ if (!Element.prototype.animate) {
       addEventListener: () => {},
     }) as unknown as Animation) as typeof Element.prototype.animate;
 }
+
+/**
+ * 单元测试的默认环境是「桌面壳」：绝大多数被测逻辑走 IPC 分支。
+ * 需要测浏览器 / 演示行为的用例应在自己的 beforeEach 里显式
+ * `delete window.__TAURI_INTERNALS__`，而不是依赖全局默认——
+ * 依赖默认会让「这条用例到底在测哪个环境」变得看不出来。
+ */
+if (!("__TAURI_INTERNALS__" in window)) {
+  (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+}

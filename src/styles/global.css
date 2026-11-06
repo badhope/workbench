@@ -531,3 +531,20 @@ input[type="checkbox"] {
 body {
   line-height: var(--line-height-body, 1.55);
 }
+
+/* ── 遮罩层：随主题明暗切换 ──────────────────────────────────
+ *
+ * 原先所有遮罩写死 bg-black/50~55。在亮色主题下，55% 黑会把整页压成
+ * 一层灰泥：背景文字全部低于可读阈值，模态框浮在"灰雾"上，看起来像
+ * 渲染坏了（文档截图里一眼可见）。暗色主题需要深遮罩来压住亮部，
+ * 亮色主题只需要很轻的一层就能建立层级。
+ *
+ * 用 <html data-chart-theme="dark|light">（applyTheme 已写入）驱动，
+ * 自定义主题同样生效，不需要在组件里判断主题名。
+ */
+[data-chart-theme="light"] .overlay-scrim {
+  background-color: rgb(15 23 42 / 0.18);
+}
+[data-chart-theme="dark"] .overlay-scrim {
+  background-color: rgb(0 0 0 / 0.55);
+}

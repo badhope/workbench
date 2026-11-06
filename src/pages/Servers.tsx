@@ -7,6 +7,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useT } from "../lib/i18n";
 import { Btn, Card, Empty, ErrorState, SectionTitle, Skeleton, StatCard } from "../ui";
 import { downloadText, toCsv } from "../lib/export";
+import { urlForPort } from "../lib/openTarget";
 import {
   frameworkDistribution,
   isPieWorthRendering,
@@ -228,15 +229,24 @@ export default function Servers() {
                   >
                     <ListTree size={11} />
                   </button>
-                  <button
-                    type="button"
-                    className="text-dim hover:text-accent"
-                    onClick={() => openTarget(`http://localhost:${p.local_port}`)}
-                    title={t("servers.open")}
-                    aria-label={t("servers.open")}
-                  >
-                    <ExternalLink size={11} />
-                  </button>
+                  {/* 打开链接要按实际监听地址与协议推断：写死 localhost+
+                      http 在 IPv6、HTTPS、UDP 端口上都会给出错误地址。
+                      非 TCP 端口不提供该按钮——没有可打开的语义。 */}
+                  {(() => {
+                    const target = urlForPort(p.local_port, p.local_addr, p.protocol);
+                    if (!target) return null;
+                    return (
+                      <button
+                        type="button"
+                        className="text-dim hover:text-accent"
+                        onClick={() => openTarget(target.url)}
+                        title={`${t("servers.open")} · ${target.url}`}
+                        aria-label={`${t("servers.open")} ${target.url}`}
+                      >
+                        <ExternalLink size={11} />
+                      </button>
+                    );
+                  })()}
                 </span>
               </div>
             ))}

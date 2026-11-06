@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FileText, RefreshCw, Trash2 } from "lucide-react";
 import { useStore } from "../lib/store";
-import { isTauri, readLogs, clearLogs } from "../lib/api";
+import { isBackend, readLogs, clearLogs } from "../lib/api";
 import { demoBundle } from "../lib/demo";
 import { Btn } from "../ui";
 import { getLang, t as translate, useT } from "../lib/i18n";
@@ -39,9 +39,10 @@ export default function Logs() {
   const [query, setQuery] = useState("");
 
   const load = useCallback(async () => {
-    // 浏览器预览没有后端日志文件：给一段标注清楚的样例，
+    // 没有后端（纯静态预览）时给一段标注清楚的样例，
     // 而不是把整页渲染成「不可用」——那看起来像功能坏了。
-    if (!isTauri()) {
+    // Web 模式（连 HTTP 后端）日志端点未开放，同样落到这个分支。
+    if (!isBackend()) {
       setContent(demoBundle(getLang()).logs);
       return;
     }

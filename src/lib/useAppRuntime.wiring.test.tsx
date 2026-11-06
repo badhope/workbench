@@ -11,7 +11,7 @@ import { useStore } from "./store";
 const tauriMode = { value: true };
 vi.mock("./api", async (orig) => {
   const actual = await orig<typeof import("./api")>();
-  return { ...actual, isTauri: () => tauriMode.value };
+  return { ...actual, isTauri: () => tauriMode.value, isBackend: () => tauriMode.value };
 });
 
 function setVisibility(state: "visible" | "hidden") {

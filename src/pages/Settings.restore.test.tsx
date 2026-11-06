@@ -8,6 +8,7 @@ import { setLang } from "../lib/i18n";
 vi.mock("../lib/api", async (original) => ({
   ...(await original<typeof import("../lib/api")>()),
   isTauri: () => true,
+  isBackend: () => true,
 }));
 vi.mock("../components/AppearancePanel", () => ({ AppearancePanel: () => null }));
 vi.mock("../components/AutostartCard", () => ({ AutostartCard: () => null }));

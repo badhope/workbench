@@ -216,6 +216,7 @@ export const dict = {
     "settings.version": "Version",
     "settings.mode": "Mode",
     "settings.modeTauri": "Tauri desktop",
+    "settings.modeWeb": "Web (HTTP backend)",
     "settings.modeBrowser": "Browser preview",
     "settings.aboutNote":
       "Process and port data come from local sysinfo and netstat; AI sessions also support the opencode local service (default port 4096), scanning of Claude Code / Codex CLI session files, cost metering and budget alerts.",
@@ -427,6 +428,7 @@ export const dict = {
     "settings.version": "版本",
     "settings.mode": "模式",
     "settings.modeTauri": "Tauri 桌面端",
+    "settings.modeWeb": "Web（HTTP 后端）",
     "settings.modeBrowser": "浏览器预览",
     "settings.aboutNote":
       "进程与端口数据来自本机 sysinfo 与 netstat；AI 会话另支持 opencode 本地服务（默认端口 4096）、Claude Code / Codex CLI 会话记录文件扫描、成本计量与预算告警。",
@@ -651,6 +653,7 @@ export const dict = {
     "settings.version": "バージョン",
     "settings.mode": "モード",
     "settings.modeTauri": "Tauri デスクトップ",
+    "settings.modeWeb": "Web（HTTP バックエンド）",
     "settings.modeBrowser": "ブラウザプレビュー",
     "settings.aboutNote":
       "プロセスとポートのデータはローカルの sysinfo と netstat から取得します。AI セッションは opencode ローカルサービス（既定ポート 4096）、Claude Code / Codex CLI セッションファイルのスキャン、コスト計測と予算アラートにも対応します。",

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyUiScale, resetAppliedScaleForTests } from "./uiScale";
 
 /**
@@ -7,6 +7,11 @@ import { applyUiScale, resetAppliedScaleForTests } from "./uiScale";
  * 关注两点：值必须被夹在 0.85–1.2（再小读不清、再大会把右侧栏挤爆），
  * 以及同一个值重复应用时不重复触碰 DOM（缩放会触发全页重排）。
  */
+beforeEach(() => {
+  // 这个文件默认测浏览器行为（CSS zoom），个别用例自己注入桌面标记。
+  delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+});
+
 afterEach(() => {
   resetAppliedScaleForTests();
   document.documentElement.style.zoom = "";

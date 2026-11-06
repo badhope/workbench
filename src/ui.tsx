@@ -196,7 +196,7 @@ export function Modal({
   return (
     <div
       // 手机上 p-6 只留 272px 给内容，太挤；窄屏用更小的外边距
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-6"
+      className="overlay-scrim fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
       onClick={onClose}
     >
       <div

@@ -9,6 +9,7 @@ import { opencodeSessions, recentSessions } from "../../lib/api";
 vi.mock("../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/api")>()),
   isTauri: () => true,
+  isBackend: () => true,
   opencodeSessions: vi.fn(),
   recentSessions: vi.fn(),
 }));

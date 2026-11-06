@@ -1,8 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { Menu, Moon, Pin, PinOff, RefreshCw, Search, Sun } from "lucide-react";
 import { isTauri } from "../lib/api";
+
 import { localeFor, useLang, useT } from "../lib/i18n";
 import { useStore } from "../lib/store";
+import { useTransportMode } from "../lib/useAppRuntime";
 import { useShallow } from "zustand/react/shallow";
 import { allThemes, findTheme } from "../lib/theme/presets";
 import { Btn, Spinner } from "../ui";
@@ -81,25 +83,27 @@ export function AppHeaderControls() {
         >
           <RefreshCw size={13} />
         </Btn>
-        <Btn
-          title={alwaysOnTop ? t("app.pinOn") : t("app.pinOff")}
-          onClick={async () => {
-            const next = !alwaysOnTop;
-            setAlwaysOnTop(next);
-            if (isTauri()) {
+        {/* 置顶是窗口能力：Web 模式没有窗口可置顶，按钮直接不渲染，
+            而不是留一个点了没反应的图标。 */}
+        {isTauri() && (
+          <Btn
+            title={alwaysOnTop ? t("app.pinOn") : t("app.pinOff")}
+            onClick={async () => {
+              const next = !alwaysOnTop;
+              setAlwaysOnTop(next);
               try {
                 await invoke("set_always_on_top", { on: next });
               } catch {
                 setAlwaysOnTop(!next);
               }
-            }
-          }}
-          className={`!rounded-full !border-0 !bg-transparent !px-1.5 !py-1 !text-dim hover:!text-text ${
-            alwaysOnTop ? "!text-accent" : ""
-          }`}
-        >
-          {alwaysOnTop ? <Pin size={13} /> : <PinOff size={13} />}
-        </Btn>
+            }}
+            className={`!rounded-full !border-0 !bg-transparent !px-1.5 !py-1 !text-dim hover:!text-text ${
+              alwaysOnTop ? "!text-accent" : ""
+            }`}
+          >
+            {alwaysOnTop ? <Pin size={13} /> : <PinOff size={13} />}
+          </Btn>
+        )}
         <Btn
           title={t("app.themeToggle")}
           onClick={() => {
@@ -124,7 +128,16 @@ export function AppHeader({
 }) {
   const t = useT();
   const { view } = useStore(useShallow((s) => ({ view: s.view })));
-  const tauri = isTauri();
+  // 三态：桌面实时 / 浏览器连后端实时 / 纯静态演示。
+  // 少一态就会把「浏览器连着 serve」错标成 Demo，用户会以为数据是假的。
+  const mode = useTransportMode();
+  const live = mode !== "demo";
+  const modeLabel =
+    mode === "tauri"
+      ? t("app.mode.realtime")
+      : mode === "http"
+        ? t("app.mode.web")
+        : t("app.mode.demo");
 
   return (
     <header
@@ -143,11 +156,11 @@ export function AppHeader({
       </h1>
       <span
         className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-[3px] text-[10px] font-medium tracking-[0.02em] ${
-          tauri ? "border-ok/30 bg-ok/8 text-ok" : "border-warn/30 bg-warn/8 text-warn"
+          live ? "border-ok/30 bg-ok/8 text-ok" : "border-warn/30 bg-warn/8 text-warn"
         }`}
       >
-        <span className={`h-1 w-1 rounded-full ${tauri ? "bg-ok" : "bg-warn"}`} />
-        {tauri ? t("app.mode.realtime") : t("app.mode.demo")}
+        <span className={`h-1 w-1 rounded-full ${live ? "bg-ok" : "bg-warn"}`} />
+        {modeLabel}
       </span>
       <div className="ml-auto">
         <AppHeaderControls />

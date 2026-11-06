@@ -43,6 +43,7 @@ let tauriMode = true;
 vi.mock("./api", () => ({
   ...api,
   isTauri: () => tauriMode,
+  isBackend: () => tauriMode,
 }));
 
 const { useStore } = await import("./store");

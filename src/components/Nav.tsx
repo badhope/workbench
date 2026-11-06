@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import { PAGE_GROUPS, pagesByGroup, type ViewKey } from "../pages/registry";
 import { APP_VERSION, useT } from "../lib/i18n";
-import { isTauri } from "../lib/api";
+import { useTransportMode } from "../lib/useAppRuntime";
 import { BrandMark } from "./BrandMark";
 import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 
@@ -240,12 +240,17 @@ function CollapseToggle({
 /** 侧栏脚注：运行模式 + 版本号。 */
 function AppFooter() {
   const t = useT();
-  const tauri = isTauri();
+  const mode = useTransportMode();
+  const live = mode !== "demo";
   return (
     <>
       <div className="flex items-center gap-1.5">
-        <span className={`h-1.5 w-1.5 rounded-full ${tauri ? "bg-ok" : "bg-warn"}`} />
-        {tauri ? t("app.mode.desktop") : t("app.mode.browser")}
+        <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-ok" : "bg-warn"}`} />
+        {mode === "tauri"
+          ? t("app.mode.desktop")
+          : mode === "http"
+            ? t("app.mode.web")
+            : t("app.mode.browser")}
       </div>
       <div className="mt-0.5 opacity-70">
         {t("app.versionLine", { version: APP_VERSION })}

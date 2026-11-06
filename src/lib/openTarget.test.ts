@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyOpenTarget, isUrlScheme } from "./openTarget";
+import { classifyOpenTarget, isUrlScheme, urlForPort } from "./openTarget";
 
 /**
  * 回归：openExternal 曾用 `/^[a-z][a-z0-9+.-]*:/` 判 scheme，
@@ -67,5 +67,40 @@ describe("边界输入", () => {
 
   it("相对路径按 path 处理（由后端白名单决定是否放行）", () => {
     expect(classifyOpenTarget("proj/sub")).toEqual({ kind: "path", value: "proj/sub" });
+  });
+});
+
+/**
+ * 端口 → URL 的推断规则。
+ *
+ * 这段逻辑替代了原先写死的 `http://localhost:${port}`：后者在
+ * IPv6 监听、HTTPS 服务、UDP 端口上都会给出错误链接。
+ */
+describe("urlForPort", () => {
+  it("通配监听地址回落到 localhost", () => {
+    expect(urlForPort(3000, "0.0.0.0", "TCP")?.url).toBe("http://localhost:3000");
+    expect(urlForPort(3000, "::", "TCP")?.url).toBe("http://localhost:3000");
+  });
+
+  it("具体地址原样使用", () => {
+    expect(urlForPort(8080, "127.0.0.1", "TCP")?.url).toBe("http://127.0.0.1:8080");
+    expect(urlForPort(8080, "192.168.1.5", "TCP")?.url).toBe("http://192.168.1.5:8080");
+  });
+
+  it("IPv6 字面量加方括号，否则 URL 解析会失败", () => {
+    expect(urlForPort(5173, "::1", "TCP")?.url).toBe("http://[::1]:5173");
+  });
+
+  it("常见 TLS 端口推断为 https", () => {
+    expect(urlForPort(443, "127.0.0.1", "TCP")?.url).toBe("https://127.0.0.1:443");
+    expect(urlForPort(8443, "127.0.0.1", "TCP")?.url).toBe("https://127.0.0.1:8443");
+    expect(urlForPort(3000, "127.0.0.1", "TCP")?.url).toBe("http://127.0.0.1:3000");
+  });
+
+  it("UDP 与非法端口不产生链接", () => {
+    expect(urlForPort(53, "0.0.0.0", "UDP")).toBeNull();
+    expect(urlForPort(0, "0.0.0.0", "TCP")).toBeNull();
+    expect(urlForPort(70000, "0.0.0.0", "TCP")).toBeNull();
+    expect(urlForPort(1.5, "0.0.0.0", "TCP")).toBeNull();
   });
 });

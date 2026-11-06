@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { DollarSign, Download, Eraser, RefreshCw, Upload } from "lucide-react";
 import { useStore } from "../lib/store";
+import { useTransportMode } from "../lib/useAppRuntime";
 import { useShallow } from "zustand/react/shallow";
-import { isTauri } from "../lib/api";
+import { isBackend, isTauri } from "../lib/api";
+
 import { APP_VERSION, setLang, useLang, useT, type Lang } from "../lib/i18n";
 import { Badge, Btn, Card, ConfirmDialog, Field, SectionTitle, inputCls } from "../ui";
 import { AppearancePanel } from "../components/AppearancePanel";
@@ -394,7 +396,7 @@ export default function Settings() {
               </p>
             </Card>
             <BackupPanel />
-            {isTauri() && <DiagnosticsPanel />}
+            {isBackend() && <DiagnosticsPanel />}
           </div>{" "}
         </div>
       </div>
@@ -436,10 +438,7 @@ export default function Settings() {
         <div className="flex flex-col gap-1.5 text-xs text-dim">
           <div className="flex items-center gap-2">
             {t("settings.version")} <Badge tone="dim">v{APP_VERSION}</Badge>
-            {t("settings.mode")}{" "}
-            <Badge tone={isTauri() ? "ok" : "warn"}>
-              {isTauri() ? t("settings.modeTauri") : t("settings.modeBrowser")}
-            </Badge>
+            {t("settings.mode")} <ModeBadge />
           </div>
           <p>{t("settings.aboutNote")}</p>
           <p className="text-warn">{t("settings.killWarning")}</p>
@@ -501,4 +500,17 @@ function parseBackup(text: string, t: (key: string) => string): WorkbenchData {
     }
   }
   return parsed;
+}
+
+/** 运行模式徽章：三态（桌面 / Web 后端 / 静态演示）。 */
+function ModeBadge() {
+  const t = useT();
+  const mode = useTransportMode();
+  const label =
+    mode === "tauri"
+      ? t("settings.modeTauri")
+      : mode === "http"
+        ? t("settings.modeWeb")
+        : t("settings.modeBrowser");
+  return <Badge tone={mode === "demo" ? "warn" : "ok"}>{label}</Badge>;
 }

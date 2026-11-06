@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { classifyOpenTarget } from "./openTarget";
+import { currentTransport, httpJson } from "./transport";
 import type {
   AiProcess,
   DiagnosticsReport,
@@ -26,42 +27,83 @@ import type {
   WorkbenchData,
 } from "../types";
 
-/** 是否运行在 Tauri 桌面壳内 */
+/** 是否运行在 Tauri 桌面壳内（有 IPC、托盘、置顶等原生能力）。 */
 export function isTauri(): boolean {
+  // 同步判定：不依赖异步探测，否则首帧会误判成浏览器。
+  // 这个信号由 Tauri 注入，测试里也用它来切换环境。
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
-export async function listProcesses(): Promise<ProcInfo[]> {
-  return invoke<ProcInfo[]>("list_processes");
+/**
+ * 是否有真实后端（桌面 IPC 或 `workbench serve` 的 HTTP API）。
+ *
+ * 与 `isTauri()` 的区别：浏览器连着 HTTP 后端时，进程/端口/成本都是真的，
+ * 只是没有托盘这类桌面专属能力。页面判断「能不能显示真实数据」用这个，
+ * 判断「要不要显示托盘设置项」才用 `isTauri()`。
+ */
+export function isBackend(): boolean {
+  // 桌面端恒有后端；浏览器端要等探测确认连上了 HTTP 服务。
+  return isTauri() || currentTransport() === "http";
 }
 
+export async function listProcesses(): Promise<ProcInfo[]> {
+  if (isTauri()) return invoke<ProcInfo[]>("list_processes");
+  return httpJson<ProcInfo[]>("/api/processes");
+}
+
+/**
+ * 结束进程。**只有桌面端提供**：浏览器里没有可信的「用户确认」环节，
+ * 把不可逆操作暴露成 HTTP 端点等于给任何网页一次免确认的杀进程能力。
+ */
 export async function terminateProcess(pid: number): Promise<void> {
+  if (!isTauri()) {
+    throw new Error("结束进程仅在桌面应用中可用（Web 模式不提供该操作）");
+  }
   return invoke("terminate_process", { pid });
 }
 
 /** 以管理员结束进程：Windows 触发 UAC 授权，受保护进程由后端直接拒绝。 */
 export async function terminateProcessElevated(pid: number): Promise<void> {
+  if (!isTauri()) {
+    throw new Error("提权结束进程仅在桌面应用中可用");
+  }
   return invoke("terminate_process_elevated", { pid });
 }
 
 export async function listPorts(): Promise<PortEntry[]> {
-  return invoke<PortEntry[]>("list_ports");
+  if (isTauri()) return invoke<PortEntry[]>("list_ports");
+  return httpJson<PortEntry[]>("/api/ports");
 }
 
 export async function listDevServers(): Promise<DevServer[]> {
-  return invoke<DevServer[]>("list_dev_servers");
+  if (isTauri()) return invoke<DevServer[]>("list_dev_servers");
+  return httpJson<DevServer[]>("/api/dev-servers");
 }
 
 export async function listAiProcesses(): Promise<AiProcess[]> {
-  return invoke<AiProcess[]>("list_ai_processes");
+  if (isTauri()) return invoke<AiProcess[]>("list_ai_processes");
+  return httpJson<AiProcess[]>("/api/ai-processes");
 }
 
 export async function opencodeSessions(): Promise<OpencodeSessionsResult> {
-  return invoke<OpencodeSessionsResult>("opencode_sessions");
+  if (isTauri()) return invoke<OpencodeSessionsResult>("opencode_sessions");
+  const probe = await httpJson<{
+    port: number;
+    available: boolean;
+    sessions: OpencodeSessionsResult["sessions"];
+    error: string | null;
+  }>("/api/sessions/opencode");
+  // HTTP 端把「没装 opencode」表达成 available:false，而 IPC 会直接抛错。
+  // 统一成「抛错」语义，调用方不必写两套分支。
+  if (!probe.available) {
+    throw new Error(probe.error ?? "未检测到运行中的 opencode 服务");
+  }
+  return { port: probe.port, sessions: probe.sessions };
 }
 
 export async function recentSessions(): Promise<SessionFilePreview[]> {
-  return invoke<SessionFilePreview[]>("recent_sessions_preview");
+  if (isTauri()) return invoke<SessionFilePreview[]>("recent_sessions_preview");
+  return httpJson<SessionFilePreview[]>("/api/sessions");
 }
 
 export async function opencodeSessionDetail(
@@ -81,11 +123,13 @@ export async function setAlwaysOnTop(on: boolean): Promise<void> {
 }
 
 export async function systemInfo(): Promise<SystemInfo> {
-  return invoke<SystemInfo>("system_info");
+  if (isTauri()) return invoke<SystemInfo>("system_info");
+  return httpJson<SystemInfo>("/api/system");
 }
 
 export async function diskInfo(): Promise<DiskInfo[]> {
-  return invoke<DiskInfo[]>("disk_info");
+  if (isTauri()) return invoke<DiskInfo[]>("disk_info");
+  return httpJson<DiskInfo[]>("/api/disks");
 }
 
 export async function loadData(): Promise<WorkbenchData> {
@@ -96,11 +140,17 @@ export async function loadDataVersioned(): Promise<{
   data: WorkbenchData;
   generation: string;
 }> {
-  return invoke("load_data_versioned");
+  if (isTauri()) return invoke("load_data_versioned");
+  // HTTP 端没有 generation 乐观锁：浏览器是单写者场景（同一标签页），
+  // 用固定值占位，store 的版本检查逻辑对它是恒等比较。
+  const data = await httpJson<WorkbenchData>("/api/data");
+  return { data, generation: "http" };
 }
 
 export async function saveData(data: WorkbenchData, generation: string): Promise<string> {
-  return invoke("save_data", { data, generation });
+  if (isTauri()) return invoke("save_data", { data, generation });
+  await httpJson<{ ok: boolean }>("/api/data", { method: "PUT", body: data });
+  return generation;
 }
 
 /** 用系统默认方式打开 URL / 目录。
@@ -171,10 +221,15 @@ export async function notify(title: string, body: string): Promise<void> {
 // ── 日志读取 ──────────────────────────────────────────────
 
 export async function readLogs(maxLines: number): Promise<string> {
+  if (!isTauri()) {
+    // 服务端日志文件不在 HTTP 暴露面内（可能含本机路径），Web 模式明确不支持。
+    throw new Error("运行日志仅在桌面应用中可读");
+  }
   return invoke<string>("read_logs", { maxLines });
 }
 
 export async function clearLogs(): Promise<void> {
+  if (!isTauri()) throw new Error("运行日志仅在桌面应用中可管理");
   await invoke("clear_logs");
 }
 
@@ -182,47 +237,59 @@ export async function clearLogs(): Promise<void> {
 
 /** 扫描 session 文件 → 提取 usage → 计算成本 → 持久化 */
 export async function scanSessionCosts(): Promise<ScanCostResult> {
-  return invoke<ScanCostResult>("scan_session_costs");
+  if (isTauri()) return invoke<ScanCostResult>("scan_session_costs");
+  return httpJson<ScanCostResult>("/api/cost/scan", { method: "POST" });
 }
 
 /** 获取成本总览（不重新扫描） */
 export async function getCostOverview(): Promise<CostOverview> {
-  return invoke<CostOverview>("get_cost_overview");
+  if (isTauri()) return invoke<CostOverview>("get_cost_overview");
+  return httpJson<CostOverview>("/api/cost/overview");
 }
 
 /** 获取成本趋势 */
 export async function getCostTrend(days: number = 14): Promise<CostTrendRow[]> {
-  return invoke<CostTrendRow[]>("get_cost_trend", { days });
+  if (isTauri()) return invoke<CostTrendRow[]>("get_cost_trend", { days });
+  return httpJson<CostTrendRow[]>("/api/cost/trend?days=" + days);
 }
 
 /** 按模型分解成本 */
 export async function getModelBreakdown(): Promise<ModelBreakdownRow[]> {
-  return invoke<ModelBreakdownRow[]>("get_model_breakdown");
+  if (isTauri()) return invoke<ModelBreakdownRow[]>("get_model_breakdown");
+  return httpJson<ModelBreakdownRow[]>("/api/cost/models");
 }
 
 /** 按项目目录归因成本（"哪个仓库花钱最多"） */
 export async function getProjectBreakdown(): Promise<ProjectBreakdownRow[]> {
-  return invoke<ProjectBreakdownRow[]>("get_project_breakdown");
+  if (isTauri()) return invoke<ProjectBreakdownRow[]>("get_project_breakdown");
+  return httpJson<ProjectBreakdownRow[]>("/api/cost/projects");
 }
 
 /** 扩展趋势：最近 `days` 天按日，更早的按月聚合 */
 export async function getCostTrendExtended(days: number): Promise<ExtendedTrend> {
-  return invoke<ExtendedTrend>("get_cost_trend_extended", { days });
+  if (isTauri()) return invoke<ExtendedTrend>("get_cost_trend_extended", { days });
+  return httpJson<ExtendedTrend>("/api/cost/trend-extended?days=" + days);
 }
 
 /** 台账导出：原始成本记录（含估算行，来源列自述）。上限 20 万行。 */
 export async function getCostExportRows(limit = 200_000): Promise<CostExportRow[]> {
-  return invoke<CostExportRow[]>("get_cost_export", { limit });
+  if (isTauri()) return invoke<CostExportRow[]>("get_cost_export", { limit });
+  return httpJson<CostExportRow[]>("/api/cost/export?limit=" + limit);
 }
 
 /** 获取成本设置 */
 export async function getCostSettings(): Promise<CostSettings> {
-  return invoke<CostSettings>("get_cost_settings_cmd");
+  if (isTauri()) return invoke<CostSettings>("get_cost_settings_cmd");
+  return httpJson<CostSettings>("/api/cost/settings");
 }
 
 /** 保存成本设置 */
 export async function saveCostSettings(settings: CostSettings): Promise<void> {
-  return invoke("save_cost_settings_cmd", { settings });
+  if (isTauri()) return invoke("save_cost_settings_cmd", { settings });
+  await httpJson<{ ok: boolean }>("/api/cost/settings", {
+    method: "PUT",
+    body: settings,
+  });
 }
 
 /** 清空全部成本记录 */
@@ -253,6 +320,9 @@ export async function savePricing(
 }
 
 export async function clearCostRecords(): Promise<void> {
+  if (!isTauri()) {
+    throw new Error("清空成本记录仅在桌面应用中可用");
+  }
   return invoke("clear_cost_records");
 }
 
@@ -260,5 +330,6 @@ export async function clearCostRecords(): Promise<void> {
 
 /** 运行环境逐项检查（平台、数据目录、会话目录、端口工具…）。 */
 export async function runDiagnostics(): Promise<DiagnosticsReport> {
-  return invoke<DiagnosticsReport>("diagnostics");
+  if (isTauri()) return invoke<DiagnosticsReport>("diagnostics");
+  return httpJson<DiagnosticsReport>("/api/diagnostics");
 }

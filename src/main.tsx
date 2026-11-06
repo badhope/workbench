@@ -7,9 +7,14 @@ import { t, syncDocumentLang } from "./lib/i18n";
 import { applyMotion, applyTheme } from "./lib/theme/apply";
 import { tokensFor } from "./lib/theme/presets";
 import { consumeThemeHash } from "./lib/theme/share";
+import { detectTransport } from "./lib/transport";
 
 // 分享链接：URL 带 #theme= 时先消费掉（一次性，成功与否都清 hash），
 // 再做主题同步 —— 这样下面这行 applyTheme 应用的已经是导入后的主题。
+// 先启动传输探测（不阻塞渲染）：浏览器里判断是「连了 HTTP 后端」还是纯静态预览，
+// 结果一到就广播，模式徽章随之从占位值切到真实值。
+void detectTransport();
+
 const shared = consumeThemeHash();
 if (shared) {
   const res = useStore.getState().importTheme(JSON.stringify(shared));

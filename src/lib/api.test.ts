@@ -274,3 +274,161 @@ describe("桌面端插件分支", () => {
     expect(sendNotification).toHaveBeenCalledWith({ title: "标题", body: "正文" });
   });
 });
+
+/**
+ * HTTP 传输分支：同一批函数在浏览器里连着 `workbench serve` 时走 REST。
+ *
+ * 这些用例的价值不在「调了 fetch」，而在三点：
+ * 1) 路径与查询参数正确（写错就是 404，而 UI 只会显示"加载失败"）；
+ * 2) 桌面独占的不可逆操作必须明确拒绝，而不是悄悄发请求；
+ * 3) 后端语义差异（opencode 的 available:false）被归一化成调用方熟悉的形式。
+ */
+describe("HTTP 传输分支", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(async () => {
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    const { __resetTransportForTests } = await import("./transport");
+    __resetTransportForTests();
+    fetchMock.mockReset();
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ status: "ok" }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    // 让探测判定为 http
+    await (await import("./transport")).detectTransport();
+  });
+
+  afterEach(async () => {
+    const { __resetTransportForTests } = await import("./transport");
+    __resetTransportForTests();
+    vi.unstubAllGlobals();
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+  });
+
+  it("进程与端口走对应 REST 路径", async () => {
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => [],
+    }));
+    await api.listProcesses();
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("/api/processes");
+    await api.listPorts();
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("/api/ports");
+    await api.listDevServers();
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("/api/dev-servers");
+    await api.listAiProcesses();
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("/api/ai-processes");
+  });
+
+  it("成本趋势把 days 放进查询串而不是 body", async () => {
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => [],
+    }));
+    await api.getCostTrend(30);
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("/api/cost/trend?days=30");
+    await api.getCostTrendExtended(7);
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("/api/cost/trend-extended?days=7");
+  });
+
+  it("保存数据用 PUT 且带 JSON body", async () => {
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    }));
+    const data = { projects: [], tasks: [] };
+    await api.saveData(data, "http");
+    const [url, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
+    expect(url).toBe("/api/data");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(String(init.body))).toEqual(data);
+  });
+
+  it("桌面独占的不可逆操作在 Web 模式明确报错，且不发请求", async () => {
+    const before = fetchMock.mock.calls.length;
+    await expect(api.terminateProcess(1234)).rejects.toThrow(/桌面应用/);
+    await expect(api.terminateProcessElevated(1234)).rejects.toThrow(/桌面应用/);
+    await expect(api.clearCostRecords()).rejects.toThrow(/桌面应用/);
+    await expect(api.readLogs(10)).rejects.toThrow(/桌面应用/);
+    expect(fetchMock.mock.calls.length).toBe(before);
+  });
+
+  it("opencode 未运行时把 available:false 归一化成抛错", async () => {
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        port: 4096,
+        available: false,
+        sessions: [],
+        error: "未检测到运行中的 opencode 服务",
+      }),
+    }));
+    await expect(api.opencodeSessions()).rejects.toThrow(/opencode/);
+  });
+
+  it("opencode 可用时返回 port 与 sessions", async () => {
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        port: 4200,
+        available: true,
+        sessions: [{ id: "s1" }],
+        error: null,
+      }),
+    }));
+    const res = await api.opencodeSessions();
+    expect(res.port).toBe(4200);
+    expect(res.sessions).toHaveLength(1);
+  });
+
+  it("保存成本设置用 PUT /api/cost/settings", async () => {
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    }));
+    await api.saveCostSettings({
+      daily_budget: 5,
+      monthly_budget: 50,
+      alert_threshold_pct: 80,
+      include_estimated: true,
+    });
+    const [url, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
+    expect(url).toBe("/api/cost/settings");
+    expect(init.method).toBe("PUT");
+  });
+
+  it("扫描成本用 POST /api/cost/scan", async () => {
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ new_records: 0 }),
+    }));
+    await api.scanSessionCosts();
+    const [url, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
+    expect(url).toBe("/api/cost/scan");
+    expect(init.method).toBe("POST");
+  });
+
+  it("诊断与系统信息走 GET", async () => {
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    }));
+    await api.runDiagnostics();
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("/api/diagnostics");
+    await api.systemInfo();
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("/api/system");
+    await api.diskInfo();
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("/api/disks");
+  });
+});

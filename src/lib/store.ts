@@ -9,6 +9,7 @@ import {
 } from "./theme/presets";
 import type { ThemeInput } from "./theme/tokens";
 import { applyMotion, applyTheme, type MotionLevel } from "./theme/apply";
+import { currentTransport, detectTransport } from "./transport";
 import {
   DEFAULT_ORDER,
   normalizeHidden,
@@ -31,6 +32,7 @@ import {
   getProjectBreakdown,
   getModelBreakdown,
   ensureNotificationPermission,
+  isBackend,
   isTauri,
   listAiProcesses,
   listDevServers,
@@ -506,8 +508,14 @@ export const useStore = create<Store>()(
       setKillTarget: (p) => set({ killTarget: p }),
 
       loadAll: async () => {
-        if (!isTauri()) {
-          // 浏览器预览模式：注入静态演示数据，不发 IPC 请求
+        // 浏览器里可能是「连着 HTTP 后端」也可能是「纯静态预览」：
+        // 先探一次（结果会广播给模式徽章），再决定走真实数据还是演示数据。
+        if (!isTauri() && currentTransport() !== "http") {
+          await detectTransport();
+        }
+        if (!isBackend()) {
+          // 纯静态预览（既不是桌面壳、也没有 HTTP 后端）：注入演示数据。
+          // 连着 `workbench serve` 的浏览器走下面的真实路径。
           const seed = [0, 1, 2].map((i) => ({
             cpu: Math.round(20 + i * 3),
             memGb: Math.round((12 + i * 0.4) * 100) / 100,
@@ -568,7 +576,7 @@ export const useStore = create<Store>()(
       },
 
       refreshRuntime: async () => {
-        if (!isTauri()) return;
+        if (!isBackend()) return;
         // 刷新重入保护：netstat + 进程快照耗时可超过最短刷新间隔（设置页有 1s 档），
         // 不加锁会让并发调用乱序覆盖数据，并丢掉 history 采样点。
         //
@@ -635,7 +643,7 @@ export const useStore = create<Store>()(
       },
 
       refreshAi: async () => {
-        if (!isTauri()) return;
+        if (!isBackend()) return;
         const requestId = ++aiRefreshId;
         const [online, files] = await Promise.allSettled([
           opencodeSessions(),
@@ -775,12 +783,12 @@ export const useStore = create<Store>()(
       },
 
       persistData: (next) => {
-        if (restoringData || (isTauri() && dataSaveBlocked)) {
+        if (restoringData || (isBackend() && dataSaveBlocked)) {
           set({ toast: t("store.saveFailed", { err: "数据正在恢复或需要重新加载" }) });
           return false;
         }
         set({ data: next });
-        if (!isTauri()) return true;
+        if (!isBackend()) return true;
         if (saveTimer) clearTimeout(saveTimer);
         pendingData = next;
         dataDirty = true;
@@ -799,11 +807,11 @@ export const useStore = create<Store>()(
       },
 
       persistDataNow: async (next) => {
-        if (restoringData || (isTauri() && dataSaveBlocked)) {
+        if (restoringData || (isBackend() && dataSaveBlocked)) {
           set({ toast: t("store.saveFailed", { err: "数据正在恢复或需要重新加载" }) });
           return false;
         }
-        if (!isTauri()) {
+        if (!isBackend()) {
           set({ data: next });
           return true;
         }
@@ -946,9 +954,9 @@ export const useStore = create<Store>()(
       // ── 成本计量 ──
 
       loadCostOverview: async () => {
-        // 浏览器演示模式没有后端，直接保持初始状态，避免抛 "reading 'invoke'" 之类
-        // 的 TypeError 顶到 toast 上（其余数据接口都做了同样的守卫）。
-        if (!isTauri()) return;
+        // 没有后端（纯静态预览）时保持初始状态，避免把 "reading 'invoke'"
+        // 这类 TypeError 顶到 toast 上。
+        if (!isBackend()) return;
         // 后端现在会把「数据文件损坏」等真实错误抛出来，不能再用 catch(()=>null) 吞掉，
         // 否则用户看到的是空白页而不是「账本读不了」。
         const errors: string[] = [];
@@ -999,7 +1007,7 @@ export const useStore = create<Store>()(
       },
 
       loadCostTrend: async (days) => {
-        if (!isTauri()) {
+        if (!isBackend()) {
           set({ costTrendDays: days });
           return;
         }
@@ -1017,7 +1025,7 @@ export const useStore = create<Store>()(
       },
 
       scanCosts: async (options) => {
-        if (!isTauri()) return;
+        if (!isBackend()) return;
         if (get().costLoading) {
           if (options?.afterCurrent) costScanAgain = true;
           return;
@@ -1070,7 +1078,7 @@ export const useStore = create<Store>()(
       },
 
       loadCostSettings: async () => {
-        if (!isTauri()) return;
+        if (!isBackend()) return;
         try {
           const s = await getCostSettings();
           set({ costSettings: s });
@@ -1084,9 +1092,9 @@ export const useStore = create<Store>()(
        * 原先失败也返回 void，设置页无条件 setDirty(false)，用户会以为已持久化。
        */
       updateCostSettings: async (s) => {
-        // 演示模式没有后端。这里返回 false 而不是抛错：调用方保持「未保存」状态，
-        // 用户输入不会丢，也不会看到 "reading 'invoke'" 这类原始 TypeError。
-        if (!isTauri()) return false;
+        // 无后端时返回 false 而不是抛错：调用方保持「未保存」状态，
+        // 用户输入不会丢，也不会看到原始的 TypeError。
+        if (!isBackend()) return false;
         try {
           await saveCostSettings(s);
         } catch (e) {
@@ -1101,8 +1109,7 @@ export const useStore = create<Store>()(
       },
 
       clearCosts: async () => {
-        // 与其余成本接口一致：演示模式下没有后端
-        if (!isTauri()) return;
+        if (!isBackend()) return;
         try {
           await clearCostRecords();
           set({

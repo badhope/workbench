@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { isTauri } from "./api";
+import { isBackend, isTauri } from "./api";
+import { currentTransport, subscribeTransport } from "./transport";
 import { useStore } from "./store";
 
 /**
@@ -9,6 +10,11 @@ import { useStore } from "./store";
  * 从 App.tsx 抽出来的原因：App 的圈复杂度实测 18（红线 10），而这几段
  * 全是与渲染无关的订阅逻辑。抽走后 App 只剩「外壳 + 路由」。
  */
+/** 订阅传输探测结果：探测完成后触发重渲染，让模式徽章从不正确的 demo 切到真实值。 */
+export function useTransportMode() {
+  return useSyncExternalStore(subscribeTransport, currentTransport, currentTransport);
+}
+
 export function useAppRuntime() {
   const loadAll = useStore((s) => s.loadAll);
   const refreshRuntime = useStore((s) => s.refreshRuntime);
@@ -29,9 +35,10 @@ export function useAppRuntime() {
     if (on) void invoke("set_always_on_top", { on: true }).catch(() => {});
   }, []);
 
-  // 轮询：窗口隐藏时暂停（看不见界面时继续采样纯属浪费电）
+  // 轮询：窗口隐藏时暂停（看不见界面时继续采样纯属浪费电）。
+  // Web 模式同样需要轮询——它连的是真实后端，数据会变。
   useEffect(() => {
-    if (!isTauri()) return;
+    if (!isBackend()) return;
     return pollWhileVisible(refreshRuntime, refreshMs);
   }, [refreshMs, refreshRuntime]);
 

@@ -13,9 +13,26 @@ export function costTrendOption(
   colors: string[],
   labels: { legend: string; tooltip: (value: string) => string }
 ) {
-  // 后端契约：日粒度是 YYYY-MM-DD（slice(5) 取 MM-DD）；
-  // 扩展趋势会把更早的数据按月聚合成 YYYY-MM，整段显示。
-  const days = rows.map((r) => (r.day.length === 7 ? r.day : r.day.slice(5)));
+  // 后端契约：日粒度 YYYY-MM-DD，更早的数据按月聚合成 YYYY-MM。
+  //
+  // 两者必须在**同一根轴**上可读：早先直接把 YYYY-MM 原样显示、日粒度截成
+  // MM-DD，结果一张图的刻度是 `2026-06, 2026-07, 10-25, 10-27`——同一根轴
+  // 两种格式，读者无法判断哪些点是月、哪些是日（文档截图里一眼可见）。
+  // 现在统一成 `M月` / `M-D`，月份带后缀，日粒度不带，语义一眼可分。
+  const days = rows.map((r) => {
+    const parts = r.day.split("-");
+    // 先按**形状**判断再按长度：只看 length===7 会把 "unknown" 这类
+    // 七字符的异常值误判成月度桶，渲染出 `un/NaN月`。
+    if (parts.length === 2 && parts.every((p) => /^\d+$/.test(p))) {
+      // YYYY-MM（月度桶）：带「月」后缀，与日粒度在轴上可区分
+      return `${parts[0].slice(2)}/${Number(parts[1])}月`;
+    }
+    if (parts.length === 3 && parts.every((p) => /^\d+$/.test(p))) {
+      // YYYY-MM-DD（日粒度）：保留 M-D
+      return `${Number(parts[1])}-${Number(parts[2])}`;
+    }
+    return r.day;
+  });
   return {
     grid: { left: 50, right: 16, top: 20, bottom: 24 },
     tooltip: {

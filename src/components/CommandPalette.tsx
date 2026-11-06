@@ -149,7 +149,7 @@ export function CommandPalette() {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-start justify-center bg-black/55 px-3 pt-[12vh] backdrop-blur-[2px]"
+      className="overlay-scrim fixed inset-0 z-[60] flex items-start justify-center px-3 pt-[12vh] backdrop-blur-[2px]"
       role="presentation"
       onClick={() => setOpen(false)}
     >

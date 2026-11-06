@@ -6,6 +6,10 @@ import { setLang } from "./i18n";
 // 锁定界面语言：toast / 默认名文案按中文断言（默认语言是英语）
 setLang("zh");
 
+// 整个文件测的是**浏览器（无后端）语义**：项目/任务的内存态、演示模式守卫。
+// 显式去掉桌面标记，而不是依赖全局默认值——默认值一旦改，这里的断言就失去意义。
+delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+
 /** 测试隔离：每个用例前把 store 重置到已知状态（浏览器模式下不触发 IPC）。 */
 function resetStore() {
   useStore.setState({

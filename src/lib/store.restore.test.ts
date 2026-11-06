@@ -18,6 +18,7 @@ vi.mock("./api", async (original) => {
   return {
     ...actual,
     isTauri: () => true,
+    isBackend: () => true,
     loadDataVersioned: async () => {
       if (backend.failLoad) throw new Error("load failed");
       const snapshot = {

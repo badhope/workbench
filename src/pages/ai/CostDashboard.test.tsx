@@ -10,6 +10,7 @@ import type { CostOverview, PricingRow, PricingView } from "../../types";
 vi.mock("../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/api")>()),
   isTauri: () => true,
+  isBackend: () => true,
   getPricing: vi.fn(),
   savePricing: vi.fn(),
   scanSessionCosts: vi.fn(),
