@@ -8,9 +8,12 @@ pub mod diagnostics;
 pub mod ipc_guard;
 pub mod json_store;
 pub mod logging_setup;
+pub mod paths;
 pub mod ports;
 pub mod pricing;
 pub mod procs;
+pub mod runtime;
+pub mod server;
 pub mod session_meter;
 
 use std::sync::atomic::{AtomicBool, Ordering};

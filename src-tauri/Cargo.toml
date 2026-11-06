@@ -1,6 +1,6 @@
 [package]
 name = "workbench"
-version = "0.6.0"
+version = "0.7.0"
 description = "Workbench - local-first desktop workbench (Tauri 2 + React 19)"
 edition = "2021"
 rust-version = "1.90"  # Tauri 2 生态实际要求；1.77 从未被验证过
@@ -25,6 +25,9 @@ log = "0.4"
 fern = "0.7"
 chrono = "0.4"
 ts-rs = { version = "12.0.1", features = ["serde-compat"] }
+axum = "0.8"
+tower-http = { version = "0.6", features = ["fs", "cors", "trace"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 
 [dependencies.tauri]
 version = "2"
@@ -50,3 +53,6 @@ version = "2"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

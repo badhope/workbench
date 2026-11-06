@@ -11,6 +11,7 @@ use crate::data::{self, WorkbenchData};
 use crate::devserver::{self, DevServer};
 use crate::diagnostics::{self, DiagnosticsReport};
 use crate::ipc_guard::{AllowedPorts, KnownDirs};
+use crate::paths::DataRoot;
 use crate::ports::{self, PortEntry};
 use crate::pricing::PricingTable;
 use crate::procs::{self, ProcInfo};
@@ -18,6 +19,18 @@ use crate::session_meter::{self, SessionFileEntry};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Command;
+
+/// 桌面壳里把 Tauri 的 `app_data_dir()` 收敛成 `DataRoot`。
+///
+/// 后端聚合层不再接受 `&AppHandle`，这样同一套逻辑在 CLI 与 HTTP 服务里
+/// 也能跑；这里只是「桌面入口 → 显式路径」的一次转换。
+fn data_root(app: &AppHandle) -> Result<DataRoot, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法定位数据目录: {e}"))?;
+    Ok(DataRoot::new(dir).ensure()?.clone())
+}
 
 /// 派生外部命令（Windows 上不闪控制台窗口）。
 ///
@@ -242,31 +255,9 @@ pub async fn list_dev_servers(dirs: tauri::State<'_, KnownDirs>) -> Result<Vec<D
 
 #[tauri::command(async)]
 pub async fn list_ai_processes() -> Result<Vec<AiProcess>, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let procs = procs::snapshot_processes();
-        let mut out = Vec::new();
-        for p in procs {
-            let name_lower = p.name.to_ascii_lowercase();
-            let cmd_lower = p.cmd_line.to_ascii_lowercase();
-            let exe_lower = p.exe_path.to_ascii_lowercase();
-            let Some(kw) = ai::find_ai_keyword(&name_lower, &cmd_lower, &exe_lower) else {
-                continue;
-            };
-            out.push(AiProcess {
-                pid: p.pid,
-                name: p.name.clone(),
-                exe_path: p.exe_path.clone(),
-                cmd_line: p.cmd_line.clone(),
-                matched: kw.to_string(),
-                memory: p.memory,
-                start_time: p.start_time,
-            });
-        }
-        out.sort_by_key(|a| a.name.clone());
-        Ok(out)
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+    tauri::async_runtime::spawn_blocking(|| Ok(crate::runtime::collect_ai_processes()))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// opencode 会话列表 + 实际命中的服务端口（前端详情请求必须复用该端口）。
@@ -309,30 +300,8 @@ pub async fn opencode_sessions(
 }
 
 fn discover_opencode_ports(procs: &[ProcInfo]) -> Vec<u16> {
-    let mut ports = Vec::new();
-    for p in procs {
-        let hay = p.cmd_line.to_ascii_lowercase();
-        let name = p.name.to_ascii_lowercase();
-        let exe = p.exe_path.to_ascii_lowercase();
-        if !name.contains("opencode") && !exe.contains("opencode") {
-            continue;
-        }
-        let tokens: Vec<&str> = hay.split_whitespace().collect();
-        for (i, t) in tokens.iter().enumerate() {
-            if let Some(rest) = t.strip_prefix("--port=") {
-                if let Ok(v) = rest.parse::<u16>() {
-                    ports.push(v);
-                }
-            } else if (*t == "--port" || *t == "-p") && i + 1 < tokens.len() {
-                if let Ok(v) = tokens[i + 1].parse::<u16>() {
-                    ports.push(v);
-                }
-            }
-        }
-    }
-    ports.sort_unstable();
-    ports.dedup();
-    ports
+    // 端口发现逻辑与 HTTP 服务共用一份，避免两处漏掉 `--port=` 或 `--port N` 写法。
+    crate::runtime::collect_opencode_ports(procs)
 }
 
 // ── AI 会话详情 ──────────────────────────────────────────
@@ -462,16 +431,19 @@ fn cached_system_info() -> SystemInfo {
         .clone()
 }
 
+/// 同步版本：桌面 IPC 与 HTTP 服务共用，避免两处字段各写一遍。
+pub fn system_info_blocking() -> SystemInfo {
+    let mut info = cached_system_info();
+    // uptime 会随时间走，单独刷新；其余字段（主机名/OS/核数/总内存）进程内不变
+    info.uptime_seconds = sysinfo::System::uptime();
+    info
+}
+
 #[tauri::command(async)]
 pub async fn system_info() -> Result<SystemInfo, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let mut info = cached_system_info();
-        // uptime 会随时间走，单独刷新；其余字段（主机名/OS/核数/总内存）进程内不变
-        info.uptime_seconds = sysinfo::System::uptime();
-        Ok(info)
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+    tauri::async_runtime::spawn_blocking(|| Ok(system_info_blocking()))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 // ── 磁盘信息 ──────────────────────────────────────────────
@@ -490,42 +462,46 @@ pub struct DiskInfo {
 }
 
 #[tauri::command(async)]
-pub async fn disk_info() -> Result<Vec<DiskInfo>, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        use sysinfo::Disks;
-        let disks_list = Disks::new_with_refreshed_list();
+/// 同步版本：桌面 IPC 与 HTTP 服务共用。
+pub fn disk_info_blocking() -> Vec<DiskInfo> {
+    use sysinfo::Disks;
+    let disks_list = Disks::new_with_refreshed_list();
 
-        let mut disks = Vec::new();
-        for d in disks_list.list() {
-            let total = d.total_space();
-            if total == 0 {
+    let mut disks = Vec::new();
+    for d in disks_list.list() {
+        let total = d.total_space();
+        if total == 0 {
+            continue;
+        }
+        let available = d.available_space();
+        let label = d.name().to_string_lossy().into_owned();
+        if label.is_empty() {
+            let mp = d.mount_point();
+            if mp == std::path::Path::new("/") {
                 continue;
             }
-            let available = d.available_space();
-            let label = d.name().to_string_lossy().into_owned();
-            if label.is_empty() {
-                let mp = d.mount_point();
-                if mp == std::path::Path::new("/") {
-                    continue;
-                }
-            }
-            disks.push(DiskInfo {
-                label: if label.is_empty() {
-                    d.mount_point().to_string_lossy().into_owned()
-                } else {
-                    label
-                },
-                mount_point: d.mount_point().to_string_lossy().into_owned(),
-                total_bytes: total,
-                available_bytes: available,
-                used_bytes: total.saturating_sub(available),
-                is_removable: d.is_removable(),
-            });
         }
-        Ok(disks)
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+        disks.push(DiskInfo {
+            label: if label.is_empty() {
+                d.mount_point().to_string_lossy().into_owned()
+            } else {
+                label
+            },
+            mount_point: d.mount_point().to_string_lossy().into_owned(),
+            total_bytes: total,
+            available_bytes: available,
+            used_bytes: total.saturating_sub(available),
+            is_removable: d.is_removable(),
+        });
+    }
+    disks
+}
+
+#[tauri::command(async)]
+pub async fn disk_info() -> Result<Vec<DiskInfo>, String> {
+    tauri::async_runtime::spawn_blocking(|| Ok(disk_info_blocking()))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 #[tauri::command(async)]
@@ -533,7 +509,7 @@ pub async fn load_data(
     app: AppHandle,
     dirs: tauri::State<'_, KnownDirs>,
 ) -> Result<WorkbenchData, String> {
-    let data = data::load_from_disk(&app)?;
+    let data = data::load_from_disk(&data_root(&app)?)?;
     // data.json 可能被外部编辑过，回灌白名单时同样要过存在性校验。
     // 校验含 Path::is_dir()：断开的 UNC / 映射盘会阻塞数秒，
     // 因此必须在 spawn_blocking 里做（这两个命令原先是非 async，跑在主线程）。
@@ -557,7 +533,7 @@ pub async fn load_data_versioned(
 ) -> Result<VersionedWorkbenchData, String> {
     let snapshot = tauri::async_runtime::spawn_blocking(move || {
         let _guard = lock_ledger_operation()?;
-        let data = data::load_from_disk(&app)?;
+        let data = data::load_from_disk(&data_root(&app)?)?;
         let generation = DATA_RESTORE_GENERATION.load(std::sync::atomic::Ordering::Acquire);
         Ok::<_, String>(VersionedWorkbenchData {
             data,
@@ -602,7 +578,7 @@ pub async fn save_data(
             generation.as_deref(),
             started,
             &DATA_RESTORE_GENERATION,
-            || data::save_to_disk(&app2, &data),
+            || data::save_to_disk(&data_root(&app2)?, &data),
         )
     })
     .await
@@ -690,7 +666,7 @@ fn read_pricing_overrides_at(path: &std::path::Path) -> Result<cost_store::Overr
 }
 
 fn read_pricing_overrides(app: &AppHandle) -> Result<cost_store::OverrideRead, String> {
-    read_pricing_overrides_at(&cost_store::cost_data_path_overrides(app)?)
+    read_pricing_overrides_at(&cost_store::cost_data_path_overrides(&data_root(app)?))
 }
 
 /// 扫描 session JSONL 文件 → 提取 usage → 计算成本 → 写入 SQLite 成本库
@@ -742,7 +718,8 @@ pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String
             }
         }
         let total_scanned = records.len();
-        let outcome = cost_store::import_and_aggregate(&app, &records, &scanned_paths, 14)?;
+        let outcome =
+            cost_store::import_and_aggregate(&data_root(&app)?, &records, &scanned_paths, 14)?;
         if !errors.is_empty() {
             return Err(format!(
                 "{} 个会话扫描失败，旧记录已保留；成功文件已更新: {}",
@@ -772,7 +749,7 @@ pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String
 pub async fn get_cost_overview(app: AppHandle) -> Result<CostOverview, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _scan_guard = lock_ledger_operation()?;
-        cost_store::build_overview(&app)
+        cost_store::build_overview(&data_root(&app)?)
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
@@ -783,7 +760,7 @@ pub async fn get_cost_overview(app: AppHandle) -> Result<CostOverview, String> {
 pub async fn get_cost_trend(app: AppHandle, days: usize) -> Result<Vec<CostTrendRow>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _scan_guard = lock_ledger_operation()?;
-        cost_store::build_trend(&app, days)
+        cost_store::build_trend(&data_root(&app)?, days)
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
@@ -794,7 +771,7 @@ pub async fn get_cost_trend(app: AppHandle, days: usize) -> Result<Vec<CostTrend
 pub async fn get_model_breakdown(app: AppHandle) -> Result<Vec<ModelBreakdownRow>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _scan_guard = lock_ledger_operation()?;
-        cost_store::build_model_breakdown(&app)
+        cost_store::build_model_breakdown(&data_root(&app)?)
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
@@ -805,7 +782,7 @@ pub async fn get_model_breakdown(app: AppHandle) -> Result<Vec<ModelBreakdownRow
 pub async fn get_project_breakdown(app: AppHandle) -> Result<Vec<ProjectBreakdownRow>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _scan_guard = lock_ledger_operation()?;
-        cost_store::build_project_breakdown(&app)
+        cost_store::build_project_breakdown(&data_root(&app)?)
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
@@ -816,7 +793,7 @@ pub async fn get_project_breakdown(app: AppHandle) -> Result<Vec<ProjectBreakdow
 pub async fn get_cost_trend_extended(app: AppHandle, days: usize) -> Result<ExtendedTrend, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _scan_guard = lock_ledger_operation()?;
-        cost_store::build_trend_extended(&app, days)
+        cost_store::build_trend_extended(&data_root(&app)?, days)
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
@@ -827,7 +804,7 @@ pub async fn get_cost_trend_extended(app: AppHandle, days: usize) -> Result<Exte
 pub async fn get_cost_export(app: AppHandle, limit: usize) -> Result<Vec<CostExportRow>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _scan_guard = lock_ledger_operation()?;
-        cost_store::build_cost_export(&app, limit)
+        cost_store::build_cost_export(&data_root(&app)?, limit)
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
@@ -838,7 +815,7 @@ pub async fn get_cost_export(app: AppHandle, limit: usize) -> Result<Vec<CostExp
 pub async fn get_cost_settings_cmd(app: AppHandle) -> Result<CostSettings, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _scan_guard = lock_ledger_operation()?;
-        cost_store::get_cost_settings(&app)
+        cost_store::get_cost_settings(&data_root(&app)?)
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
@@ -848,7 +825,7 @@ pub async fn get_cost_settings_cmd(app: AppHandle) -> Result<CostSettings, Strin
 pub async fn save_cost_settings_cmd(app: AppHandle, settings: CostSettings) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _scan_guard = lock_ledger_operation()?;
-        cost_store::save_cost_settings(&app, settings)
+        cost_store::save_cost_settings(&data_root(&app)?, settings)
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
@@ -859,7 +836,7 @@ pub async fn save_cost_settings_cmd(app: AppHandle, settings: CostSettings) -> R
 pub async fn clear_cost_records(app: AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _scan_guard = lock_ledger_operation()?;
-        cost_store::clear_records(&app)
+        cost_store::clear_records(&data_root(&app)?)
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
@@ -899,22 +876,18 @@ pub struct BackupResult {
 }
 
 /// 备份根目录（`<data dir>/backups`）。
-fn backups_root(app: &AppHandle) -> Result<std::path::PathBuf, String> {
-    let base = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法定位数据目录: {e}"))?;
-    Ok(base.join("backups"))
+fn backups_root(root: &DataRoot) -> std::path::PathBuf {
+    root.backups_dir()
 }
 
 /// 三份数据文件的 (名字, 真实路径) 列表。
-fn data_files(app: &AppHandle) -> Vec<(&'static str, Result<std::path::PathBuf, String>)> {
+fn data_files(root: &DataRoot) -> Vec<(&'static str, std::path::PathBuf)> {
     vec![
-        ("data.json", data::data_file_path(app)),
-        ("cost.db", cost_store::cost_db_path(app)),
+        ("data.json", data::data_file_path(root)),
+        ("cost.db", cost_store::cost_db_path(root)),
         (
             "pricing_overrides.json",
-            cost_store::cost_data_path_overrides(app),
+            cost_store::cost_data_path_overrides(root),
         ),
     ]
 }
@@ -947,7 +920,8 @@ pub async fn backup_data(app: AppHandle) -> Result<BackupResult, String> {
 
 /// 同步版本：`restore_backup` 要在同一个阻塞线程里先备份再恢复。
 fn backup_now(app: &AppHandle) -> Result<BackupResult, String> {
-    let root = backups_root(app)?;
+    let data_root_ = data_root(app)?;
+    let root = backups_root(&data_root_);
     std::fs::create_dir_all(&root).map_err(|e| format!("创建备份目录失败: {e}"))?;
 
     // 目录名精确到秒，但「恢复」会在同一秒内先做一次安全备份：
@@ -979,25 +953,23 @@ fn backup_now(app: &AppHandle) -> Result<BackupResult, String> {
 
     let mut files = Vec::new();
     let mut skipped = Vec::new();
-    for (name, path) in data_files(app) {
-        match path {
-            Ok(src) if src.exists() => {
-                // 先写临时名再改名：备份中途失败不会留下半个文件。
-                // SQLite 必须用 VACUUM INTO 而不是直接复制：应用可能正在写入，
-                // 复制会拿到「主文件已改、日志未合并」的中间态。
-                let dst = out_dir.join(name);
-                let tmp = out_dir.join(format!("{name}.tmp"));
-                if name.ends_with(".db") {
-                    cost_store::snapshot_db(app, &tmp)?;
-                } else {
-                    std::fs::copy(&src, &tmp).map_err(|e| format!("复制 {name} 失败: {e}"))?;
-                }
-                std::fs::rename(&tmp, &dst).map_err(|e| format!("落盘 {name} 失败: {e}"))?;
-                files.push(name.to_string());
-            }
-            Ok(_) => skipped.push(name.to_string()),
-            Err(e) => return Err(format!("定位 {name} 失败: {e}")),
+    for (name, src) in data_files(&data_root_) {
+        if !src.exists() {
+            skipped.push(name.to_string());
+            continue;
         }
+        // 先写临时名再改名：备份中途失败不会留下半个文件。
+        // SQLite 必须用 VACUUM INTO 而不是直接复制：应用可能正在写入，
+        // 复制会拿到「主文件已改、日志未合并」的中间态。
+        let dst = out_dir.join(name);
+        let tmp = out_dir.join(format!("{name}.tmp"));
+        if name.ends_with(".db") {
+            cost_store::snapshot_db(&data_root_, &tmp)?;
+        } else {
+            std::fs::copy(&src, &tmp).map_err(|e| format!("复制 {name} 失败: {e}"))?;
+        }
+        std::fs::rename(&tmp, &dst).map_err(|e| format!("落盘 {name} 失败: {e}"))?;
+        files.push(name.to_string());
     }
     if files.is_empty() {
         // 一份都没备份出来：删掉空目录，否则备份列表里会出现空条目
@@ -1020,7 +992,7 @@ fn backup_now(app: &AppHandle) -> Result<BackupResult, String> {
 #[tauri::command(async)]
 pub async fn list_backups(app: AppHandle) -> Result<Vec<BackupPoint>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let root = backups_root(&app)?;
+        let root = backups_root(&data_root(&app)?);
         let mut out = Vec::new();
         let entries = match std::fs::read_dir(&root) {
             Ok(e) => e,
@@ -1114,15 +1086,14 @@ fn restore_now(app: &AppHandle, id: &str) -> Result<RestoreResult, String> {
     if !is_backup_id(id) {
         return Err("非法的备份 id".to_string());
     }
-    let src_dir = backups_root(app)?.join(id);
+    let src_dir = backups_root(&data_root(app)?).join(id);
     if !src_dir.is_dir() {
         return Err(format!("备份不存在: {id}"));
     }
 
     let mut plan: Vec<(&'static str, std::path::PathBuf, std::path::PathBuf)> = Vec::new();
     let mut untouched = Vec::new();
-    for (name, dest) in data_files(app) {
-        let dest = dest?;
+    for (name, dest) in data_files(&data_root(app)?) {
         let src = src_dir.join(name);
         if !src.exists() {
             untouched.push(name.to_string());
@@ -1221,7 +1192,7 @@ pub async fn get_pricing(app: AppHandle) -> Result<PricingView, String> {
         let _scan_guard = lock_ledger_operation()?;
         let table = build_pricing_table(&app);
         let problems = read_pricing_overrides(&app)?.problems;
-        let path = cost_store::cost_data_path_overrides(&app)?
+        let path = cost_store::cost_data_path_overrides(&data_root(&app)?)
             .to_string_lossy()
             .to_string();
         Ok(PricingView {
@@ -1258,9 +1229,9 @@ pub async fn save_pricing(
             return Err(problems.join("；"));
         }
         let _scan_guard = lock_ledger_operation()?;
-        cost_store::save_pricing_overrides(&app, &clean)?;
+        cost_store::save_pricing_overrides(&data_root(&app)?, &clean)?;
         let table = build_pricing_table(&app);
-        let path = cost_store::cost_data_path_overrides(&app)?
+        let path = cost_store::cost_data_path_overrides(&data_root(&app)?)
             .to_string_lossy()
             .to_string();
         Ok(PricingView {

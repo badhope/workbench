@@ -242,6 +242,12 @@ pub fn collect(app_version: &str, data_dir: &Path) -> DiagnosticsReport {
         "If no tray icon appears, set WORKBENCH_NO_TRAY=1 and close-to-exit is used",
     ));
 
+    // 崩溃记录：只在真的发生过 panic 时才出现，避免给「一切正常」的用户
+    // 增加一条永远 ok 的噪音条目。用户报「窗口自己没了」时，这一条就是答案。
+    if let Some(crash) = crash_log_check(data_dir) {
+        checks.push(crash);
+    }
+
     let ok_count = checks.iter().filter(|c| c.level == "ok").count();
     let warn_count = checks.iter().filter(|c| c.level == "warn").count();
     let fail_count = checks.iter().filter(|c| c.level == "fail").count();
@@ -255,6 +261,34 @@ pub fn collect(app_version: &str, data_dir: &Path) -> DiagnosticsReport {
         warn_count,
         fail_count,
     }
+}
+
+/// 上一次运行是否留下 panic 记录。
+///
+/// 桌面应用由窗口启动时没有控制台，`panic!` 的默认输出会彻底丢失；
+/// 崩溃钩子把它写进 `crash.log`（见 logging_setup），这里读回来展示。
+/// 只报告是否存在与最后一行摘要，不把整个堆栈塞进 UI 列表。
+fn crash_log_check(data_dir: &Path) -> Option<DiagnosticCheck> {
+    let candidates = [
+        data_dir.join("crash.log"),
+        std::env::temp_dir().join(format!("{}.crash.log", crate::paths::APP_IDENTIFIER)),
+    ];
+    for path in candidates {
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let tail = text.lines().rfind(|l| !l.trim().is_empty())?;
+        let hint = "If the app closed unexpectedly, please attach this file to your issue";
+        return Some(check(
+            "crash-log",
+            "Previous crash",
+            "warn",
+            format!("{}
+{}", path.display(), tail.chars().take(200).collect::<String>()),
+            hint,
+        ));
+    }
+    None
 }
 
 #[cfg(test)]
@@ -297,5 +331,51 @@ mod tests {
     fn missing_session_dir_is_warn_not_fail() {
         let c = session_dir_check("x", "X", Some(PathBuf::from("/definitely/not/here")));
         assert_eq!(c.level, "warn");
+    }
+}
+
+#[cfg(test)]
+mod crash_tests {
+    use super::*;
+
+    /// 没有崩溃文件时不应凭空产生一条 warn——那会让「一切正常」的报告
+    /// 变成永远有条黄色警告，用户很快就学会忽略整份报告。
+    #[test]
+    fn no_crash_file_means_no_check() {
+        let dir = std::env::temp_dir().join(format!("wb-nocrash-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(crash_log_check(&dir).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 有崩溃文件时必须报出来，并带上最后一行摘要（这是用户唯一能提供的信息）。
+    #[test]
+    fn crash_file_is_reported_with_last_line() {
+        let dir = std::env::temp_dir().join(format!("wb-crash-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("crash.log"),
+            "[2026-01-01 10:00:00] [PANIC]: boom @ src/lib.rs:10:5\n\
+             [2026-01-01 10:00:01] [PANIC]: second panic @ src/x.rs:1:1\n",
+        )
+        .unwrap();
+
+        let found = crash_log_check(&dir).expect("should detect crash log");
+        assert_eq!(found.id, "crash-log");
+        assert_eq!(found.level, "warn");
+        // 只带最后一条，且截断到 200 字符内
+        assert!(found.detail.contains("second panic"));
+        assert!(!found.detail.contains("boom"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 空文件等同于没有崩溃：不能因为文件被创建过就报警。
+    #[test]
+    fn empty_crash_file_is_ignored() {
+        let dir = std::env::temp_dir().join(format!("wb-emptycrash-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("crash.log"), "\n\n").unwrap();
+        assert!(crash_log_check(&dir).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

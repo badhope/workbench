@@ -2,9 +2,9 @@
 //! 损坏文件先保全再报错（见 json_store），绝不静默当成空数据 —— 那会让下一次保存
 //! 把可恢复的用户数据覆盖成空集。
 
+use crate::paths::DataRoot;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
 
 use crate::json_store;
 
@@ -42,18 +42,13 @@ pub struct Task {
     pub updated_at: u64,
 }
 
-pub fn data_file_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法定位数据目录: {e}"))?;
-    std::fs::create_dir_all(&dir).map_err(|e| format!("无法创建数据目录: {e}"))?;
-    Ok(dir.join("data.json"))
+pub fn data_file_path(root: &DataRoot) -> PathBuf {
+    root.data_json()
 }
 
 /// 读取项目/任务数据。文件损坏或不可读时返回 Err，由前端明确告知用户。
-pub fn load_from_disk(app: &AppHandle) -> Result<WorkbenchData, String> {
-    let path = data_file_path(app)?;
+pub fn load_from_disk(root: &DataRoot) -> Result<WorkbenchData, String> {
+    let path = data_file_path(root);
     Ok(json_store::read_json(&path)?.unwrap_or_default())
 }
 
@@ -63,13 +58,14 @@ pub fn load_from_disk(app: &AppHandle) -> Result<WorkbenchData, String> {
 /// 若不加锁，它可以在 `mutate` 的「读」与「写」之间插入，
 /// 把后者刚读到的内容覆盖掉（丢更新）。`mutate` 内部的写会重入同一把锁，
 /// 因为 `std::sync::Mutex` 不可重入，所以拆出内部实现给 `mutate` 用。
-pub fn save_to_disk(app: &AppHandle, data: &WorkbenchData) -> Result<(), String> {
+pub fn save_to_disk(root: &DataRoot, data: &WorkbenchData) -> Result<(), String> {
     let _guard = lock();
-    save_to_disk_unlocked(app, data)
+    save_to_disk_unlocked(root, data)
 }
 
-fn save_to_disk_unlocked(app: &AppHandle, data: &WorkbenchData) -> Result<(), String> {
-    json_store::write_json_atomic(&data_file_path(app)?, data)
+fn save_to_disk_unlocked(root: &DataRoot, data: &WorkbenchData) -> Result<(), String> {
+    root.ensure()?;
+    json_store::write_json_atomic(&data_file_path(root), data)
 }
 
 /// 数据文件锁。
@@ -88,15 +84,15 @@ fn lock() -> std::sync::MutexGuard<'static, ()> {
 /// 在锁内做「读-改-写」，返回被修改后的结果。
 /// `f` 返回 true 表示有变更，需要落盘。
 pub fn mutate<R>(
-    app: &AppHandle,
+    root: &DataRoot,
     f: impl FnOnce(&mut WorkbenchData) -> (R, bool),
 ) -> Result<R, String> {
     let _guard = lock();
-    let mut data = load_from_disk(app)?;
+    let mut data = load_from_disk(root)?;
     let (out, changed) = f(&mut data);
     // 锁内直接调 unlocked 版本：save_to_disk 会再取一次锁 → 死锁
     if changed {
-        save_to_disk_unlocked(app, &data)?;
+        save_to_disk_unlocked(root, &data)?;
     }
     Ok(out)
 }

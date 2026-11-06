@@ -15,6 +15,66 @@ const TAIL_CHUNK: u64 = 64 * 1024;
 /// 运行期检查间隔：日志增长很慢，一分钟一次足够，开销可忽略。
 const ROTATE_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
 
+/// 安装 panic 钩子：把崩溃写进同一个日志文件。
+///
+/// 为什么必须做：Rust 侧 panic 默认只打到 stderr。桌面应用由窗口启动时
+/// 没有控制台，`panic!` 的整段信息（消息 + 位置 + backtrace）会彻底丢失，
+/// 用户看到的是「窗口没了」，维护者拿到的是零线索。日志文件是唯一能跨
+/// 重启留存的地方，所以先装钩子再初始化 logger —— 顺序反了的话，
+/// 早期 panic 仍然写不进去。
+///
+/// 钩子内**只写文件**，不再调用 log 宏：logger 可能在 panic 时正持有锁，
+/// 二次进入会死锁，反而吞掉真正的崩溃信息。
+pub fn install_panic_hook() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        // 保留默认行为（stderr / backtrace 环境变量），再补一份到日志文件。
+        default_hook(info);
+
+        let payload = info
+            .payload()
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| info.payload().downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "<non-string panic payload>".to_string());
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "<unknown location>".to_string());
+
+        let line = format!(
+            "[{}] [PANIC]: {payload} @ {location}
+",
+            Local::now().format("%Y-%m-%d %H:%M:%S")
+        );
+        // 追加写入：不依赖 logger 状态，也不做轮转（崩溃是低频事件）。
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(panic_log_path())
+        {
+            use std::io::Write;
+            let _ = f.write_all(line.as_bytes());
+            let _ = f.flush();
+        }
+    }));
+}
+
+/// panic 日志路径。与 `workbench.log` 同目录，但独立文件：
+/// 崩溃信息不能被日志轮转截断，也不该混进常规运行日志里被淹没。
+fn panic_log_path() -> PathBuf {
+    if let Some(v) = std::env::var_os("WORKBENCH_DATA_DIR") {
+        if !v.is_empty() {
+            let dir = PathBuf::from(v);
+            let _ = std::fs::create_dir_all(&dir);
+            return dir.join("crash.log");
+        }
+    }
+    // 无环境变量时退到临时目录：panic 可能发生在 Tauri 完成路径解析之前，
+    // 此时用 app_data_dir 拿不到值，而写临时目录总比丢失强。
+    std::env::temp_dir().join(format!("{}.crash.log", crate::paths::APP_IDENTIFIER))
+}
+
 pub fn init_logging(app: &AppHandle) {
     let log_path = match log_file_path(app) {
         Some(p) => p,

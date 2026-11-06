@@ -15,12 +15,12 @@
 //! 互斥锁 + SQLite 自己的事务；每次操作新开一个连接，避免恢复备份后
 //! 连接仍指向旧文件（被替换的 inode）。
 
+use crate::paths::DataRoot;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
-use tauri::{AppHandle, Manager};
 
 use crate::json_store;
 
@@ -227,28 +227,19 @@ pub struct CostExportRow {
 
 // ── 路径 ───────────────────────────────────────────────────
 
-fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法定位数据目录: {e}"))?;
-    std::fs::create_dir_all(&dir).map_err(|e| format!("无法创建数据目录: {e}"))?;
-    Ok(dir)
-}
-
 /// 成本库文件路径（供备份命令使用）。
-pub fn cost_db_path(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(app_data_dir(app)?.join("cost.db"))
+pub fn cost_db_path(root: &DataRoot) -> PathBuf {
+    root.cost_db()
 }
 
 /// 旧版本的成本数据文件（迁移源）。
-pub fn legacy_cost_json_path(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(app_data_dir(app)?.join("cost_data.json"))
+pub fn legacy_cost_json_path(root: &DataRoot) -> PathBuf {
+    root.legacy_cost_json()
 }
 
 /// 用户自定义定价覆盖文件路径
-pub fn cost_data_path_overrides(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(app_data_dir(app)?.join("pricing_overrides.json"))
+pub fn cost_data_path_overrides(root: &DataRoot) -> PathBuf {
+    root.pricing_overrides()
 }
 
 // ── 连接与建表 ─────────────────────────────────────────────
@@ -335,16 +326,16 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
     }
 }
 
-fn open(app: &AppHandle) -> Result<Connection, String> {
-    open_at(&cost_db_path(app)?)
+fn open(root: &DataRoot) -> Result<Connection, String> {
+    open_at(&cost_db_path(root))
 }
 
 /// 迁移旧 `cost_data.json`（幂等）。
 ///
 /// 只在旧文件存在时执行一次；成功后改名为 `.migrated` 保留原件。
 /// 迁移失败时**不**改名，下次启动还会重试；数据库里的部分写入由事务回滚。
-fn migrate_legacy_json(app: &AppHandle) -> Result<(), String> {
-    let legacy = legacy_cost_json_path(app)?;
+fn migrate_legacy_json(root: &DataRoot) -> Result<(), String> {
+    let legacy = legacy_cost_json_path(root);
     if !legacy.exists() {
         return Ok(());
     }
@@ -358,7 +349,7 @@ fn migrate_legacy_json(app: &AppHandle) -> Result<(), String> {
         return Ok(());
     };
 
-    let mut conn = open(app)?;
+    let mut conn = open(root)?;
     let tx = conn
         .transaction()
         .map_err(|e| format!("开启迁移事务失败: {e}"))?;
@@ -432,8 +423,8 @@ pub struct OverrideRead {
     pub problems: Vec<String>,
 }
 
-pub fn read_pricing_overrides(app: &AppHandle) -> Result<OverrideRead, String> {
-    read_pricing_overrides_at(&cost_data_path_overrides(app)?)
+pub fn read_pricing_overrides(root: &DataRoot) -> Result<OverrideRead, String> {
+    read_pricing_overrides_at(&cost_data_path_overrides(root))
 }
 
 /// 纯路径版本：可脱离 AppHandle 测试（文件格式、逐条校验、空文件语义）。
@@ -459,10 +450,10 @@ pub fn read_pricing_overrides_at(path: &Path) -> Result<OverrideRead, String> {
 }
 
 pub fn save_pricing_overrides(
-    app: &AppHandle,
+    root: &DataRoot,
     overrides: &HashMap<String, (f64, f64)>,
 ) -> Result<(), String> {
-    save_pricing_overrides_at(&cost_data_path_overrides(app)?, overrides)
+    save_pricing_overrides_at(&cost_data_path_overrides(root), overrides)
 }
 
 /// 纯路径版本：空表删除文件，非空原子写入。
@@ -524,27 +515,27 @@ fn read_settings(conn: &Connection) -> Result<CostSettings, String> {
     Ok(row.unwrap_or_default())
 }
 
-pub fn get_cost_settings(app: &AppHandle) -> Result<CostSettings, String> {
+pub fn get_cost_settings(root: &DataRoot) -> Result<CostSettings, String> {
     let _guard = lock();
-    migrate_legacy_json(app)?;
-    let conn = open(app)?;
+    migrate_legacy_json(root)?;
+    let conn = open(root)?;
     read_settings(&conn)
 }
 
-pub fn save_cost_settings(app: &AppHandle, settings: CostSettings) -> Result<(), String> {
+pub fn save_cost_settings(root: &DataRoot, settings: CostSettings) -> Result<(), String> {
     let _guard = lock();
-    migrate_legacy_json(app)?;
-    let conn = open(app)?;
+    migrate_legacy_json(root)?;
+    let conn = open(root)?;
     save_settings_row(&conn, &settings)
 }
 
 // ── 导入 ───────────────────────────────────────────────────
 
 /// 已入库文件的 (path, mtime, size) 快照，供扫描跳过未变化文件。
-pub fn existing_keys(app: &AppHandle) -> Result<HashMap<(String, u64, u64), ()>, String> {
+pub fn existing_keys(root: &DataRoot) -> Result<HashMap<(String, u64, u64), ()>, String> {
     let _guard = lock();
-    migrate_legacy_json(app)?;
-    let conn = open(app)?;
+    migrate_legacy_json(root)?;
+    let conn = open(root)?;
     let mut stmt = conn
         .prepare("SELECT DISTINCT file_path, file_mtime, file_size FROM records")
         .map_err(|e| format!("准备查询失败: {e}"))?;
@@ -566,13 +557,13 @@ pub fn existing_keys(app: &AppHandle) -> Result<HashMap<(String, u64, u64), ()>,
 }
 
 /// 导入：按 file_path **整组替换**，在单个事务里完成。
-pub fn import_records(app: &AppHandle, new_records: &[CostRecord]) -> Result<usize, String> {
+pub fn import_records(root: &DataRoot, new_records: &[CostRecord]) -> Result<usize, String> {
     if new_records.is_empty() {
         return Ok(0);
     }
     let _guard = lock();
-    migrate_legacy_json(app)?;
-    let mut conn = open(app)?;
+    migrate_legacy_json(root)?;
+    let mut conn = open(root)?;
     let tx = conn
         .transaction()
         .map_err(|e| format!("开启导入事务失败: {e}"))?;
@@ -609,10 +600,10 @@ fn replace_scanned_files(
     Ok(new_records.len().saturating_sub(removed))
 }
 
-pub fn clear_records(app: &AppHandle) -> Result<(), String> {
+pub fn clear_records(root: &DataRoot) -> Result<(), String> {
     let _guard = lock();
-    migrate_legacy_json(app)?;
-    let conn = open(app)?;
+    migrate_legacy_json(root)?;
+    let conn = open(root)?;
     conn.execute("DELETE FROM records", [])
         .map_err(|e| format!("清空成本记录失败: {e}"))?;
     // 删完顺手回收空间：十万条记录的文件可能几十 MB，用户点「清空」后
@@ -633,14 +624,14 @@ pub struct ScanOutcome {
 
 /// 扫描落库 + 聚合，全程一个连接、一个事务。
 pub fn import_and_aggregate(
-    app: &AppHandle,
+    root: &DataRoot,
     records: &[CostRecord],
     scanned_paths: &[String],
     trend_days: usize,
 ) -> Result<ScanOutcome, String> {
     let _guard = lock();
-    migrate_legacy_json(app)?;
-    let mut conn = open(app)?;
+    migrate_legacy_json(root)?;
+    let mut conn = open(root)?;
     let tx = conn
         .transaction()
         .map_err(|e| format!("开启事务失败: {e}"))?;
@@ -658,42 +649,42 @@ pub fn import_and_aggregate(
     })
 }
 
-pub fn build_overview(app: &AppHandle) -> Result<CostOverview, String> {
+pub fn build_overview(root: &DataRoot) -> Result<CostOverview, String> {
     let _guard = lock();
-    migrate_legacy_json(app)?;
-    let conn = open(app)?;
+    migrate_legacy_json(root)?;
+    let conn = open(root)?;
     let settings = read_settings(&conn)?;
     overview_sql(&conn, &settings)
 }
 
-pub fn build_trend(app: &AppHandle, days: usize) -> Result<Vec<CostTrendRow>, String> {
+pub fn build_trend(root: &DataRoot, days: usize) -> Result<Vec<CostTrendRow>, String> {
     let _guard = lock();
-    migrate_legacy_json(app)?;
-    let conn = open(app)?;
+    migrate_legacy_json(root)?;
+    let conn = open(root)?;
     let settings = read_settings(&conn)?;
     trend_sql(&conn, days, settings.include_estimated)
 }
 
-pub fn build_model_breakdown(app: &AppHandle) -> Result<Vec<ModelBreakdownRow>, String> {
+pub fn build_model_breakdown(root: &DataRoot) -> Result<Vec<ModelBreakdownRow>, String> {
     let _guard = lock();
-    migrate_legacy_json(app)?;
-    let conn = open(app)?;
+    migrate_legacy_json(root)?;
+    let conn = open(root)?;
     let settings = read_settings(&conn)?;
     breakdown_sql(&conn, settings.include_estimated)
 }
 
-pub fn build_project_breakdown(app: &AppHandle) -> Result<Vec<ProjectBreakdownRow>, String> {
+pub fn build_project_breakdown(root: &DataRoot) -> Result<Vec<ProjectBreakdownRow>, String> {
     let _guard = lock();
-    migrate_legacy_json(app)?;
-    let conn = open(app)?;
+    migrate_legacy_json(root)?;
+    let conn = open(root)?;
     let settings = read_settings(&conn)?;
     project_breakdown_sql(&conn, settings.include_estimated)
 }
 
-pub fn build_trend_extended(app: &AppHandle, days: usize) -> Result<ExtendedTrend, String> {
+pub fn build_trend_extended(root: &DataRoot, days: usize) -> Result<ExtendedTrend, String> {
     let _guard = lock();
-    migrate_legacy_json(app)?;
-    let conn = open(app)?;
+    migrate_legacy_json(root)?;
+    let conn = open(root)?;
     let settings = read_settings(&conn)?;
     let daily = trend_sql(&conn, days, settings.include_estimated)?;
     // 月度桶从「日粒度最早一天」之前开始，按构造不重叠。
@@ -711,10 +702,10 @@ pub fn build_trend_extended(app: &AppHandle, days: usize) -> Result<ExtendedTren
 
 /// 台账导出。`limit` 同时是防误用的上限：全量导出也最多 20 万行，
 /// 超出的部分按时间保留最新的（SQL 按天升序 + 限长在子查询里完成）。
-pub fn build_cost_export(app: &AppHandle, limit: usize) -> Result<Vec<CostExportRow>, String> {
+pub fn build_cost_export(root: &DataRoot, limit: usize) -> Result<Vec<CostExportRow>, String> {
     let _guard = lock();
-    migrate_legacy_json(app)?;
-    let conn = open(app)?;
+    migrate_legacy_json(root)?;
+    let conn = open(root)?;
     export_records_sql(&conn, limit.clamp(1, 200_000))
 }
 
@@ -1003,10 +994,10 @@ fn export_records_sql(conn: &Connection, limit: usize) -> Result<Vec<CostExportR
 /// 直接复制 .db 在正常情况下也可行（回滚日志已合并），但应用正在写入时
 /// 复制可能拿到「主文件已改、日志未合并」的中间态。VACUUM INTO 由 SQLite
 /// 自己保证快照一致，代价是一次全量重写（备份本来就要复制全量）。
-pub fn snapshot_db(app: &AppHandle, dest: &Path) -> Result<(), String> {
+pub fn snapshot_db(root: &DataRoot, dest: &Path) -> Result<(), String> {
     let _guard = lock();
-    migrate_legacy_json(app)?;
-    let conn = open(app)?;
+    migrate_legacy_json(root)?;
+    let conn = open(root)?;
     if dest.exists() {
         std::fs::remove_file(dest).map_err(|e| format!("清理旧快照失败: {e}"))?;
     }
