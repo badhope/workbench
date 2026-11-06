@@ -24,7 +24,7 @@ repository, not an aspiration.
 | i18n (3+ languages) | ● | ● | ○ | ○ | ○ | ● | ○ | ○ |
 | Keyboard command palette | ● | ○ | ○ | ◐ | ○ | ○ | ◐ | ○ |
 | CSV export | ● | ○ | ● | ◐ | ● | ○ | ● | ● |
-| Browser/web mode | ● (demo) | ○ | ○ | ○ | ● | ● | ○ | ○ |
+| Browser/web mode | ● (live, local) | ○ | ○ | ○ | ● | ● | ○ | ○ |
 | Scriptable CLI | ● | ○ | ◐ | ◐ | ● | ○ | ● | ● |
 | Plugin / extension API | ○ | ○ | ● | ○ | ● | ○ | ◐ | ○ |
 | Auto-update | ○ | ○ | ● | ○ | ◐ | ● | ○ | ○ |

@@ -2,10 +2,10 @@
 
 **English** | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-[![Version](https://img.shields.io/badge/version-0.6.0-22d3ee)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.md#system-requirements)
-[![Tests](https://img.shields.io/badge/tests-489%20unit%20%2B%20136%20backend-8b5cf6)](#quality-gates)
+[![Tests](https://img.shields.io/badge/tests-532%20unit%20%2B%20161%20backend-8b5cf6)](#quality-gates)
 
 ![Workbench](docs/screenshots/12-brand-hero.png)
 
@@ -26,6 +26,17 @@ to configure.
 | **Keyboard-first** | Ctrl/Cmd+K searches every page, process, port, project and task. Flat table or parent/child tree. Everything reachable without the mouse. |
 | **Trustworthy by construction** | Protected system processes are rejected in Rust, the target identity is re-checked right before a kill, UAC elevation is opt-in per action, and every report states what it verified. |
 | **Local-first, honestly** | SQLite ledger on your disk, CSP locked to `self`, no telemetry. The only outbound request is the optional probe of a local opencode server. |
+
+## Three ways to run it
+
+| Mode | Start it | What you get |
+|------|----------|--------------|
+| **Desktop** | install the bundle, or `npm run tauri dev` | The full app: tray, global shortcut, elevated kill, native notifications |
+| **Web** | `workbench serve` | The same backend over HTTP on `127.0.0.1:7788`, serving the built UI to your browser. Real processes, ports and cost ledger — not demo data. Read-only for machine state: no kill endpoint, no remote access |
+| **Demo** | open the deployed landing page | Static sample data so the UI can be evaluated without installing anything |
+
+The header badge always says which one you are looking at — `Live`, `Web · live data`
+or `Demo` — so a number on screen is never ambiguous about being real.
 
 ## Screenshots
 
@@ -86,7 +97,8 @@ data appears in it). [Download the MP4](docs/screenshots/workbench-demo.mp4).
 | **Backup & restore** | Timestamped snapshots with one-click rollback and integrity checks (`VACUUM INTO` + `PRAGMA integrity_check`) |
 | **Start at login** | Real OS registration (registry / autostart entry), toggle reads back from the OS |
 | **Environment check** | Per-item ok / warn / fail report for platform, data directory, cost DB, session folders and port tools, with a copyable summary |
-| **CLI mode** | The same binary answers `workbench ps`, `workbench ports` and `workbench diag` (add `--json`) — read-only, scriptable, no window |
+| **CLI mode** | One binary, four read-only commands: `ps`, `ports`, `diag`, `cost` (all support `--json`). Scriptable, no window |
+| **Web mode** | `workbench serve` starts the same backend over HTTP and serves the built UI to a browser on the same machine — real process/port/cost data, not a demo |
 | **Visual system** | 7 overview layouts × 8 themes × 3 shells, draggable & hideable widgets with per-widget widths, theme editor with share links |
 | **Trilingual UI** | 简体中文 (default) / English / 日本語 |
 | **Cross-platform** | CI defines Windows, Linux and macOS jobs, including Linux `.deb` and macOS `.app` builds |
@@ -102,8 +114,8 @@ steps run locally (`node scripts/ci-local.mjs`) and in CI:
 | `npx tsc --noEmit` | type errors, including the generated IPC contract |
 | `npm run lint` · `npm run format:check` | zero-warning ESLint, Prettier |
 | `npm run dup` | duplicated code above 3 % |
-| `npm run coverage` | 408 frontend tests with an enforced threshold |
-| `cargo test` | 131 backend tests, plus the ts-rs binding export |
+| `npm run coverage` | 532 frontend tests with an enforced threshold |
+| `cargo test` | 161 backend tests, plus the ts-rs binding export |
 | `cargo clippy -- -D warnings` | Rust lints, zero tolerated |
 | `npm audit` · `cargo audit` | known vulnerabilities in either dependency tree |
 | `npm run test:e2e` | 28 Playwright cases: structure, WCAG AA contrast, visual baselines |
@@ -142,10 +154,12 @@ node scripts/ci-local.mjs --fast   # skip the visual-regression pass
 Command line (same executable, no window):
 
 ```bash
-workbench ps            # every process: pid, name, cpu%, memory, parent, status
-workbench ports         # listening TCP/UDP ports with the owning PID
-workbench diag          # environment self-check
-workbench ports --json  # machine-readable output for scripts
+workbench ps              # every process: pid, name, cpu%, memory, parent, status
+workbench ports           # listening TCP/UDP ports with the owning PID
+workbench diag            # environment self-check
+workbench cost            # AI session cost summary (--days N, --by-project)
+workbench serve           # headless HTTP API + web UI on 127.0.0.1:7788
+workbench ports --json    # machine-readable output for scripts
 ```
 
 Tech stack, project structure, FAQ, screenshots and everything else live in

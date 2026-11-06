@@ -246,7 +246,9 @@ Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×�
 - 成本账本使用 SQLite（`cost.db`，rusqlite bundled），按日 / 模型 / 文件建索引；聚合在 SQL 内完成，十万条记录约 250ms，而不是每次查询都重新解析整个 JSON。旧 `cost_data.json` 首次启动自动导入并改名为 `.migrated`（不删除）
 - 此处未验证 Release 安装包的签名状态和可用性
 - 托盘菜单文案为中英双语，且不跟随界面语言切换（启动时构建一次）
-- 没有插件 API、HTTP API 与远程监控——这是有意的取舍，代价写在
+- **没有插件 API、没有远程/多机监控**——这是有意的取舍。但本机 HTTP API
+  是有的：`workbench serve` 把同一套读取路径暴露给同机浏览器，只绑回环地址，
+  不构成远程监控能力。代价写在
   [COMPARISON.zh-CN.md](COMPARISON.zh-CN.md) 里
 
 ## 数据存储

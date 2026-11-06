@@ -194,9 +194,23 @@ async function main() {
   // Hero：页头品牌区（logo + 标题 + 副标题）。三份 README 的首图，坐标
   // 基于 1440×900 视口下的概览页页头（侧栏 220px + 标题区）。
   await gotoPage(page, "overview", keys);
+  // 高度必须容得下副标题换行：英文副标题在 820px 宽下会折成两行，
+  // 原先写死 height:120 把第二行切掉，README 首图看起来像被裁坏了。
+  // 用 masthead 的真实包围盒（`main > header`），换语言/改文案都不会再切。
+  const heroBox = await page.evaluate(() => {
+    const header = document.querySelector("main header");
+    if (!header) return null;
+    const r = header.getBoundingClientRect();
+    return { top: r.top, height: r.height };
+  });
   await page.screenshot({
     path: path.join(OUT_DIR, "12-brand-hero.png"),
-    clip: { x: 236, y: 56, width: 820, height: 120 },
+    clip: {
+      x: 236,
+      y: Math.max(48, Math.floor((heroBox?.top ?? 72) - 8)),
+      width: 820,
+      height: heroBox ? Math.ceil(heroBox.height) + 30 : 160,
+    },
   });
   console.log("  12-brand-hero.png");
 

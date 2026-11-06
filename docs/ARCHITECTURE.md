@@ -304,9 +304,48 @@ release is cut — lives in [ROADMAP.md](ROADMAP.md). Summary:
 - Signing status and availability of release installers have not been verified here
 - The tray menu text is bilingual Chinese/English and does not follow the UI
   language switch (it is built once at startup)
-- No plugin API, no HTTP API and no remote monitoring — by design, see
-  [COMPARISON.md](COMPARISON.md) for what that costs us against Glances and
-  System Informer
+- **No plugin API and no remote/multi-machine monitoring** — by design.
+  A local-only HTTP API *does* exist: `workbench serve` (see below) exposes the
+  same read paths to a browser on the same machine; it binds to loopback only
+  and is not a remote-monitoring story. See [COMPARISON.md](COMPARISON.md) for
+  what the missing pieces cost us against Glances and System Informer
+
+## HTTP mode (`workbench serve`)
+
+The desktop shell and the headless server share one backend: `paths::DataRoot`
+resolves the data directory, `cost_store` / `data` / `runtime` contain no
+`AppHandle`, and `server.rs` only maps JSON onto those calls. That is deliberate —
+two implementations of "how much did this session cost" would drift apart within
+a release or two.
+
+```
+workbench serve --port 7788 --dist dist
+```
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/health` | Liveness + capability list (used by the frontend to detect a backend) |
+| `GET /api/version` | Version + API schema number |
+| `GET /api/snapshot` | Processes + ports + dev servers in one round trip |
+| `GET /api/processes`, `/ports`, `/dev-servers`, `/ai-processes` | Individual collections |
+| `GET /api/sessions`, `/sessions/opencode` | Local session previews; opencode probe |
+| `GET /api/system`, `/disks` | Host info and volume usage |
+| `GET/PUT /api/data` | Projects & tasks |
+| `GET /api/cost/overview`, `/trend`, `/trend-extended`, `/models`, `/projects`, `/export` | Ledger views |
+| `GET/PUT /api/cost/settings`, `POST /api/cost/scan` | Budget settings; session scan |
+| `GET /api/diagnostics` | Environment self-check |
+
+Deliberate limits: no endpoint terminates a process, opens a path, or clears the
+ledger. Those are irreversible and the browser has no trustworthy "user
+confirmed" signal (CSRF, stray clicks, scripted tabs), so they stay in the
+desktop confirmation flow. Everything binds to `127.0.0.1` by default; there is
+no authentication because there is no remote story — put it behind a reverse
+proxy and add auth yourself if you need one.
+
+The frontend picks its transport at startup (`src/lib/transport.ts`):
+`__TAURI_INTERNALS__` → IPC, else `GET /api/health` succeeds → REST, else the
+static demo bundle. The three states are visible in the header badge so a user is
+never left guessing whether the numbers are real.
 
 ## Data storage
 

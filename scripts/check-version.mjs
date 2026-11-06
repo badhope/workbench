@@ -39,7 +39,10 @@ const cargo = read("src-tauri/Cargo.toml");
 const cargoVersion = cargo.match(/^\[package\][\s\S]*?^version\s*=\s*"([^"]+)"/m)?.[1];
 sources.push({ file: "src-tauri/Cargo.toml", version: cargoVersion });
 
-const cargoLock = read("src-tauri/Cargo.lock");
+// 行尾统一再匹配：Windows 上 Cargo.lock 由 cargo 以 CRLF 写出，而检出或
+// 手工编辑可能产生 LF。写死 `\n` 会让门禁在 Windows 上假红（更糟的是在
+// 别的机器上假绿）。
+const cargoLock = read("src-tauri/Cargo.lock").replace(/\r\n/g, "\n");
 const lockVersion = cargoLock.match(
   /\[\[package\]\]\nname = "workbench"\nversion = "([^"]+)"/
 )?.[1];

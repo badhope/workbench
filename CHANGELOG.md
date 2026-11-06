@@ -3,6 +3,51 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.0] - 2026-11-07
+
+### Added — 第三种运行形态：浏览器 + 真实后端
+
+- **`workbench serve`**：同一个可执行文件现在能当服务器用。`serve --port 7788
+  --dist dist` 起 axum HTTP 服务，把进程、端口、开发服务器、AI 会话、成本账本
+  以 REST 暴露给同机浏览器。默认只绑 `127.0.0.1`，没有账号、没有认证，也
+  没有远程监控——它是「同一台机器换个界面」，不是多机方案。
+- **前端三态传输**（`src/lib/transport.ts`）：启动时判定 `__TAURI_INTERNALS__`
+  → IPC，`GET /api/health` 成功 → REST，都不满足 → 静态演示数据。顶栏与侧栏
+  徽章显示「实时 / Web · 真实数据 / 演示」，用户永远不会看着假数据猜真假。
+- **`workbench cost`**：成本账本终于有 CLI。`cost`（人读）、`--json`（含
+  `schema` 与 `generated_at` 的稳定契约）、`--days N`、`--by-project`。
+- **崩溃可见**：安装 panic hook，把消息与位置追加到 `crash.log`；环境自检页
+  在存在崩溃记录时多出一条 warn，附最后一行摘要。桌面应用没有控制台，
+  在此之前 panic 信息是彻底丢失的。
+
+### Changed — 后端解耦，为三入口共用一套逻辑
+
+- 新增 `paths::DataRoot`：数据目录解析从 `AppHandle` 剥离。`cost_store` /
+  `data` 不再依赖 Tauri，桌面、CLI、HTTP 三条入口调用同一份实现。此前
+  `cost_store.rs` 有 24 处 `AppHandle` 引用，是「无法脱离桌面壳运行」的
+  唯一障碍。
+- 新增 `runtime`：端口缓存、PID 索引、dev server 组装、AI 进程识别、
+  opencode 端口发现从 IPC 命令层抽出，HTTP 与 IPC 共用，避免两套口径。
+- `list_ai_processes`、`system_info`、`disk_info` 增加同步实现并在两处复用。
+
+### Fixed
+
+- **端口「打开」链接**：原先是硬编码 `http://localhost:PORT`，IPv6 监听、
+  HTTPS 服务、UDP 端口全部给出错误地址。改为按实际监听地址与常见 TLS 端口
+  推断，且 UDP 不再显示该按钮（没有可打开的语义）。
+- **版本门禁在 Windows 上假红**：`check-version.mjs` 用 `
+` 匹配 Cargo.lock，
+  而 cargo 在 Windows 写 CRLF。现在先归一化行尾再匹配。
+- 文档漂移：架构文档（en/zh/ja）此前写「没有 HTTP API」，与 0.7.0 的实现矛盾；
+  COMPARISON 的「浏览器模式」从「演示」更正为「本地实时」。
+
+### Notes
+
+- Web 模式**不提供**结束进程、打开路径、清空成本库。这些不可逆操作需要可信的
+  用户确认，浏览器里没有等价保证，因此留在桌面确认流程里。
+- `--allow-origin` 只为「前端单独跑在 5173 端口」这类开发场景准备，默认不加
+  CORS 层。
+
 ## [0.6.0] - 2026-11-04
 
 ### Added — 视觉 2.0（体验与个性化专项）

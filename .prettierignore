@@ -9,3 +9,4 @@ package-lock.json
 src-tauri/Cargo.lock
 CHANGELOG.md
 *.md
+.tmp

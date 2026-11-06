@@ -2,10 +2,10 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | **日本語**
 
-[![Version](https://img.shields.io/badge/version-0.6.0-22d3ee)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.ja.md#システム要件)
-[![Tests](https://img.shields.io/badge/tests-489%20unit%20%2B%20136%20backend-8b5cf6)](#品質ゲート)
+[![Tests](https://img.shields.io/badge/tests-532%20unit%20%2B%20161%20backend-8b5cf6)](#品質ゲート)
 
 ![Workbench](docs/screenshots/12-brand-hero.png)
 
@@ -25,6 +25,16 @@
 | **キーボード優先** | Ctrl/Cmd+K でページ・プロセス・ポート・プロジェクト・タスクを横断検索。フラット表と親子ツリーの 2 表示。 |
 | **実装で担保する信頼性** | 保護対象プロセスは Rust 層で拒否、終了直前に同一性を再検証、昇格は都度承認。レポートには検証内容を明記。 |
 | **誠実なローカルファースト** | 台帳はローカル SQLite、CSP は self 固定、テレメトリなし。外部通信は任意のローカル opencode 探索のみ。 |
+
+## 3 つの実行形態
+
+| 形態 | 起動方法 | 得られるもの |
+|------|----------|--------------|
+| **デスクトップ** | インストーラー、または `npm run tauri dev` | トレイ、グローバルショートカット、管理者権限での終了、ネイティブ通知を含む全機能 |
+| **Web** | `workbench serve` | 同じバックエンドを `127.0.0.1:7788` で HTTP 公開し、ビルド済み UI をブラウザに配信。プロセス・ポート・コストはすべて実データで、デモではありません。マシン状態は読み取り専用（終了エンドポイントなし、外部公開なし） |
+| **デモ** | 公開ランディングページを開く | インストール不要で UI を評価できる静的サンプルデータ |
+
+ヘッダーのバッジは常に現在の形態（`ライブ` / `Web · 実データ` / `デモ`）を示すため、画面の数字が本物かどうか曖昧になりません。
 
 ## スクリーンショット
 
@@ -84,7 +94,8 @@
 | **バックアップ & 復元** | タイムスタンプ付きスナップショット、ワンクリック復元、整合性チェック（`VACUUM INTO` + `PRAGMA integrity_check`） |
 | **ログイン時に起動** | 実際の OS 登録（レジストリ / autostart）。トグルは OS から状態を再読込 |
 | **環境チェック** | プラットフォーム、データフォルダー、コスト DB、セッションフォルダー、ポートツールを ok / warn / fail で個別表示。レポートはコピー可能 |
-| **CLI モード** | 同じ実行ファイルで `workbench ps` / `ports` / `diag`（`--json` 対応）。読み取り専用でスクリプト化可能、ウィンドウなし |
+| **CLI モード** | 1 つの実行ファイルで 4 つの読み取り専用コマンド: `ps` / `ports` / `diag` / `cost`（すべて `--json` 対応）。スクリプト化可能、ウィンドウなし |
+| **Web モード** | `workbench serve` が同じバックエンドを HTTP で公開し、ビルド済み UI を同一マシンのブラウザに配信。実際のプロセス/ポート/コストデータで、デモではありません |
 | **ビジュアルシステム** | 7 レイアウト × 8 テーマ × 3 シェル、ドラッグ / 非表示 + 個別幅設定、テーマエディタと共有リンク |
 | **三言語 UI** | 简体中文（既定）/ English / 日本語 |
 | **クロスプラットフォーム** | CI に Windows / Linux / macOS のジョブを定義。Linux `.deb` と macOS `.app` のビルドを含む |
@@ -100,8 +111,8 @@
 | `npx tsc --noEmit` | 型エラー（生成された IPC 契約を含む） |
 | `npm run lint` · `npm run format:check` | ESLint 警告ゼロ、Prettier 整形 |
 | `npm run dup` | 重複コード 3% 超 |
-| `npm run coverage` | フロントエンド 408 テスト、カバレッジ閾値付き |
-| `cargo test` | バックエンド 131 テスト + ts-rs バインディング出力 |
+| `npm run coverage` | フロントエンド 532 テスト、カバレッジ閾値付き |
+| `cargo test` | バックエンド 161 テスト + ts-rs バインディング出力 |
 | `cargo clippy -- -D warnings` | Rust lint、警告ゼロ |
 | `npm audit` · `cargo audit` | 両方の依存ツリーの既知脆弱性 |
 | `npm run test:e2e` | Playwright 28 ケース: 構造、WCAG AA コントラスト、視覚ベースライン |
@@ -140,10 +151,12 @@ node scripts/ci-local.mjs --fast   # 視覚回帰をスキップ
 コマンドライン（同じ実行ファイル、ウィンドウなし）:
 
 ```bash
-workbench ps            # 全プロセス: PID、名前、CPU%、メモリ、親、状態
-workbench ports         # 待受ポートと所有 PID
-workbench diag          # 環境チェック
-workbench ports --json  # スクリプト向け JSON
+workbench ps              # 全プロセス: PID、名前、CPU%、メモリ、親、状態
+workbench ports           # 待受ポートと所有 PID
+workbench diag            # 環境チェック
+workbench cost            # AI セッションのコスト概要（--days N、--by-project）
+workbench serve           # ヘッドレス HTTP API + Web UI（127.0.0.1:7788）
+workbench ports --json    # スクリプト向け JSON
 ```
 
 技術スタック・プロジェクト構成・FAQ・ロードマップ・スクリーンショット一覧などは

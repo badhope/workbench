@@ -2,10 +2,10 @@
 
 [English](README.md) | **简体中文** | [日本語](README.ja.md)
 
-[![Version](https://img.shields.io/badge/version-0.6.0-22d3ee)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.zh-CN.md#系统要求)
-[![Tests](https://img.shields.io/badge/tests-489%20unit%20%2B%20136%20backend-8b5cf6)](#质量门禁)
+[![Tests](https://img.shields.io/badge/tests-532%20unit%20%2B%20161%20backend-8b5cf6)](#质量门禁)
 
 ![工作台](docs/screenshots/12-brand-hero.png)
 
@@ -24,6 +24,16 @@
 | **键盘优先** | Ctrl/Cmd+K 一次搜索页面、进程、端口、项目、任务；进程支持列表与父子树双视图，全流程不用鼠标。 |
 | **可靠性写进实现** | 受保护系统进程在 Rust 层直接拒绝；结束前重新校验目标身份；提权按次授权；每份报告都写清它验证了什么。 |
 | **诚实的本地优先** | 账本是本机 SQLite，CSP 收紧到 self，无遥测。唯一的外部请求是可选地探测本机 opencode 服务。 |
+
+## 三种运行方式
+
+| 形态 | 启动方式 | 你能得到什么 |
+|------|----------|--------------|
+| **桌面** | 装安装包，或 `npm run tauri dev` | 完整能力：托盘、全局快捷键、提权结束进程、系统通知 |
+| **Web** | `workbench serve` | 同一套后端以 HTTP 跑在 `127.0.0.1:7788`，把构建好的界面临给浏览器。进程、端口、成本都是真的，不是演示数据。对机器状态只读：没有结束进程的端点，也不对外网开放 |
+| **演示** | 打开已部署的落地页 | 静态样例数据，不安装也能评估界面 |
+
+顶栏徽章始终标明当前处在哪一种——`实时` / `Web · 真实数据` / `演示`——屏幕上的数字不会含糊其辞。
 
 ## 界面预览
 
@@ -84,7 +94,8 @@
 | **备份恢复** | 带时间戳快照，一键回滚，恢复前完整性校验（`VACUUM INTO` + `PRAGMA integrity_check`） |
 | **开机自启** | 真实系统级注册（注册表 / autostart），开关状态回读操作系统 |
 | **环境自检** | 平台、数据目录、成本库、会话目录、端口工具逐项 ok / warn / fail，报告可一键复制 |
-| **命令行模式** | 同一个可执行文件支持 `workbench ps` / `ports` / `diag`（加 `--json`），只读、可进脚本、不弹窗口 |
+| **命令行模式** | 一个可执行文件，四条只读命令：`ps` / `ports` / `diag` / `cost`（都支持 `--json`），可进脚本、不弹窗口 |
+| **Web 模式** | `workbench serve` 用 HTTP 起同一套后端，并把构建好的界面临给同机浏览器——真实进程/端口/成本数据，不是演示 |
 | **视觉系统** | 7 种概览版面 × 8 套主题 × 3 种外壳，组件可拖拽 / 隐藏并单独设宽度，主题编辑器与分享链接 |
 | **三语界面** | 简体中文（默认）/ English / 日本語 |
 | **跨平台** | CI 定义了 Windows、Linux 和 macOS 的任务，包括 Linux `.deb` 与 macOS `.app` 构建 |
@@ -100,8 +111,8 @@
 | `npx tsc --noEmit` | 类型错误，含生成的 IPC 契约 |
 | `npm run lint` · `npm run format:check` | ESLint 零告警、Prettier 格式 |
 | `npm run dup` | 重复代码超过 3% |
-| `npm run coverage` | 408 个前端测试，带覆盖率阈值 |
-| `cargo test` | 131 个后端测试，以及 ts-rs 绑定导出 |
+| `npm run coverage` | 532 个前端测试，带覆盖率阈值 |
+| `cargo test` | 161 个后端测试，以及 ts-rs 绑定导出 |
 | `cargo clippy -- -D warnings` | Rust lint，零容忍 |
 | `npm audit` · `cargo audit` | 两套依赖树中的已知漏洞 |
 | `npm run test:e2e` | 28 个 Playwright 用例：结构、WCAG AA 对比度、视觉基线 |
@@ -139,10 +150,12 @@ node scripts/ci-local.mjs --fast   # 跳过视觉回归
 命令行（同一个可执行文件，不弹窗口）：
 
 ```bash
-workbench ps            # 全部进程：pid、名称、CPU%、内存、父进程、状态
-workbench ports         # 监听端口及所属 PID
-workbench diag          # 环境自检
-workbench ports --json  # 供脚本消费的 JSON
+workbench ps              # 全部进程：pid、名称、CPU%、内存、父进程、状态
+workbench ports           # 监听端口及所属 PID
+workbench diag            # 环境自检
+workbench cost            # AI 会话成本摘要（--days N、--by-project）
+workbench serve           # 无界面 HTTP API + Web 界面（127.0.0.1:7788）
+workbench ports --json    # 供脚本消费的 JSON
 ```
 
 技术栈、项目结构、常见问题、截图全览等内容都在

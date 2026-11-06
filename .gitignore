@@ -23,3 +23,10 @@ blob-report/
 __pycache__/
 *.pyc
 tmp-*
+
+# 本地临时目录（截图草稿、构建日志、serve 测试数据）
+.tmp/
+
+# CI 日志误下载时不要入库（256KB 的 runner 输出，无任何价值）
+*.log
+!docs/**/*.log
