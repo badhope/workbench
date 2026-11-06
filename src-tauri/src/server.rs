@@ -22,8 +22,8 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use axum::extract::{Query, State};
-use axum::http::StatusCode;
+use axum::extract::{OriginalUri, Query, State};
+use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -39,6 +39,71 @@ use crate::diagnostics;
 use crate::paths::DataRoot;
 use crate::runtime::RuntimeSnapshot;
 use crate::session_meter::ScanReadBudget;
+
+/// 编译期嵌入的前端构建产物（`../dist`）。
+///
+/// 为什么必须嵌入：NSIS 安装包只放一个 exe，用户机器上没有源码树，
+/// 也没有 `dist/`。原先 `resolve_static_dir` 的最后一条回落是
+/// `env!("CARGO_MANIFEST_DIR")/../dist` —— 那是**构建机**的路径，
+/// 实测在安装版上所有文件系统候选都落空、`GET /` 返回 404，
+/// Web 模式等于不可用。嵌入之后单文件自包含：拷走 exe 也能起完整的
+/// 「API + 页面」服务，这与「local-first、单二进制」的产品形态一致。
+///
+/// 体积代价：dist 约 1.3 MB（未压缩），gzip 后远小于 Rust 链接器本就
+/// 产出的二进制增量，可以接受。debug 构建下 rust-embed 直接读文件系统，
+/// 便于改前端后不重编 Rust。
+#[derive(rust_embed::RustEmbed)]
+#[folder = "../dist"]
+struct WebAssets;
+
+/// 嵌入资源的 MIME 猜测：按扩展名给 `Content-Type`。
+///
+/// 只覆盖构建产物实际出现的类型；漏掉的类型浏览器会当 `text/plain`
+/// 渲染，CSS/JS 直接不生效，所以这里宁多勿少，且全部小写。
+fn mime_for(path: &str) -> &'static str {
+    match path.rsplit('.').next().unwrap_or("") {
+        "html" => "text/html; charset=utf-8",
+        "js" | "mjs" => "text/javascript; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "json" => "application/json",
+        "svg" => "image/svg+xml",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "ico" => "image/x-icon",
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        "ttf" => "font/ttf",
+        "map" => "application/json",
+        "txt" => "text/plain; charset=utf-8",
+        "webmanifest" => "application/manifest+json",
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
+        "wasm" => "application/wasm",
+        _ => "application/octet-stream",
+    }
+}
+
+/// 从嵌入资源解析一个路径。目录索引回落到 `index.html`（SPA 路由刷新）。
+/// 是否带上了前端产物（以 index.html 存在为准）。
+pub fn has_embedded_assets() -> bool {
+    WebAssets::get("index.html").is_some()
+}
+
+fn embedded_file(path: &str) -> Option<(Vec<u8>, &'static str)> {
+    let clean = path.trim_start_matches('/');
+    // 依次尝试：原路径 → 目录下 index.html → SPA 回落 index.html。
+    // 前两者保证 /assets/xxx.js 命中真实文件，最后一条保证 /some/route
+    // 刷新时拿到的是应用而不是 404。
+    for candidate in [clean, &format!("{clean}/index.html"), "index.html"] {
+        if let Some(file) = WebAssets::get(candidate) {
+            let data = file.data.into_owned();
+            return Some((data, mime_for(candidate)));
+        }
+    }
+    None
+}
 
 /// 服务运行参数。
 #[derive(Debug, Clone)]
@@ -85,6 +150,13 @@ struct ApiError {
 }
 
 impl ApiError {
+    fn not_found(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::NOT_FOUND,
+            message: message.into(),
+        }
+    }
+
     fn internal(message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,
@@ -128,12 +200,18 @@ pub fn router(state: AppState, opts: &ServeOptions) -> Router {
         .route("/cost/projects", get(cost_projects))
         .route("/cost/export", get(cost_export))
         .route("/cost/settings", get(cost_settings).put(save_cost_settings))
+        .route("/cost/pricing", get(pricing_view).put(save_pricing_view))
         .route("/cost/scan", post(cost_scan))
         .with_state(state);
 
     let mut app = Router::new().nest("/api", api);
 
-    // 静态站点：有 dist 就挂，没有就只跑 API（容器里做纯数据服务也合理）。
+    // 静态站点，两级来源：
+    // 1) 显式/自动发现的磁盘目录（开发时改完前端刷新即生效，不必重编 Rust）；
+    // 2) 编译期嵌入的产物 —— 安装版只有一个 exe，用户机器上没有源码树，
+    //    磁盘候选全部落空（实测 GET / 404），嵌入是唯一可靠的来源。
+    // 没有嵌入资源也允许只跑 API（容器里做纯数据服务合理），所以
+    // fallback 只在两者都不可用时保持 axum 默认 404。
     if let Some(dir) = &opts.static_dir {
         let index = dir.join("index.html");
         if index.is_file() {
@@ -141,6 +219,8 @@ pub fn router(state: AppState, opts: &ServeOptions) -> Router {
             let serve = ServeDir::new(dir).fallback(ServeFile::new(&index));
             app = app.fallback_service(serve);
         }
+    } else if has_embedded_assets() {
+        app = app.fallback_service(get(serve_embedded));
     }
 
     let mut app = app.layer(TraceLayer::new_for_http());
@@ -172,6 +252,21 @@ pub fn router(state: AppState, opts: &ServeOptions) -> Router {
 }
 
 /// 启动服务并阻塞到进程退出。返回实际绑定地址（`--port 0` 时有用）。
+/// 嵌入资源的请求处理：解析路径 → 200 + MIME，未命中回落 index.html。
+async fn serve_embedded(OriginalUri(uri): OriginalUri) -> Response {
+    // /api/* 未命中必须仍是 404 JSON：脚本消费者靠状态码判断，回落到
+    // index.html 会让他们拿到 200 + HTML（解析出 "Unexpected token <"）。
+    // 这是嵌入回落引入前的既有契约，测试 unknown_api_route_is_404_not_html 锁定。
+    let path = uri.path().trim_start_matches('/');
+    if path.starts_with("api/") {
+        return ApiError::not_found("no such API route").into_response();
+    }
+    match embedded_file(path) {
+        Some((data, mime)) => ([(header::CONTENT_TYPE, mime)], data).into_response(),
+        None => (StatusCode::NOT_FOUND, "no such asset").into_response(),
+    }
+}
+
 pub async fn serve(opts: ServeOptions) -> Result<(), String> {
     let state = AppState::new(opts.data_root.clone());
     let app = router(state, &opts);
@@ -186,6 +281,8 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
     println!("  data dir: {}", opts.data_root.as_path().display());
     if let Some(dir) = &opts.static_dir {
         println!("  static:   {}", dir.display());
+    } else if has_embedded_assets() {
+        println!("  static:   embedded ({} files)", WebAssets::iter().count());
     }
     println!("  API:      {actual}/api/health");
 
@@ -538,6 +635,29 @@ struct ScanResponse {
 }
 
 /// 扫描会话文件并落库。与 IPC 版是同一段逻辑（步进式预算 + 单事务）。
+/// 定价视图（内置表 + 覆盖状态）。
+async fn pricing_view(State(st): State<AppState>) -> ApiResult<crate::commands::PricingView> {
+    let root = st.root.clone();
+    let v = tokio::task::spawn_blocking(move || crate::commands::get_pricing_at(&root))
+        .await
+        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
+        .map_err(ApiError::internal)?;
+    ok(v)
+}
+
+/// 保存定价覆盖：与桌面 IPC 共用同一份校验（任一条非法整体拒绝）。
+async fn save_pricing_view(
+    State(st): State<AppState>,
+    Json(payload): Json<std::collections::HashMap<String, (f64, f64)>>,
+) -> Result<Json<crate::commands::PricingView>, ApiError> {
+    let root = st.root.clone();
+    let v = tokio::task::spawn_blocking(move || crate::commands::save_pricing_at(&root, payload))
+        .await
+        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
+        .map_err(ApiError::internal)?;
+    ok(v)
+}
+
 async fn cost_scan(State(st): State<AppState>) -> Result<Json<ScanResponse>, ApiError> {
     let root = st.root.clone();
     let result = tokio::task::spawn_blocking(move || scan_sessions(&root))
@@ -892,7 +1012,92 @@ mod http_tests {
         std::fs::remove_dir_all(root.as_path()).ok();
     }
 
-    /// 没有 dist 时只跑 API（不能崩），根路径返回 404。
+    /// 嵌入资源是安装版的唯一 UI 来源（磁盘候选在用户机器上全落空）。
+    /// debug 构建下 rust-embed 读文件系统，仓库里 dist 应当存在；
+    /// 这条测试同时锁住「文件夹路径没配错」与「MIME 表没漏类型」。
+    #[tokio::test]
+    async fn embedded_assets_serve_index_and_mime() {
+        if !has_embedded_assets() {
+            panic!("仓库构建必须携带 ../dist；若 CI 顺序变化请先 npm run build");
+        }
+        let root = temp_root("embed");
+        let mut opts = ServeOptions::new(addr_for_test(), root.clone());
+        opts.static_dir = None; // 强制走嵌入路径
+        let app = router(AppState::new(root.clone()), &opts);
+
+        let index = app
+            .clone()
+            .oneshot(Request::get("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(index.status(), StatusCode::OK);
+        let html = axum::body::to_bytes(index.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let html = String::from_utf8_lossy(&html);
+        assert!(
+            html.contains("<div id=\"root\">"),
+            "应返回 SPA 入口而非 404 文本"
+        );
+
+        // 真实资产文件（构建产物的哈希文件名保证存在）+ 正确 MIME
+        let asset_name = WebAssets::iter()
+            .find(|p| p.starts_with("assets/") && p.ends_with(".js"))
+            .expect("构建产物必含至少一个 JS chunk")
+            .to_string();
+        let res = app
+            .clone()
+            .oneshot(
+                Request::get(format!("/{asset_name}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let ctype = res
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string();
+        assert!(
+            ctype.starts_with("text/javascript"),
+            "JS 资产必须以 text/javascript 下发，实际: {ctype}"
+        );
+
+        // SPA 回落：不存在的路由也返回入口页
+        let deep = app
+            .oneshot(
+                Request::get("/some/deep/route")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(deep.status(), StatusCode::OK);
+
+        std::fs::remove_dir_all(root.as_path()).ok();
+    }
+
+    /// MIME 表至少要覆盖构建产物里实际出现的每一种扩展名。
+    #[test]
+    fn mime_table_covers_all_embedded_extensions() {
+        let mut seen = std::collections::BTreeSet::new();
+        for path in WebAssets::iter() {
+            if let Some(ext) = path.rsplit('.').next() {
+                seen.insert(ext.to_string());
+            }
+        }
+        for ext in seen {
+            let m = mime_for(&format!("x.{ext}"));
+            assert_ne!(m, "application/octet-stream", "扩展名 {ext} 没有专属 MIME");
+        }
+    }
+
+    /// 没有磁盘 dist 时：API 照常可用，页面由嵌入资源顶上（安装版唯一来源）。
+    /// （0.7.0 初版这里期待根路径 404 —— 那正是「安装版网页 404」缺陷的
+    /// 测试化形态；嵌入修复后语义反转，两者都锁住。）
     #[tokio::test]
     async fn static_dir_absent_still_serves_api() {
         let root = temp_root("nodist");
@@ -911,7 +1116,7 @@ mod http_tests {
             .oneshot(Request::get("/").body(Body::empty()).unwrap())
             .await
             .unwrap();
-        assert_eq!(root_path.status(), StatusCode::NOT_FOUND);
+        assert_eq!(root_path.status(), StatusCode::OK);
         std::fs::remove_dir_all(root.as_path()).ok();
     }
 }

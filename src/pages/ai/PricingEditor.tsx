@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Pencil, Plus, RotateCcw, X } from "lucide-react";
-import { getPricing, isTauri, savePricing } from "../../lib/api";
+import { getPricing, isBackend, savePricing } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { Badge, Btn, Card, Field, SectionTitle, inputCls } from "../../ui";
 import type { PricingRow, PricingView } from "../../types";
@@ -33,7 +33,7 @@ export function PricingEditor({ onChanged }: { onChanged?: () => void }) {
 
   // 所有 setState 都落在 await 之后（微任务里），不在渲染/同步 effect 路径上。
   const load = useCallback(async () => {
-    if (!isTauri()) return;
+    if (!isBackend()) return;
     try {
       const next = await getPricing();
       setView(next);
@@ -152,7 +152,7 @@ export function PricingEditor({ onChanged }: { onChanged?: () => void }) {
     setQuery(model);
   };
 
-  if (!isTauri()) {
+  if (!isBackend()) {
     return (
       <Card>
         <SectionTitle>{t("pricing.title")}</SectionTitle>

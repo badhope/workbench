@@ -3,6 +3,34 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.1] - 2026-11-07
+
+### Fixed — 实机验收发现的两处「装完用不了」
+
+按用户拿到安装包后的真实路径重验（静默安装 → 启动 → 逐页走查），发现并修复：
+
+- **安装版 Web 模式页面 404**：安装目录只有一个 exe，没有 `dist/`；
+  静态目录回落链的最后一条是 `CARGO_MANIFEST_DIR/../dist`——那是**构建机**
+  的源码路径，用户机器上必然落空。实测把构建机 dist 移走后 `GET /` 返回 404
+  （API 正常），Web 模式等于不可用。修复：前端产物编译期嵌入二进制
+  （rust-embed，34 个文件，~1.3 MB），`workbench serve` 单文件自包含，
+  拷走 exe 也能出完整页面；磁盘 dist 仍优先（开发时改前端不必重编 Rust）。
+  `/api/*` 未命中保持 404 JSON，不会回落成 SPA HTML。
+- **定价编辑器在浏览器模式下显示「需要桌面端」**：`PricingEditor` 的加载
+  门禁写死 `isTauri()`，且 HTTP 侧根本没有定价端点。补 `GET/PUT
+  /api/cost/pricing`（与桌面 IPC 共用同一份校验：任一条非法整体拒绝），
+  门禁改为 `isBackend()`。实测 PUT 一条覆盖价 → 落盘 `pricing_overrides.json`
+  → 读回一致。
+
+### Verification
+
+| Gate | Result |
+|------|--------|
+| 前端 | 532 tests，coverage 86.6% branches（阈值 85%） |
+| 后端 | 163 tests（新增嵌入资源 MIME 覆盖与 SPA 回落门禁） |
+| 实机 | 静默安装 → 移走构建机 dist → `GET /` 200 + 深链 200；定价 PUT→磁盘→读回一致；卸载器清目录与注册表 |
+| 持久化 | UI 建项目/任务 → `data.json` 落盘 → 重启服务后仍在 |
+
 ## [0.7.0] - 2026-11-07
 
 ### Added — 第三种运行形态：浏览器 + 真实后端

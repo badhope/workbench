@@ -310,13 +310,15 @@ export async function restoreBackup(id: string): Promise<RestoreResult> {
 }
 
 export async function getPricing(): Promise<PricingView> {
-  return invoke<PricingView>("get_pricing");
+  if (isTauri()) return invoke<PricingView>("get_pricing");
+  return httpJson<PricingView>("/api/cost/pricing");
 }
 
 export async function savePricing(
   overrides: Record<string, [number, number]>
 ): Promise<PricingView> {
-  return invoke<PricingView>("save_pricing", { overrides });
+  if (isTauri()) return invoke<PricingView>("save_pricing", { overrides });
+  return httpJson<PricingView>("/api/cost/pricing", { method: "PUT", body: overrides });
 }
 
 export async function clearCostRecords(): Promise<void> {

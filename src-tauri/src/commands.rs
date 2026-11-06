@@ -1188,21 +1188,9 @@ pub struct PricingView {
 
 #[tauri::command(async)]
 pub async fn get_pricing(app: AppHandle) -> Result<PricingView, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let _scan_guard = lock_ledger_operation()?;
-        let table = build_pricing_table(&app);
-        let problems = read_pricing_overrides(&app)?.problems;
-        let path = cost_store::cost_data_path_overrides(&data_root(&app)?)
-            .to_string_lossy()
-            .to_string();
-        Ok(PricingView {
-            rows: table.rows(),
-            problems,
-            path,
-        })
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+    tauri::async_runtime::spawn_blocking(move || get_pricing_at(&data_root(&app)?))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 保存定价覆盖。整体替换：UI 传什么就是什么（含删除某条覆盖）。
@@ -1214,44 +1202,67 @@ pub async fn save_pricing(
     app: AppHandle,
     overrides: HashMap<String, (f64, f64)>,
 ) -> Result<PricingView, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let mut clean: HashMap<String, (f64, f64)> = HashMap::new();
-        let mut problems: Vec<String> = Vec::new();
-        for (model, (input, output)) in overrides {
-            match crate::pricing::PricingTable::validate_override(&model, input, output) {
-                Ok((key, pair)) => {
-                    clean.insert(key, pair);
-                }
-                Err(e) => problems.push(format!("{model}: {e}")),
+    tauri::async_runtime::spawn_blocking(move || save_pricing_at(&data_root(&app)?, overrides))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+/// 校验并落盘定价覆盖，返回保存后的完整视图。桌面 IPC 与 HTTP 服务共用。
+///
+/// 全量校验后才写：任一条非法就整体拒绝，不做「跳过坏的、写入好的」——
+/// 部分成功会让界面价格与磁盘不一致，用户无法判断哪条生效了。
+pub fn save_pricing_at(
+    root: &DataRoot,
+    overrides: HashMap<String, (f64, f64)>,
+) -> Result<PricingView, String> {
+    let mut clean: HashMap<String, (f64, f64)> = HashMap::new();
+    let mut problems: Vec<String> = Vec::new();
+    for (model, (input, output)) in overrides {
+        match crate::pricing::PricingTable::validate_override(&model, input, output) {
+            Ok((key, pair)) => {
+                clean.insert(key, pair);
             }
+            Err(e) => problems.push(format!("{model}: {e}")),
         }
-        if !problems.is_empty() {
-            return Err(problems.join("；"));
-        }
-        let _scan_guard = lock_ledger_operation()?;
-        cost_store::save_pricing_overrides(&data_root(&app)?, &clean)?;
-        let table = build_pricing_table(&app);
-        let path = cost_store::cost_data_path_overrides(&data_root(&app)?)
-            .to_string_lossy()
-            .to_string();
-        Ok(PricingView {
-            rows: table.rows(),
-            problems: Vec::new(),
-            path,
-        })
+    }
+    if !problems.is_empty() {
+        return Err(problems.join("；"));
+    }
+    let _scan_guard = lock_ledger_operation()?;
+    cost_store::save_pricing_overrides(root, &clean)?;
+    let table = build_pricing_table(root);
+    let path = cost_store::cost_data_path_overrides(root)
+        .to_string_lossy()
+        .to_string();
+    Ok(PricingView {
+        rows: table.rows(),
+        problems: Vec::new(),
+        path,
     })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+/// 读取定价视图（内置表 + 覆盖状态 + 覆盖文件路径）。桌面 IPC 与 HTTP 共用。
+pub fn get_pricing_at(root: &DataRoot) -> Result<PricingView, String> {
+    let _scan_guard = lock_ledger_operation()?;
+    let table = build_pricing_table(root);
+    let problems = read_pricing_overrides_at(&cost_store::cost_data_path_overrides(root))?.problems;
+    Ok(PricingView {
+        rows: table.rows(),
+        problems,
+        path: cost_store::cost_data_path_overrides(root)
+            .to_string_lossy()
+            .to_string(),
+    })
 }
 
 /// 构造当前定价表 = 内置快照 + 用户覆盖文件 pricing_overrides.json。
 /// 覆盖文件是可选增强：损坏时降级为内置表并告警，不能让整个成本扫描失败
 /// （data.json 才是用户核心数据，那里才该「保全后上抛」）。
-pub fn build_pricing_table(app: &AppHandle) -> PricingTable {
+pub fn build_pricing_table(root: &DataRoot) -> PricingTable {
     let mut table = PricingTable::default();
     // 走与 get_pricing 相同的读取路径：坏条目被逐条拒绝并记日志，
     // 而不是整个文件被静默忽略（那会让用户以为改价生效了）。
-    match read_pricing_overrides(app) {
+    match read_pricing_overrides_at(&cost_store::cost_data_path_overrides(root)) {
         Ok(read) => {
             if !read.problems.is_empty() {
                 log::warn!(
