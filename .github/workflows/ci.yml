@@ -96,6 +96,20 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.22.2"
+          cache: npm
+
+      # rust-embed 在编译期读取 ../dist（0.7.1 起前端产物嵌入 exe）。
+      # backend job 与前端 job 分离，不先构建前端的话 derive 宏直接报
+      # folder does not exist —— 0.7.1 首次 CI 三平台齐红的实测根因。
+      # 顺带让 CI 测试的正是「带嵌入 UI 的真实产物」，而不是残缺版本。
+      - name: Build frontend for embedding
+        run: |
+          npm ci
+          npm run build
+
       - name: Format check
         working-directory: src-tauri
         run: cargo fmt --all -- --check
@@ -164,6 +178,20 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.22.2"
+          cache: npm
+
+      # rust-embed 在编译期读取 ../dist（0.7.1 起前端产物嵌入 exe）。
+      # backend job 与前端 job 分离，不先构建前端的话 derive 宏直接报
+      # folder does not exist —— 0.7.1 首次 CI 三平台齐红的实测根因。
+      # 顺带让 CI 测试的正是「带嵌入 UI 的真实产物」，而不是残缺版本。
+      - name: Build frontend for embedding
+        run: |
+          npm ci
+          npm run build
+
       - name: Format check
         working-directory: src-tauri
         run: cargo fmt --all -- --check
@@ -218,6 +246,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+
+      # rust-embed 在编译期读取 ../dist（0.7.1 起前端产物嵌入 exe）。
+      # backend job 与前端 job 分离，不先构建前端的话 derive 宏直接报
+      # folder does not exist —— 0.7.1 首次 CI 三平台齐红的实测根因。
+      # 顺带让 CI 测试的正是「带嵌入 UI 的真实产物」，而不是残缺版本。
+      - name: Build frontend for embedding
+        run: |
+          npm ci
+          npm run build
 
       - name: Format check
         working-directory: src-tauri
