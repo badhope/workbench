@@ -283,8 +283,12 @@ fn crash_log_check(data_dir: &Path) -> Option<DiagnosticCheck> {
             "crash-log",
             "Previous crash",
             "warn",
-            format!("{}
-{}", path.display(), tail.chars().take(200).collect::<String>()),
+            format!(
+                "{}
+{}",
+                path.display(),
+                tail.chars().take(200).collect::<String>()
+            ),
             hint,
         ));
     }

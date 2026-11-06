@@ -270,9 +270,11 @@ fn cost_text(
     );
 
     if !trend.is_empty() {
-        out.push_str("
+        out.push_str(
+            "
 BY DAY
-");
+",
+        );
         for row in trend {
             out.push_str(&format!(
                 "  {}  ${:>8.2}  {:>3} rec
@@ -283,17 +285,22 @@ BY DAY
     }
 
     if !projects.is_empty() {
-        out.push_str("
+        out.push_str(
+            "
 BY PROJECT
-");
+",
+        );
         for row in projects.iter().take(20) {
             let label = if row.project.is_empty() {
                 "(unattributed)"
             } else {
                 row.project.as_str()
             };
-            out.push_str(&format!("  ${:>8.2}  {}
-", row.cost, label));
+            out.push_str(&format!(
+                "  ${:>8.2}  {}
+",
+                row.cost, label
+            ));
         }
     }
 
@@ -376,8 +383,10 @@ fn run_cost(args: &[String]) -> i32 {
             "trend": trend,
             "projects": projects,
         });
-        emit(&serde_json::to_string_pretty(&payload)
-            .unwrap_or_else(|e| format!("{{\"error\":\"{e}\"}}")));
+        emit(
+            &serde_json::to_string_pretty(&payload)
+                .unwrap_or_else(|e| format!("{{\"error\":\"{e}\"}}")),
+        );
     } else {
         emit(&cost_text(&overview, &trend, &projects, days));
     }
@@ -478,7 +487,15 @@ mod tests {
 
     #[test]
     fn help_lists_every_command() {
-        for cmd in ["ps", "ports", "diag", "cost", "serve", "--version", "--json"] {
+        for cmd in [
+            "ps",
+            "ports",
+            "diag",
+            "cost",
+            "serve",
+            "--version",
+            "--json",
+        ] {
             assert!(HELP.contains(cmd), "help 缺少 {cmd}");
         }
     }
