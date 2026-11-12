@@ -15,7 +15,7 @@ import {
 } from "../ui";
 import { shortPath } from "../lib/util";
 import { isProjectRunning } from "../lib/aggregate";
-import { nextTaskForProject, projectProgress } from "../lib/workbench";
+import { nextTaskForProject, projectGoal, projectProgress } from "../lib/workbench";
 import { useT } from "../lib/i18n";
 import type { Project } from "../types";
 
@@ -33,6 +33,7 @@ interface Draft {
   tags: string;
   pinned: boolean;
   note: string;
+  goal: string;
 }
 
 const emptyDraft: Draft = {
@@ -42,6 +43,7 @@ const emptyDraft: Draft = {
   tags: "",
   pinned: false,
   note: "",
+  goal: "",
 };
 
 export default function Projects() {
@@ -112,6 +114,8 @@ export default function Projects() {
         .filter(Boolean),
       pinned: draft.pinned,
       note: draft.note,
+      // 清空就清掉 goal（undefined 不会写进磁盘），显示层再回落到 note。
+      goal: draft.goal.trim() || undefined,
     };
     const accepted = draft.id ? updateProject(draft.id, payload) : addProject(payload);
     if (accepted) setDraft(null);
@@ -167,7 +171,7 @@ export default function Projects() {
                 </div>
 
                 <p className="line-clamp-2 min-h-[2.6em] text-[11.5px] leading-relaxed text-dim">
-                  {p.note.trim() || t("projects.noGoal")}
+                  {projectGoal(p) || t("projects.noGoal")}
                 </p>
 
                 <div>
@@ -258,6 +262,7 @@ export default function Projects() {
                         tags: p.tags.join(", "),
                         pinned: p.pinned,
                         note: p.note,
+                        goal: p.goal ?? "",
                       })
                     }
                   >
@@ -339,6 +344,14 @@ export default function Projects() {
                 value={draft.tags}
                 onChange={(e) => setDraft({ ...draft, tags: e.target.value })}
                 placeholder={t("projects.placeholderTags")}
+              />
+            </Field>
+            <Field label={t("projects.fieldGoal")}>
+              <input
+                className={inputCls}
+                value={draft.goal}
+                onChange={(e) => setDraft({ ...draft, goal: e.target.value })}
+                placeholder={t("projects.placeholderGoal")}
               />
             </Field>
             <Field label={t("projects.fieldNote")}>

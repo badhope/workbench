@@ -857,14 +857,19 @@ export const useStore = create<Store>()(
 
       addTask: (input) => {
         const now = Math.floor(Date.now() / 1000);
+        const status = input.status ?? "todo";
         const task: Task = {
           id: uid(),
           title: input.title?.trim() || t("store.unnamedTask"),
-          status: input.status ?? "todo",
+          status,
           priority: input.priority ?? "normal",
           due: input.due ?? null,
           project_id: input.project_id ?? null,
           tags: input.tags ?? [],
+          next_step: input.next_step ?? undefined,
+          blocked_reason: input.blocked_reason ?? undefined,
+          // 直接以 done 状态建的任务，完成时间就是建的那一刻。
+          completed_at: status === "done" ? now : undefined,
           created_at: now,
           updated_at: now,
         };
@@ -876,9 +881,17 @@ export const useStore = create<Store>()(
       },
 
       updateTask: (id, patch) => {
-        const tasks = get().data.tasks.map((t) =>
-          t.id === id ? { ...t, ...patch, updated_at: Math.floor(Date.now() / 1000) } : t
-        );
+        const now = Math.floor(Date.now() / 1000);
+        const tasks = get().data.tasks.map((t) => {
+          if (t.id !== id) return t;
+          const next = { ...t, ...patch, updated_at: now };
+          // 完成时间是「状态进入 done 的那一刻」，离开 done 就清掉。
+          // 只在状态真的变了的时候动它 —— 改个标题不该把完成时间刷新一遍。
+          if (patch.status !== undefined && patch.status !== t.status) {
+            next.completed_at = patch.status === "done" ? now : undefined;
+          }
+          return next;
+        });
         return get().persistData({ ...get().data, tasks });
       },
 
@@ -898,6 +911,7 @@ export const useStore = create<Store>()(
           tags: p.tags ?? [],
           pinned: p.pinned ?? false,
           note: p.note ?? "",
+          goal: p.goal ?? undefined,
           created_at: Math.floor(Date.now() / 1000),
         };
         return get().persistData({

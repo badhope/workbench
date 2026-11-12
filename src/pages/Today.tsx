@@ -22,10 +22,12 @@ import { ProgressRing } from "../components/ProgressRing";
 import { dueLabel, formatTime } from "../lib/util";
 import {
   attentionCounts,
+  explicitNextStep,
   isDueToday,
   isOpenTask,
   nextTaskForProject,
   pickCurrentProject,
+  projectGoal,
   projectProgress,
   sortTasksForWork,
   tasksForToday,
@@ -683,7 +685,7 @@ function CurrentProject({
               )}
             </div>
             <p className="mt-1 line-clamp-2 max-w-[52ch] text-[12.5px] leading-relaxed text-dim">
-              {project.note.trim() || t("projects.noGoal")}
+              {projectGoal(project) || t("projects.noGoal")}
             </p>
           </div>
           <ProgressRing
@@ -717,6 +719,7 @@ function CurrentProject({
 function NextAction({ next, onOpen }: { next: Task | null; onOpen: () => void }) {
   const t = useT();
   const due = next ? dueLabel(next.due) : null;
+  const step = explicitNextStep(next);
   return (
     <div className="flex items-center gap-3 border-l-2 border-accent/60 pl-3">
       <div className="min-w-0 flex-1">
@@ -724,13 +727,18 @@ function NextAction({ next, onOpen }: { next: Task | null; onOpen: () => void })
           {t("today.nextAction")}
         </div>
         {next ? (
-          <button
-            type="button"
-            onClick={onOpen}
-            className="mt-0.5 block w-full truncate text-left text-[13.5px] font-medium hover:text-accent"
-          >
-            {next.title}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={onOpen}
+              className="mt-0.5 block w-full truncate text-left text-[13.5px] font-medium hover:text-accent"
+            >
+              {step || next.title}
+            </button>
+            {step && (
+              <div className="mt-0.5 truncate text-[11px] text-faint">{next.title}</div>
+            )}
+          </>
         ) : (
           <div className="mt-0.5 text-[12px] text-dim">{t("today.noNextAction")}</div>
         )}

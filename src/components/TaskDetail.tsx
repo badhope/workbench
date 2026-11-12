@@ -66,6 +66,8 @@ function TaskEditor({
     due: task.due ?? "",
     projectId: task.project_id ?? "",
     tags: task.tags.join(", "),
+    nextStep: task.next_step ?? "",
+    blockedReason: task.blocked_reason ?? "",
   });
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -86,6 +88,9 @@ function TaskEditor({
       due: draft.due || null,
       project_id: draft.projectId || null,
       tags,
+      // 清空输入框就清掉字段（undefined 序列化时被丢弃，Rust 侧读成 None）。
+      next_step: draft.nextStep.trim() || undefined,
+      blocked_reason: draft.blockedReason.trim() || undefined,
     });
     if (ok) onClose();
   };
@@ -165,6 +170,24 @@ function TaskEditor({
           </Field>
         </div>
 
+        <Field label={t("tasks.fieldNextStep")}>
+          <input
+            className={inputCls}
+            value={draft.nextStep}
+            onChange={(e) => patch({ nextStep: e.target.value })}
+            placeholder={t("tasks.nextStepPlaceholder")}
+          />
+        </Field>
+
+        <Field label={t("tasks.fieldBlockedReason")}>
+          <input
+            className={inputCls}
+            value={draft.blockedReason}
+            onChange={(e) => patch({ blockedReason: e.target.value })}
+            placeholder={t("tasks.blockedReasonPlaceholder")}
+          />
+        </Field>
+
         <Field label={t("tasks.fieldTags")}>
           <input
             className={inputCls}
@@ -181,6 +204,11 @@ function TaskEditor({
           <span>
             {t("tasks.metaUpdated")}: {fromNow(task.updated_at)}
           </span>
+          {task.completed_at ? (
+            <span>
+              {t("tasks.metaCompleted")}: {fromNow(task.completed_at)}
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={() => setConfirmDelete(true)}

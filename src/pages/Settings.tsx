@@ -16,6 +16,9 @@ import { WORK_MODES, type WorkMode } from "../lib/workModes";
 import { formatUsd } from "../lib/util";
 import type { CostSettings, WorkbenchData } from "../types";
 
+/** 当前数据结构版本，必须与 Rust 侧 data.rs 的 SCHEMA_VERSION 保持一致。 */
+const MAX_SCHEMA_VERSION = 2;
+
 // ════════════════════════════════════════════════════════════
 // 自定义 Hook: 成本设置的本地编辑状态
 // ════════════════════════════════════════════════════════════
@@ -524,15 +527,12 @@ export default function Settings() {
  * 非法状态的任务会从看板上消失（三列里都不匹配）。这里逐字段校验，
  * 任一不合规就整份拒绝，并给出具体原因。
  */
-function parseBackup(text: string, t: (key: string) => string): WorkbenchData {
+function parseBackup(text: string, t: Translate): WorkbenchData {
   const parsed = JSON.parse(text) as WorkbenchData;
   if (!Array.isArray(parsed.projects) || !Array.isArray(parsed.tasks)) {
     throw new Error(t("settings.importBadStructure"));
   }
-  const stringArray = (value: unknown) =>
-    Array.isArray(value) && value.every((item) => typeof item === "string");
-  const uint = (value: unknown) =>
-    typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+  assertSupportedVersion(parsed.schema_version, t);
   for (const p of parsed.projects) {
     if (
       !p ||
@@ -540,10 +540,11 @@ function parseBackup(text: string, t: (key: string) => string): WorkbenchData {
       typeof p.name !== "string" ||
       typeof p.path !== "string" ||
       typeof p.status !== "string" ||
-      !stringArray(p.tags) ||
+      !isStringArray(p.tags) ||
       typeof p.pinned !== "boolean" ||
       typeof p.note !== "string" ||
-      !uint(p.created_at)
+      !isOptionalString(p.goal) ||
+      !isUint(p.created_at)
     ) {
       throw new Error(t("settings.importBadProject"));
     }
@@ -554,9 +555,12 @@ function parseBackup(text: string, t: (key: string) => string): WorkbenchData {
       typeof task.id !== "string" ||
       typeof task.title !== "string" ||
       typeof task.priority !== "string" ||
-      !stringArray(task.tags) ||
-      !uint(task.created_at) ||
-      !uint(task.updated_at) ||
+      !isStringArray(task.tags) ||
+      !isUint(task.created_at) ||
+      !isUint(task.updated_at) ||
+      !isOptionalString(task.next_step) ||
+      !isOptionalString(task.blocked_reason) ||
+      !isOptionalUint(task.completed_at) ||
       (task.due !== null && task.due !== undefined && typeof task.due !== "string") ||
       (task.project_id !== null &&
         task.project_id !== undefined &&
@@ -569,6 +573,34 @@ function parseBackup(text: string, t: (key: string) => string): WorkbenchData {
     }
   }
   return parsed;
+}
+
+type Translate = (key: string, vars?: Record<string, string | number>) => string;
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+const isUint = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
+const isOptionalString = (value: unknown) =>
+  value === undefined || value === null || typeof value === "string";
+
+const isOptionalUint = (value: unknown) =>
+  value === undefined || value === null || isUint(value);
+
+/**
+ * 缺失 schema_version 就是 v1；比当前版本新就拒绝，避免把未知字段
+ * 悄悄丢掉再写回磁盘，覆盖掉用户在新版里填的内容。
+ */
+function assertSupportedVersion(value: unknown, t: Translate): void {
+  if (value === undefined) return;
+  if (!isUint(value) || value < 1) {
+    throw new Error(t("settings.importBadStructure"));
+  }
+  if (value > MAX_SCHEMA_VERSION) {
+    throw new Error(t("settings.importNewerVersion", { version: value }));
+  }
 }
 
 /** 运行模式徽章：三态（桌面 / Web 后端 / 静态演示）。 */

@@ -2,4 +2,12 @@
 import type { Project } from "./Project";
 import type { Task } from "./Task";
 
-export type WorkbenchData = { projects: Array<Project>, tasks: Array<Task>, };
+export type WorkbenchData = { 
+/**
+ * 数据格式版本。缺失 = v1。
+ *
+ * 刻意用 `Option` 而不是裸 u32：旧文件里根本没有这个键，
+ * 用裸数字就得给 serde 一个默认值，而默认值一旦和真实版本漂移，
+ * 「读到的是哪一版」就再也说不清了。
+ */
+schema_version?: number, projects: Array<Project>, tasks: Array<Task>, };

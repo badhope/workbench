@@ -78,6 +78,37 @@ describe("store 任务操作", () => {
     expect(useStore.getState().data.tasks[0].status).toBe("todo");
   });
 
+  it("updateTask 进入 done 记录完成时间，离开 done 清空", () => {
+    useStore.setState({ data: { projects: [], tasks: [task()] } });
+    useStore.getState().updateTask("t1", { status: "done" });
+    const done = useStore.getState().data.tasks[0];
+    expect(done.completed_at).toBeGreaterThan(0);
+
+    useStore.getState().updateTask("t1", { status: "doing" });
+    expect(useStore.getState().data.tasks[0].completed_at).toBeUndefined();
+  });
+
+  it("updateTask 改标题不会刷新已完成任务的完成时间", () => {
+    useStore.setState({
+      data: { projects: [], tasks: [task({ status: "done", completed_at: 123 })] },
+    });
+    useStore.getState().updateTask("t1", { title: "改名", status: "done" });
+    expect(useStore.getState().data.tasks[0].completed_at).toBe(123);
+  });
+
+  it("addTask 保存 next_step / blocked_reason，done 任务自带完成时间", () => {
+    useStore.getState().addTask({
+      title: "阻塞项",
+      status: "done",
+      next_step: "等接口",
+      blocked_reason: "后端未就绪",
+    });
+    const t = useStore.getState().data.tasks[0];
+    expect(t.next_step).toBe("等接口");
+    expect(t.blocked_reason).toBe("后端未就绪");
+    expect(t.completed_at).toBeGreaterThan(0);
+  });
+
   it("moveTask 等价于 updateTask 的 status 补丁", () => {
     useStore.setState({ data: { projects: [], tasks: [task()] } });
     useStore.getState().moveTask("t1", "done");
@@ -103,6 +134,13 @@ describe("store 项目操作", () => {
     expect(p.status).toBe("active");
     expect(p.pinned).toBe(false);
     expect(p.tags).toEqual([]);
+  });
+
+  it("addProject 保存目标，未填写时保持 undefined", () => {
+    useStore.getState().addProject({ name: "有目标", goal: "上线 v2" });
+    expect(useStore.getState().data.projects[0].goal).toBe("上线 v2");
+    useStore.getState().addProject({ name: "没目标" });
+    expect(useStore.getState().data.projects[0].goal).toBeUndefined();
   });
 
   it("deleteProject 解除任务关联而不删除任务", () => {

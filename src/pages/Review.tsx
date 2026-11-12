@@ -1,13 +1,18 @@
 import { useMemo } from "react";
 import { ArrowRight } from "lucide-react";
 import { EChart } from "../lib/echarts";
-import { chartGapColor, FIXED_COLORS, horizontalBarOption } from "../lib/chartTheme";
+import { chartGapColor, chartTheme, FIXED_COLORS, horizontalBarOption } from "../lib/chartTheme";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { useT } from "../lib/i18n";
 import { Btn, Empty, SectionTitle } from "../ui";
 import { ProgressRing } from "../components/ProgressRing";
-import { isOpenTask, isOverdue, projectProgress } from "../lib/workbench";
+import {
+  completionTrend,
+  isOpenTask,
+  isOverdue,
+  projectProgress,
+} from "../lib/workbench";
 import { formatTime } from "../lib/util";
 
 const STATUS_ORDER = ["todo", "doing", "done"] as const;
@@ -22,8 +27,9 @@ const STATUS_COLORS: Record<string, string> = {
 /**
  * 回顾页：把任务/项目的当前状态集中到一处。
  *
- * 刻意不伪造「本周完成趋势」——任务模型还没有 completed_at，
- * 因此这里只呈现可验证的当前快照，并明确标注无历史趋势。
+ * 完成趋势只统计 `completed_at`：这是 v2 才有的字段，旧任务没有，
+ * 迁移时刻意不拿 `updated_at` 冒充完成时间。数据从升级之后开始累积，
+ * 界面上要如实说明这一点，而不是假装历史一直都有。
  */
 export default function Review() {
   const t = useT();
@@ -101,6 +107,38 @@ export default function Review() {
         .slice(0, 8),
     [data.projects, data.tasks]
   );
+
+  const trend = useMemo(() => completionTrend(data.tasks, 14), [data.tasks]);
+  const hasTrend = trend.some((point) => point.count > 0);
+
+  const trendOption = useMemo(() => {
+    const palette = chartTheme(theme);
+    return {
+      grid: { left: 28, right: 8, top: 12, bottom: 22 },
+      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+      xAxis: {
+        type: "category",
+        data: trend.map((point) => point.label),
+        axisLabel: { fontSize: 9, color: palette.dim, interval: 1 },
+        axisLine: { lineStyle: { color: palette.line } },
+        axisTick: { show: false },
+      },
+      yAxis: {
+        type: "value",
+        minInterval: 1,
+        axisLabel: { fontSize: 9, color: palette.dim },
+        splitLine: { lineStyle: { color: palette.line, opacity: 0.5 } },
+      },
+      series: [
+        {
+          type: "bar",
+          data: trend.map((point) => point.count),
+          barMaxWidth: 18,
+          itemStyle: { color: palette.accent, borderRadius: [3, 3, 0, 0] },
+        },
+      ],
+    };
+  }, [trend, theme]);
 
   const statusOption = useMemo(
     () => ({
@@ -286,6 +324,20 @@ export default function Review() {
               )}
             </section>
           </div>
+
+          <section className="flex flex-col gap-2">
+            <div className="flex items-center justify-between border-b border-line/70 pb-2">
+              <h2 className="text-[14px] font-semibold">{t("review.trend")}</h2>
+              <span className="text-[10.5px] text-faint">{t("review.trendHint")}</span>
+            </div>
+            {hasTrend ? (
+              <EChart option={trendOption} style={{ height: 150 }} lazyUpdate />
+            ) : (
+              <div className="py-6 text-center text-[12px] text-faint">
+                {t("review.trendEmpty")}
+              </div>
+            )}
+          </section>
 
           <section className="flex flex-col gap-2">
             <SectionTitle>{t("review.priority")}</SectionTitle>

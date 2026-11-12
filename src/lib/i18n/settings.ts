@@ -204,6 +204,8 @@ export const dict = {
     "settings.importBadProject": "Invalid project fields (id / name must be strings)",
     "settings.importBadTask": "Invalid task fields (id / title must be strings)",
     "settings.importBadStatus": "Illegal task status (must be todo / doing / done)",
+    "settings.importNewerVersion":
+      "This file was written by a newer version (schema v{version}); update the app first",
     "diag.title": "Environment check",
     "diag.sub":
       "Verifies the platform, data directory, cost database, AI session folders and port tools. Nothing leaves your device.",
@@ -416,6 +418,7 @@ export const dict = {
     "settings.importBadProject": "项目字段类型错误（id / name 必须为字符串）",
     "settings.importBadTask": "任务字段类型错误（id / title 必须为字符串）",
     "settings.importBadStatus": "任务状态非法（需为 todo / doing / done）",
+    "settings.importNewerVersion": "该文件来自更新版本（数据结构 v{version}），请先升级应用",
     "diag.title": "环境自检",
     "diag.sub":
       "逐项检查平台、数据目录、成本库、AI 会话目录与端口工具。结果只在本机，不会上传。",
@@ -641,6 +644,8 @@ export const dict = {
       "タスクのフィールドが不正（id / title は文字列である必要があります）",
     "settings.importBadStatus":
       "タスク状態が不正（todo / doing / done のいずれかである必要があります）",
+    "settings.importNewerVersion":
+      "このファイルは新しいバージョン（スキーマ v{version}）のものです。先にアプリを更新してください",
     "diag.title": "環境チェック",
     "diag.sub":
       "プラットフォーム、データフォルダー、コスト DB、AI セッションフォルダー、ポートツールを確認します。結果は端末内のみ。",

@@ -621,6 +621,20 @@ pub async fn save_data(
         data.projects.len(),
         data.tasks.len()
     );
+    // 客户端可能拿着更新版本导出的数据。宁可明确拒绝，也不能「读进来猜着改」——
+    // 新版本可能已经改了字段语义，旧版本写回去会把用户数据改坏。
+    if let Some(version) = data.schema_version {
+        if version > data::SCHEMA_VERSION {
+            return Err(format!(
+                "数据来自更新版本（v{version}），当前版本只支持到 v{}；请升级应用后再导入",
+                data::SCHEMA_VERSION
+            ));
+        }
+    }
+    // 落盘时统一盖上当前版本号：文件里的版本号必须由后端说了算，
+    // 不能因为某个客户端忘了带就写出个没有版本号的文件。
+    let mut data = data;
+    data.schema_version = Some(data::SCHEMA_VERSION);
     // 入参来自 WebView：只登记真实存在的绝对目录，避免注入脚本借 save_data
     // 把任意目录灌进白名单后，再用 git_branch / open_known_path 触达它。
     // 存在性校验会触碰文件系统，放进阻塞线程，避免断网盘卡住主线程。

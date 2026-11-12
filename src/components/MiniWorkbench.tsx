@@ -8,6 +8,7 @@ import { BrandMark } from "./BrandMark";
 import { ProgressRing } from "./ProgressRing";
 import { dueLabel } from "../lib/util";
 import {
+  explicitNextStep,
   nextTaskForProject,
   pickCurrentProject,
   projectProgress,
@@ -175,7 +176,9 @@ export default function MiniWorkbench() {
                   {current.name}
                 </div>
                 <div className="mt-1 truncate text-[11px] text-dim">
-                  {next ? next.title : t("projects.noOpenTasks")}
+                  {next
+                    ? explicitNextStep(next) || next.title
+                    : t("projects.noOpenTasks")}
                 </div>
               </div>
               <ProgressRing percent={progress.percent} size={44} strokeWidth={4} />

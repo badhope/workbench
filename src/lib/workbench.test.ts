@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import dayjs from "dayjs";
 import {
   attentionCounts,
+  completionTrend,
+  explicitNextStep,
   isDueThisWeek,
   isDueToday,
   isOverdue,
   nextTaskForProject,
   pickCurrentProject,
+  projectGoal,
   projectProgress,
   sortTasksForWork,
   taskMatchesScope,
@@ -165,5 +168,48 @@ describe("项目进度与下一步", () => {
         NOW
       )
     ).toEqual({ overdue: 1, today: 1, doing: 1, inbox: 3 });
+  });
+});
+
+describe("v2 字段口径", () => {
+  it("项目目标优先 goal，为空时回落到 note", () => {
+    expect(projectGoal(project({ goal: "上线", note: "备注" }))).toBe("上线");
+    expect(projectGoal(project({ goal: "  ", note: "备注" }))).toBe("备注");
+    expect(projectGoal(project({ note: "" }))).toBe("");
+    expect(projectGoal(null)).toBe("");
+  });
+
+  it("显式下一步只认 next_step，不拿标题凑数", () => {
+    expect(explicitNextStep(task({ next_step: " 先改数据模型 " }))).toBe(
+      "先改数据模型"
+    );
+    expect(explicitNextStep(task({ title: "标题" }))).toBe("");
+    expect(explicitNextStep(null)).toBe("");
+  });
+
+  it("完成趋势按 completed_at 落到本地日历日", () => {
+    const trend = completionTrend(
+      [
+        task({ id: "today", status: "done", completed_at: NOW.unix() }),
+        task({
+          id: "two-days-ago",
+          status: "done",
+          completed_at: NOW.subtract(2, "day").unix(),
+        }),
+        // 旧任务没有完成时间：不计数，也不拿 updated_at 冒充。
+        task({ id: "legacy", status: "done" }),
+      ],
+      14,
+      NOW
+    );
+    expect(trend).toHaveLength(14);
+    expect(trend[13].count).toBe(1);
+    expect(trend[11].count).toBe(1);
+    expect(trend.reduce((sum, point) => sum + point.count, 0)).toBe(2);
+  });
+
+  it("没有完成记录时趋势全为 0", () => {
+    const trend = completionTrend([task({ id: "legacy", status: "done" })], 3, NOW);
+    expect(trend.map((point) => point.count)).toEqual([0, 0, 0]);
   });
 });
