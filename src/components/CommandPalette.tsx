@@ -30,18 +30,27 @@ export function CommandPalette() {
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { setView, procs, ports, data, setProcQuery, setFocusPid, refreshRuntime } =
-    useStore(
-      useShallow((s) => ({
-        setView: s.setView,
-        procs: s.procs,
-        ports: s.ports,
-        data: s.data,
-        setProcQuery: s.setProcQuery,
-        setFocusPid: s.setFocusPid,
-        refreshRuntime: s.refreshRuntime,
-      }))
-    );
+  const {
+    setView,
+    procs,
+    ports,
+    data,
+    setProcQuery,
+    setFocusPid,
+    refreshRuntime,
+    setTaskDetailId,
+  } = useStore(
+    useShallow((s) => ({
+      setView: s.setView,
+      procs: s.procs,
+      ports: s.ports,
+      data: s.data,
+      setProcQuery: s.setProcQuery,
+      setFocusPid: s.setFocusPid,
+      refreshRuntime: s.refreshRuntime,
+      setTaskDetailId: s.setTaskDetailId,
+    }))
+  );
 
   const actions = useMemo<PaletteAction[]>(() => {
     const nav = PAGES.map((p) => ({
@@ -92,7 +101,7 @@ export function CommandPalette() {
       keywords: task.tags.join(" "),
       group: t("palette.tasks"),
       hint: task.status,
-      run: () => setView("tasks"),
+      run: () => setTaskDetailId(task.id),
     }));
     const commandActions: PaletteAction[] = [
       {
@@ -111,7 +120,17 @@ export function CommandPalette() {
       ...projectActions,
       ...taskActions,
     ];
-  }, [t, procs, ports, data, setView, setProcQuery, setFocusPid, refreshRuntime]);
+  }, [
+    t,
+    procs,
+    ports,
+    data,
+    setView,
+    setProcQuery,
+    setFocusPid,
+    refreshRuntime,
+    setTaskDetailId,
+  ]);
 
   const results = useMemo(() => rankCommands(actions, query, 12), [actions, query]);
 

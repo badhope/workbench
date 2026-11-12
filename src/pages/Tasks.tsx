@@ -23,8 +23,6 @@ import {
   Card,
   ConfirmDialog,
   Empty,
-  Field,
-  Modal,
   SectionTitle,
   inputCls,
   type Tone,
@@ -88,7 +86,6 @@ export default function Tasks() {
     data,
     addTask,
     moveTask,
-    updateTask,
     deleteTask,
     theme,
     taskView,
@@ -97,12 +94,12 @@ export default function Tasks() {
     setTaskScope,
     projectFilter,
     setTaskProjectFilter,
+    setTaskDetailId,
   } = useStore(
     useShallow((s) => ({
       data: s.data,
       addTask: s.addTask,
       moveTask: s.moveTask,
-      updateTask: s.updateTask,
       deleteTask: s.deleteTask,
       theme: s.theme,
       taskView: s.taskView,
@@ -111,11 +108,11 @@ export default function Tasks() {
       setTaskScope: s.setTaskScope,
       projectFilter: s.taskProjectFilter,
       setTaskProjectFilter: s.setTaskProjectFilter,
+      setTaskDetailId: s.setTaskDetailId,
     }))
   );
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [newTitle, setNewTitle] = useState("");
-  const [taskDraft, setTaskDraft] = useState<Task | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
   const [showStats, setShowStats] = useState(false);
 
@@ -135,13 +132,6 @@ export default function Tasks() {
       ),
     [data.tasks, projectFilter, taskScope]
   );
-
-  const patchTask = (patch: Partial<Task>) =>
-    setTaskDraft((d) => (d ? { ...d, ...patch } : d));
-
-  const commitTask = () => {
-    if (taskDraft && updateTask(taskDraft.id, taskDraft)) setTaskDraft(null);
-  };
 
   const addFromList = () => {
     const title = newTitle.trim();
@@ -411,7 +401,7 @@ export default function Tasks() {
                         key={task.id}
                         task={task}
                         projectName={projectName(task.project_id)}
-                        onEdit={() => setTaskDraft({ ...task })}
+                        onEdit={() => setTaskDetailId(task.id)}
                         onDelete={() => setPendingDelete(task)}
                       />
                     ))
@@ -477,7 +467,7 @@ export default function Tasks() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setTaskDraft({ ...task })}
+                      onClick={() => setTaskDetailId(task.id)}
                       className={`min-w-0 flex-1 truncate text-left text-[12.5px] hover:text-accent ${
                         done ? "text-faint line-through" : ""
                       }`}
@@ -513,76 +503,6 @@ export default function Tasks() {
       )}
 
       <p className="text-[10.5px] text-faint">{t("tasks.listHint")}</p>
-
-      <Modal
-        open={!!taskDraft}
-        title={t("tasks.editTask")}
-        onClose={() => setTaskDraft(null)}
-        footer={
-          <>
-            <Btn onClick={() => setTaskDraft(null)}>{t("tasks.cancel")}</Btn>
-            <Btn variant="primary" onClick={commitTask}>
-              {t("tasks.done")}
-            </Btn>
-          </>
-        }
-      >
-        {taskDraft && (
-          <>
-            <Field label={t("tasks.fieldTitle")}>
-              <input
-                className={inputCls}
-                value={taskDraft.title}
-                onChange={(e) => patchTask({ title: e.target.value })}
-              />
-            </Field>
-            <Field label={t("tasks.fieldStatus")}>
-              <select
-                className={inputCls}
-                value={taskDraft.status}
-                onChange={(e) => patchTask({ status: e.target.value })}
-              >
-                <option value="todo">{t("tasks.colTodo")}</option>
-                <option value="doing">{t("tasks.colDoing")}</option>
-                <option value="done">{t("tasks.colDone")}</option>
-              </select>
-            </Field>
-            <Field label={t("tasks.fieldPriority")}>
-              <select
-                className={inputCls}
-                value={taskDraft.priority}
-                onChange={(e) => patchTask({ priority: e.target.value })}
-              >
-                <option value="low">{t("tasks.priorityLow")}</option>
-                <option value="normal">{t("tasks.priorityNormal")}</option>
-                <option value="high">{t("tasks.priorityHigh")}</option>
-              </select>
-            </Field>
-            <Field label={t("tasks.fieldDue")}>
-              <input
-                type="date"
-                className={inputCls}
-                value={taskDraft.due ?? ""}
-                onChange={(e) => patchTask({ due: e.target.value || null })}
-              />
-            </Field>
-            <Field label={t("tasks.fieldProject")}>
-              <select
-                className={inputCls}
-                value={taskDraft.project_id ?? ""}
-                onChange={(e) => patchTask({ project_id: e.target.value || null })}
-              >
-                <option value="">{t("tasks.unassigned")}</option>
-                {data.projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </>
-        )}
-      </Modal>
 
       <ConfirmDialog
         open={!!pendingDelete}

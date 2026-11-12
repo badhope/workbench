@@ -154,6 +154,8 @@ interface UiState {
   focusPid: number | null;
   refreshMs: number;
   view: ViewKey;
+  /** 当前打开的任务详情；null = 关闭。仅内存态，不跨启动恢复。 */
+  taskDetailId: string | null;
   alwaysOnTop: boolean;
   setAlwaysOnTop: (v: boolean) => void;
 }
@@ -199,6 +201,8 @@ interface Store extends UiState, RuntimeState {
   toast: string;
   killTarget: ProcInfo | null;
   setView: (v: ViewKey) => void;
+  /** 打开/关闭任务详情（传 null 关闭）。 */
+  setTaskDetailId: (id: string | null) => void;
   setTheme: (id: string) => void;
   /** 设置动效档位（视为用户显式选择，覆盖系统 reduced-motion） */
   setMotion: (m: MotionLevel) => void;
@@ -436,6 +440,7 @@ export const useStore = create<Store>()(
       focusPid: null,
       refreshMs: 3000,
       view: "today",
+      taskDetailId: null,
       alwaysOnTop: false,
       setAlwaysOnTop: (v) => set({ alwaysOnTop: v }),
       procs: [],
@@ -474,7 +479,8 @@ export const useStore = create<Store>()(
       toast: "",
       killTarget: null,
 
-      setView: (v) => set({ view: v }),
+      setView: (v) => set({ view: v, taskDetailId: null }),
+      setTaskDetailId: (id) => set({ taskDetailId: id }),
       setMotion: (m) => {
         // 显式选档 = 覆盖系统 reduced-motion；立即落到 DOM，
         // 否则三档切换要等下一次主题应用才生效（实测会「点了没反应」）。

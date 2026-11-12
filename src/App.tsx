@@ -6,6 +6,7 @@ import { useT } from "./lib/i18n";
 import { AppHeader, DockHeader } from "./components/AppHeader";
 import { KillDialog, Toast } from "./components/KillDialog";
 import { CommandPalette } from "./components/CommandPalette";
+import { TaskDetail } from "./components/TaskDetail";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { ParticleBackdrop } from "./components/ParticleBackdrop";
 import { BackgroundImage } from "./components/BackgroundImage";
@@ -162,6 +163,7 @@ export default function App() {
 
       <KillDialog />
       <CommandPalette />
+      <TaskDetail />
       <BackgroundImage dataUrl={backgroundImage} />
       <ParticleBackdrop />
       <OnboardingOverlay />

@@ -74,6 +74,7 @@ export default function Today() {
     setRailCollapsed,
     setRailSection,
     resetRailSections,
+    setTaskDetailId,
     openTarget,
   } = useStore(
     useShallow((s) => ({
@@ -94,6 +95,7 @@ export default function Today() {
       setRailCollapsed: s.setRailCollapsed,
       setRailSection: s.setRailSection,
       resetRailSections: s.resetRailSections,
+      setTaskDetailId: s.setTaskDetailId,
       openTarget: s.openTarget,
     }))
   );
@@ -279,7 +281,7 @@ export default function Today() {
               </button>
             }
             onComplete={(id) => moveTask(id, "done")}
-            onOpen={(task) => openTaskList("all", task.project_id ?? "")}
+            onOpen={(task) => setTaskDetailId(task.id)}
           />
 
           {upcoming.length > 0 && (
@@ -288,7 +290,7 @@ export default function Today() {
               tasks={upcoming}
               projects={data.projects}
               onComplete={(id) => moveTask(id, "done")}
-              onOpen={(task) => openTaskList("all", task.project_id ?? "")}
+              onOpen={(task) => setTaskDetailId(task.id)}
             />
           )}
         </div>
@@ -333,7 +335,7 @@ export default function Today() {
             {showInbox && (
               <InboxRail
                 tasks={inbox}
-                onOpen={(task) => openTaskList("inbox", task.project_id ?? "")}
+                onOpen={(task) => setTaskDetailId(task.id)}
                 onComplete={(id) => moveTask(id, "done")}
                 onViewAll={() => openTaskList("inbox")}
               />
