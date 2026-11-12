@@ -149,10 +149,22 @@ fn prune_if_needed(path: &Path) {
     }
 }
 
-fn log_file_path(app: &AppHandle) -> Option<PathBuf> {
-    let dir = app.path().app_data_dir().ok()?;
-    fs::create_dir_all(&dir).ok()?;
+fn log_file_path_in(dir: &Path) -> Option<PathBuf> {
+    fs::create_dir_all(dir).ok()?;
     Some(dir.join("workbench.log"))
+}
+
+fn log_file_path(app: &AppHandle) -> Option<PathBuf> {
+    // 日志进数据根：数据、崩溃日志（panic_log_path）已经这么干，
+    // workbench.log 却还写 app_data_dir —— 隔离模式下两个位置不一致，
+    // 「本机数据」就散在系统目录了。
+    if let Some(v) = std::env::var_os("WORKBENCH_DATA_DIR") {
+        if !v.is_empty() {
+            return log_file_path_in(&PathBuf::from(v));
+        }
+    }
+    let dir = app.path().app_data_dir().ok()?;
+    log_file_path_in(&dir)
 }
 
 /// 读取最近 max_lines 行日志（尾部倒读，前端调用）。
@@ -303,5 +315,11 @@ mod tests {
         prune_if_needed(&path);
         assert_eq!(fs::metadata(&path).unwrap().len(), 6);
         fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn log_file_lives_inside_given_data_root() {
+        let dir = tmp_log("data-root");
+        assert_eq!(log_file_path_in(&dir), Some(dir.join("workbench.log")));
     }
 }
