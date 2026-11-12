@@ -12,10 +12,12 @@ import {
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { localeFor, useLang, useT } from "../lib/i18n";
-import { Badge, Btn, Card, Empty, SectionTitle, inputCls } from "../ui";
+import { Badge, Btn, Empty } from "../ui";
+import { BrandMark } from "../components/BrandMark";
 import { dueLabel } from "../lib/util";
 import {
   attentionCounts,
+  isDueToday,
   isOpenTask,
   nextTaskForProject,
   pickCurrentProject,
@@ -37,11 +39,11 @@ function priorityLabel(key: string, t: Translate): string {
 }
 
 /**
- * 工作台首页：上下文 → 注意力 → 今天 → 项目/收件箱/系统摘要。
+ * 工作台首页：品牌头部 → 快速记录 → 注意力 → 当前项目/今天 → 右栏上下文。
  *
- * 这里刻意不放大图表：首页首先回答「现在做什么」，统计数据属于回顾页。
- * 所有计数与任务页共用 lib/workbench 的口径，避免两处数字对不上。
- * 页面拆成若干子组件，单个组件的认知复杂度保持在 lint 阈值内。
+ * 设计意图：减少等大方块卡片，用一个大标题、一条环形进度、右侧独立信息栏
+ * 建立层次；动效只保留缓慢的品牌轨道，并受 data-motion 全局断闸控制。
+ * 所有计数仍来自 lib/workbench，与任务页保持同一口径。
  */
 export default function Today() {
   const t = useT();
@@ -85,6 +87,11 @@ export default function Today() {
   const now = dayjs();
   const counts = useMemo(() => attentionCounts(data.tasks), [data.tasks]);
   const todayTasks = useMemo(() => tasksForToday(data.tasks), [data.tasks]);
+  const todayDone = useMemo(
+    () => data.tasks.filter((task) => task.status === "done" && isDueToday(task)).length,
+    [data.tasks]
+  );
+  const todayTotal = todayDone + todayTasks.length;
   const todayIds = useMemo(() => new Set(todayTasks.map((x) => x.id)), [todayTasks]);
   const upcoming = useMemo(
     () =>
@@ -173,24 +180,31 @@ export default function Today() {
     .filter((m): m is NonNullable<typeof m> => Boolean(m));
 
   return (
-    <div className="flex flex-col gap-4">
-      <TodayHeader now={now} lang={lang} modeNames={modeNames} onChangeMode={() => setView("settings")} />
-
-      <QuickCapture
-        inputRef={quickRef}
-        title={quickTitle}
-        onTitle={setQuickTitle}
-        project={quickProject}
-        onProject={setQuickProject}
-        projects={data.projects}
-        onSubmit={capture}
+    <div className="flex flex-col gap-6">
+      <TodayHeader
+        now={now}
+        lang={lang}
+        modeNames={modeNames}
+        onChangeMode={() => setView("settings")}
+        done={todayDone}
+        total={todayTotal}
       />
 
-      <AttentionBar counts={counts} onOpen={openTaskList} />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex min-w-0 flex-col gap-5">
+          <QuickCapture
+            inputRef={quickRef}
+            title={quickTitle}
+            onTitle={setQuickTitle}
+            project={quickProject}
+            onProject={setQuickProject}
+            projects={data.projects}
+            onSubmit={capture}
+          />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(300px,0.85fr)]">
-        <div className="flex min-w-0 flex-col gap-4">
-          <CurrentProjectCard
+          <AttentionBar counts={counts} onOpen={openTaskList} />
+
+          <CurrentProject
             project={current}
             progress={currentProgress}
             next={currentNext}
@@ -200,7 +214,7 @@ export default function Today() {
             onCreateProject={() => setView("projects")}
           />
 
-          <TaskListCard
+          <TaskList
             title={t("today.today")}
             tasks={todayTasks.slice(0, 7)}
             projects={data.projects}
@@ -224,7 +238,7 @@ export default function Today() {
           />
 
           {upcoming.length > 0 && (
-            <TaskListCard
+            <TaskList
               title={t("today.upcoming")}
               tasks={upcoming}
               projects={data.projects}
@@ -234,9 +248,9 @@ export default function Today() {
           )}
         </div>
 
-        <div className="flex min-w-0 flex-col gap-4">
+        <aside className="flex min-w-0 flex-col gap-5 rounded-[calc(var(--radius-card)+2px)] border border-line/70 bg-panel/60 p-4 xl:sticky xl:top-5 xl:self-start">
           {showsProjectsPanel(workModes) && (
-            <ProjectsPanel
+            <ProjectsRail
               rows={projectRows}
               onOpen={(id) => openTaskList("all", id)}
               onViewAll={() => setView("projects")}
@@ -244,7 +258,7 @@ export default function Today() {
             />
           )}
 
-          <InboxPanel
+          <InboxRail
             tasks={inbox}
             onOpen={(task) => openTaskList("inbox", task.project_id ?? "")}
             onComplete={(id) => moveTask(id, "done")}
@@ -252,7 +266,7 @@ export default function Today() {
           />
 
           {showsToolsSummary(workModes) && (
-            <SystemPanel
+            <SystemRail
               devs={devs.length}
               ports={ports.length}
               ais={ais.length}
@@ -260,7 +274,7 @@ export default function Today() {
               onOpen={() => setView("overview")}
             />
           )}
-        </div>
+        </aside>
       </div>
     </div>
   );
@@ -271,44 +285,153 @@ function TodayHeader({
   lang,
   modeNames,
   onChangeMode,
+  done,
+  total,
 }: {
   now: dayjs.Dayjs;
   lang: ReturnType<typeof useLang>;
   modeNames: { labelKey: string }[];
   onChangeMode: () => void;
+  done: number;
+  total: number;
 }) {
   const t = useT();
+  const percent = total > 0 ? Math.round((done / total) * 100) : 0;
   return (
-    <header className="flex flex-col gap-3 border-b border-line/70 pb-4 sm:flex-row sm:items-end">
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-faint">
-          <span className="num">
-            {now.toDate().toLocaleDateString(localeFor(lang), {
-              month: "long",
-              day: "numeric",
-              weekday: "long",
-            })}
-          </span>
-          {modeNames.length > 0 && (
-            <>
-              <span aria-hidden="true">·</span>
-              <button
-                type="button"
-                onClick={onChangeMode}
-                className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[10.5px] text-dim transition-colors hover:border-accent/40 hover:text-text"
-                title={t("workMode.change")}
-              >
-                {modeNames.map((m) => t(m.labelKey)).join(" / ")}
-              </button>
-            </>
-          )}
+    <header className="workbench-hero relative rounded-[calc(var(--radius-card)+4px)] border border-line/80 px-5 py-6 sm:px-7 sm:py-7">
+      <HeroOrbit />
+      <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 items-start gap-4 sm:gap-5">
+          <BrandMark
+            className="mt-1 h-12 w-[54px] shrink-0 text-accent sm:h-16 sm:w-[72px]"
+            strokeWidth={4.5}
+          />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-faint">
+              <span className="num">
+                {now.toDate().toLocaleDateString(localeFor(lang), {
+                  month: "long",
+                  day: "numeric",
+                  weekday: "long",
+                })}
+              </span>
+              {modeNames.length > 0 && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    onClick={onChangeMode}
+                    className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[10.5px] text-dim transition-colors hover:border-accent/40 hover:text-text"
+                    title={t("workMode.change")}
+                  >
+                    {modeNames.map((m) => t(m.labelKey)).join(" / ")}
+                  </button>
+                </>
+              )}
+            </div>
+            <h1 className="t-heading mt-2 text-[34px] font-semibold leading-[1.02] tracking-[-0.035em] sm:text-[44px]">
+              {t("today.title")}
+            </h1>
+            <p className="mt-2 max-w-[34ch] text-[13px] leading-relaxed text-dim">
+              {t("today.subtitle")}
+            </p>
+          </div>
         </div>
-        <h1 className="t-heading mt-1 text-[22px] font-semibold leading-tight">
-          {t("today.title")}
-        </h1>
-        <p className="mt-1 text-[12.5px] text-dim">{t("today.subtitle")}</p>
+
+        <div className="flex shrink-0 items-center gap-3 self-start rounded-[calc(var(--radius-card))] border border-line/60 bg-panel/70 px-3 py-2.5 backdrop-blur-sm sm:self-center sm:gap-4 sm:px-4">
+          <ProgressRing percent={percent} size={76} strokeWidth={6} />
+          <div className="min-w-0">
+            <div className="text-[10px] text-faint">{t("today.today")}</div>
+            <div className="mt-0.5 whitespace-nowrap text-[12px] font-medium">
+              {t("today.progress", { done, total })}
+            </div>
+          </div>
+        </div>
       </div>
     </header>
+  );
+}
+
+function HeroOrbit() {
+  return (
+    <svg
+      className="pointer-events-none absolute -right-16 -top-20 h-[300px] w-[300px] text-accent/30 sm:-right-4 sm:-top-16"
+      viewBox="0 0 200 200"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="100" cy="100" r="94" stroke="currentColor" strokeOpacity=".22" />
+      <circle
+        cx="100"
+        cy="100"
+        r="72"
+        stroke="currentColor"
+        strokeOpacity=".12"
+        strokeDasharray="1.5 8"
+      />
+      <g className="hero-orbit-spin">
+        <circle cx="100" cy="6" r="4" fill="currentColor" fillOpacity=".7" />
+        <circle cx="194" cy="100" r="2.5" fill="currentColor" fillOpacity=".45" />
+        <circle cx="100" cy="172" r="2" fill="currentColor" fillOpacity=".3" />
+      </g>
+    </svg>
+  );
+}
+
+function ProgressRing({
+  percent,
+  size = 76,
+  strokeWidth = 6,
+  label,
+}: {
+  percent: number;
+  size?: number;
+  strokeWidth?: number;
+  label?: string;
+}) {
+  const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+  const radius = 46;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - clamped / 100);
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg
+        viewBox="0 0 100 100"
+        className="h-full w-full -rotate-90"
+        aria-hidden="true"
+      >
+        <circle
+          cx="50"
+          cy="50"
+          r={radius}
+          fill="none"
+          stroke="var(--color-line)"
+          strokeWidth={strokeWidth}
+        />
+        <circle
+          cx="50"
+          cy="50"
+          r={radius}
+          fill="none"
+          stroke="var(--color-accent)"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span
+          className="num font-semibold leading-none"
+          style={{ fontSize: Math.round(size * 0.22) }}
+        >
+          {clamped}%
+        </span>
+        {label && (
+          <span className="mt-1 text-[9px] text-faint">{label}</span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -331,45 +454,41 @@ function QuickCapture({
 }) {
   const t = useT();
   return (
-    <Card className="px-4 py-3">
-      <form
-        className="flex flex-col gap-2 sm:flex-row sm:items-center"
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSubmit();
-        }}
+    <form
+      className="flex flex-col gap-1.5 rounded-[calc(var(--radius-card)+2px)] border border-line/80 bg-panel px-2 py-2 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.5)] transition-colors focus-within:border-accent/50 focus-within:ring-2 focus-within:ring-accent/10 sm:flex-row sm:items-center sm:rounded-full"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit();
+      }}
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-2 pl-2">
+        <Plus size={16} className="shrink-0 text-accent" />
+        <input
+          ref={inputRef}
+          className="min-w-0 flex-1 bg-transparent py-1.5 text-[13px] text-text outline-none placeholder:text-faint"
+          value={title}
+          onChange={(e) => onTitle(e.target.value)}
+          placeholder={t("today.quickPlaceholder")}
+          aria-label={t("today.quickPlaceholder")}
+        />
+      </div>
+      <select
+        className="rounded-[var(--radius-btn)] border border-line bg-panel2 px-2 py-1.5 text-xs text-text outline-none sm:w-40 sm:border-0 sm:border-l sm:bg-transparent sm:pl-3"
+        value={project}
+        onChange={(e) => onProject(e.target.value)}
+        aria-label={t("today.quickProject")}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-btn)] border border-line bg-panel2/60 text-dim">
-            <Plus size={14} />
-          </span>
-          <input
-            ref={inputRef}
-            className={inputCls}
-            value={title}
-            onChange={(e) => onTitle(e.target.value)}
-            placeholder={t("today.quickPlaceholder")}
-            aria-label={t("today.quickPlaceholder")}
-          />
-        </div>
-        <select
-          className="rounded-[var(--radius-btn)] border border-line bg-panel2 px-2 py-1.5 text-xs text-text outline-none sm:w-44"
-          value={project}
-          onChange={(e) => onProject(e.target.value)}
-          aria-label={t("today.quickProject")}
-        >
-          <option value="">{t("today.inboxOption")}</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <Btn variant="primary" type="submit" className="shrink-0">
-          {t("today.quickAdd")}
-        </Btn>
-      </form>
-    </Card>
+        <option value="">{t("today.inboxOption")}</option>
+        {projects.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+      <Btn variant="primary" type="submit" className="shrink-0 sm:!rounded-full">
+        {t("today.quickAdd")}
+      </Btn>
+    </form>
   );
 }
 
@@ -384,7 +503,7 @@ function AttentionBar({
   const total = counts.overdue + counts.today + counts.doing + counts.inbox;
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-[11px] font-medium tracking-[0.04em] text-faint">
+      <span className="mr-1 text-[11px] font-medium tracking-[0.04em] text-faint">
         {t("today.attention")}
       </span>
       <AttentionChip
@@ -416,7 +535,7 @@ function AttentionBar({
   );
 }
 
-function CurrentProjectCard({
+function CurrentProject({
   project,
   progress,
   next,
@@ -436,8 +555,8 @@ function CurrentProjectCard({
   const t = useT();
   if (!project || !progress) {
     return (
-      <Card>
-        <SectionTitle>{t("today.current")}</SectionTitle>
+      <section className="rounded-[calc(var(--radius-card)+2px)] border border-dashed border-line/80 px-5 py-6">
+        <div className="text-[11px] font-medium text-faint">{t("today.current")}</div>
         <Empty
           action={
             <Btn variant="primary" onClick={onCreateProject}>
@@ -447,7 +566,7 @@ function CurrentProjectCard({
         >
           {t("today.noProjectHint")}
         </Empty>
-      </Card>
+      </section>
     );
   }
   const statusTone =
@@ -459,48 +578,36 @@ function CurrentProjectCard({
         ? t("projects.statusPaused")
         : t("projects.statusArchived");
   return (
-    <Card>
-      <SectionTitle
-        extra={
-          <button
-            type="button"
-            className="text-[11px] text-accent hover:underline"
-            onClick={onOpenTasks}
-          >
-            {t("today.viewTasks")}
-          </button>
-        }
-      >
-        {t("today.current")}
-      </SectionTitle>
-
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[15px] font-semibold">{project.name}</span>
-          <Badge tone={statusTone}>{statusLabel}</Badge>
-          {progress.overdue > 0 && (
-            <Badge tone="danger">
-              {t("projects.overdueCount", { count: progress.overdue })}
-            </Badge>
-          )}
-        </div>
-        <p className="line-clamp-2 text-[12.5px] leading-relaxed text-dim">
-          {project.note.trim() || t("projects.noGoal")}
-        </p>
-
-        <div>
-          <div className="mb-1 flex items-center justify-between text-[11px] text-dim">
-            <span>
-              {t("projects.progress", { done: progress.done, total: progress.total })}
-            </span>
-            <span className="num text-faint">{progress.percent}%</span>
+    <section className="relative overflow-hidden rounded-[calc(var(--radius-card)+2px)] border border-line/80 bg-panel p-5">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-accent/10 blur-3xl"
+      />
+      <div className="relative flex flex-col gap-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-[11px] font-medium text-faint">{t("today.current")}</div>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <h2 className="truncate text-[24px] font-semibold tracking-[-0.025em]">
+                {project.name}
+              </h2>
+              <Badge tone={statusTone}>{statusLabel}</Badge>
+              {progress.overdue > 0 && (
+                <Badge tone="danger">
+                  {t("projects.overdueCount", { count: progress.overdue })}
+                </Badge>
+              )}
+            </div>
+            <p className="mt-1 line-clamp-2 max-w-[52ch] text-[12.5px] leading-relaxed text-dim">
+              {project.note.trim() || t("projects.noGoal")}
+            </p>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-bg">
-            <div
-              className="h-full rounded-full bg-accent transition-[width]"
-              style={{ width: `${progress.percent}%` }}
-            />
-          </div>
+          <ProgressRing
+            percent={progress.percent}
+            size={72}
+            strokeWidth={6}
+            label={`${progress.done}/${progress.total}`}
+          />
         </div>
 
         <NextAction next={next} onOpen={onOpenTasks} />
@@ -519,7 +626,7 @@ function CurrentProjectCard({
           )}
         </div>
       </div>
-    </Card>
+    </section>
   );
 }
 
@@ -527,27 +634,29 @@ function NextAction({ next, onOpen }: { next: Task | null; onOpen: () => void })
   const t = useT();
   const due = next ? dueLabel(next.due) : null;
   return (
-    <div className="rounded-[var(--radius-btn)] border border-line/80 bg-panel2/50 px-3 py-2">
-      <div className="text-[10.5px] font-medium tracking-[0.04em] text-faint">
-        {t("today.nextAction")}
+    <div className="flex items-center gap-3 border-l-2 border-accent/60 pl-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-[10.5px] font-medium tracking-[0.04em] text-faint">
+          {t("today.nextAction")}
+        </div>
+        {next ? (
+          <button
+            type="button"
+            onClick={onOpen}
+            className="mt-0.5 block w-full truncate text-left text-[13.5px] font-medium hover:text-accent"
+          >
+            {next.title}
+          </button>
+        ) : (
+          <div className="mt-0.5 text-[12px] text-dim">{t("today.noNextAction")}</div>
+        )}
       </div>
-      {next && due ? (
-        <button
-          type="button"
-          onClick={onOpen}
-          className="mt-0.5 flex w-full items-center gap-2 text-left"
-        >
-          <span className="min-w-0 flex-1 truncate text-[13px]">{next.title}</span>
-          <Badge tone={due.tone}>{due.text}</Badge>
-        </button>
-      ) : (
-        <div className="mt-0.5 text-[12px] text-dim">{t("today.noNextAction")}</div>
-      )}
+      {due && <Badge tone={due.tone}>{due.text}</Badge>}
     </div>
   );
 }
 
-function TaskListCard({
+function TaskList({
   title,
   tasks,
   projects,
@@ -568,8 +677,16 @@ function TaskListCard({
 }) {
   const t = useT();
   return (
-    <Card>
-      <SectionTitle extra={extra}>{title}</SectionTitle>
+    <section className="flex flex-col gap-1">
+      <div className="flex items-center justify-between gap-3 border-b border-line/70 pb-2">
+        <div className="flex items-baseline gap-2">
+          <h2 className="text-[14px] font-semibold">{title}</h2>
+          {tasks.length > 0 && (
+            <span className="num text-[10.5px] text-faint">{tasks.length}</span>
+          )}
+        </div>
+        {extra}
+      </div>
       {tasks.length === 0 ? (
         <Empty action={emptyAction}>{emptyText ?? t("today.noTasks")}</Empty>
       ) : (
@@ -587,11 +704,11 @@ function TaskListCard({
           ))}
         </ul>
       )}
-    </Card>
+    </section>
   );
 }
 
-function ProjectsPanel({
+function ProjectsRail({
   rows,
   onOpen,
   onViewAll,
@@ -604,54 +721,44 @@ function ProjectsPanel({
 }) {
   const t = useT();
   return (
-    <Card>
-      <SectionTitle
-        extra={
-          <button
-            type="button"
-            className="text-[11px] text-accent hover:underline"
-            onClick={onViewAll}
-          >
-            {t("today.viewProjects")}
-          </button>
-        }
-      >
-        {t("today.projects")}
-      </SectionTitle>
+    <section>
+      <RailHeader title={t("today.projects")} action={t("today.viewProjects")} onAction={onViewAll} />
       {rows.length === 0 ? (
-        <Empty
-          action={
-            <Btn onClick={onCreate}>
-              <Plus size={13} /> {t("today.createProject")}
-            </Btn>
-          }
-        >
-          {t("today.noProjectHint")}
-        </Empty>
+        <div className="pt-2">
+          <Empty
+            action={
+              <Btn onClick={onCreate}>
+                <Plus size={13} /> {t("today.createProject")}
+              </Btn>
+            }
+          >
+            {t("today.noProjectHint")}
+          </Empty>
+        </div>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col">
           {rows.map(({ project, progress, next }) => (
-            <li key={project.id}>
+            <li key={project.id} className="border-b border-line/40 last:border-0">
               <button
                 type="button"
                 onClick={() => onOpen(project.id)}
-                className="w-full rounded-[var(--radius-btn)] border border-line/70 bg-panel2/40 px-2.5 py-2 text-left transition-colors hover:border-accent/40"
+                className="group flex w-full flex-col gap-1.5 py-2.5 text-left"
               >
                 <div className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
+                  <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium group-hover:text-accent">
                     {project.name}
                   </span>
-                  <span className="num text-[10.5px] text-faint">
+                  <span className="num text-[10px] text-faint">
                     {progress.done}/{progress.total}
                   </span>
                 </div>
-                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-bg">
+                <div className="h-1 overflow-hidden rounded-full bg-bg">
                   <div
                     className="h-full rounded-full bg-accent/80"
                     style={{ width: `${progress.percent}%` }}
                   />
                 </div>
-                <div className="mt-1 flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5">
                   <span className="min-w-0 flex-1 truncate text-[10.5px] text-dim">
                     {next ? next.title : t("projects.noOpenTasks")}
                   </span>
@@ -664,11 +771,11 @@ function ProjectsPanel({
           ))}
         </ul>
       )}
-    </Card>
+    </section>
   );
 }
 
-function InboxPanel({
+function InboxRail({
   tasks,
   onOpen,
   onComplete,
@@ -681,24 +788,15 @@ function InboxPanel({
 }) {
   const t = useT();
   return (
-    <Card>
-      <SectionTitle
-        extra={
-          <button
-            type="button"
-            className="text-[11px] text-accent hover:underline"
-            onClick={onViewAll}
-          >
-            {t("today.viewTasks")}
-          </button>
-        }
-      >
-        <span className="flex items-center gap-1.5">
-          <Inbox size={13} /> {t("today.inboxTitle")}
-        </span>
-      </SectionTitle>
+    <section className="border-t border-line/60 pt-4">
+      <RailHeader
+        title={t("today.inboxTitle")}
+        action={t("today.viewTasks")}
+        onAction={onViewAll}
+        icon={<Inbox size={12} />}
+      />
       {tasks.length === 0 ? (
-        <div className="rounded-[var(--radius-btn)] border border-dashed border-line/80 px-3 py-4 text-center">
+        <div className="py-2.5">
           <div className="text-[12px] text-dim">{t("today.inboxEmpty")}</div>
           <div className="mt-1 text-[10.5px] text-faint">{t("today.inboxHint")}</div>
         </div>
@@ -716,11 +814,11 @@ function InboxPanel({
           ))}
         </ul>
       )}
-    </Card>
+    </section>
   );
 }
 
-function SystemPanel({
+function SystemRail({
   devs,
   ports,
   ais,
@@ -735,50 +833,63 @@ function SystemPanel({
 }) {
   const t = useT();
   return (
-    <Card>
-      <SectionTitle
-        extra={
-          <button
-            type="button"
-            className="text-[11px] text-accent hover:underline"
-            onClick={onOpen}
-          >
-            {t("today.openTools")}
-          </button>
-        }
-      >
-        {t("today.system")}
-      </SectionTitle>
+    <section className="border-t border-line/60 pt-4">
+      <RailHeader title={t("today.system")} action={t("today.openTools")} onAction={onOpen} />
       {error ? (
-        <div className="rounded-[var(--radius-btn)] border border-danger/30 bg-danger/8 px-2.5 py-2 text-[11px] text-danger">
+        <div className="mt-2 rounded-[var(--radius-btn)] border border-danger/30 bg-danger/8 px-2.5 py-2 text-[11px] text-danger">
           {t("today.systemError", { err: error })}
         </div>
       ) : (
-        <ul className="flex flex-col gap-1.5 text-[11.5px]">
+        <ul className="mt-1 flex flex-col gap-2 text-[11.5px]">
           <li className="flex items-center gap-2">
             <Server size={12} className="text-ok" />
             <span className="flex-1 text-dim">
               {t("today.services", { count: devs })}
             </span>
-            <span className="num">{devs}</span>
           </li>
           <li className="flex items-center gap-2">
             <span className="flex h-3 w-3 items-center justify-center text-accent">
               <span className="h-1.5 w-1.5 rounded-full bg-accent" />
             </span>
             <span className="flex-1 text-dim">{t("today.ports", { count: ports })}</span>
-            <span className="num">{ports}</span>
           </li>
           <li className="flex items-center gap-2">
             <Sparkles size={12} className="text-warn" />
             <span className="flex-1 text-dim">
               {t("today.aiProcesses", { count: ais })}
             </span>
-            <span className="num">{ais}</span>
           </li>
         </ul>
       )}
-    </Card>
+    </section>
+  );
+}
+
+function RailHeader({
+  title,
+  action,
+  onAction,
+  icon,
+}: {
+  title: string;
+  action: string;
+  onAction: () => void;
+  icon?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <h2 className="flex items-center gap-1.5 text-[11px] font-medium tracking-[0.04em] text-faint">
+        {icon}
+        {title}
+      </h2>
+      <button
+        type="button"
+        className="text-[10.5px] text-accent hover:underline"
+        onClick={onAction}
+      >
+        {action}
+      </button>
+    </div>
   );
 }
 
@@ -828,7 +939,7 @@ function TaskRow({
   const t = useT();
   const due = dueLabel(task.due);
   return (
-    <li className="group flex items-center gap-2 border-b border-line/50 py-1.5 last:border-0">
+    <li className="group flex items-center gap-2 rounded-[var(--radius-btn)] border-b border-line/50 px-1 py-2 transition-colors last:border-0 hover:bg-panel2/50">
       <button
         type="button"
         onClick={onComplete}

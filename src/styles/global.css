@@ -6,21 +6,24 @@
  * 三条硬规则，全站共用：
  * 1. 层次来自「表面 + 1px 内描边 + 光」，不来自给每张卡片加大投影和彩色顶条。
  * 2. 数字用等宽表格数字排版，标签用小号无衬线；不拿全大写当装饰。
- * 3. 强调色只有一个（信号青），它表示「正在发生」——不是每个标题都要一条。
+ * 3. 强调色只有一个，它表示「正在发生」——不是每个标题都要一条。
  */
 @theme {
-  --color-bg: #07080b;
-  --color-panel: #0c0f15;
-  --color-panel2: #11151d;
-  --color-line: #1b212c;
-  --color-text: #e8ecf2;
-  --color-dim: #8a93a6;
-  --color-faint: #596173;
-  --color-accent: #22d3ee;
-  --color-accentsoft: #0d2f38;
-  --color-ok: #3ecf8e;
-  --color-warn: #f5b544;
-  --color-danger: #ff6b6b;
+  /* 首帧兜底使用默认的 Frost 亮色；真实主题仍由 applyTheme() 覆盖。 */
+  --color-bg: #f2f4f7;
+  --color-panel: #ffffff;
+  --color-panel2: #f7f9fc;
+  --color-line: #dde3ec;
+  --color-text: #10141b;
+  --color-dim: #556174;
+  --color-faint: #7d8899;
+  --color-accent: #0b6bcb;
+  --color-accent2: #0b6bcb;
+  --color-on-accent: #ffffff;
+  --color-accentsoft: #e8f1fb;
+  --color-ok: #0b7a54;
+  --color-warn: #a86400;
+  --color-danger: #c02b2b;
   --font-sans:
     "Segoe UI Variable Display", "Segoe UI", -apple-system, "PingFang SC",
     "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
@@ -389,6 +392,33 @@ input[type="checkbox"] {
   accent-color: var(--color-accent);
 }
 
+/* ── 工作台首页：品牌头图与缓慢轨道 ─────────────────────── */
+.workbench-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      120% 160% at 88% -20%,
+      color-mix(in srgb, var(--color-accent) 14%, transparent) 0%,
+      transparent 52%
+    ),
+    linear-gradient(
+      128deg,
+      color-mix(in srgb, var(--color-accent) 5%, var(--color-panel)) 0%,
+      var(--color-panel) 46%,
+      var(--color-panel) 100%
+    );
+}
+.hero-orbit-spin {
+  transform-origin: 100px 100px;
+  animation: hero-spin 36s linear infinite;
+}
+@keyframes hero-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ── 动效区：全部 keyframes 只动 transform 与 opacity（GPU 合成层） ── */
 
 /* 唯一的编排动效：进入页面时内容自下而上就位 */
@@ -514,6 +544,7 @@ input[type="checkbox"] {
 [data-motion="off"] .card-hover,
 [data-motion="off"] .t-btn,
 [data-motion="off"] .empty-float > svg,
+[data-motion="off"] .hero-orbit-spin,
 /* Tailwind 内置的 animate-spin / animate-pulse 也在动效管辖范围内 */
 [data-motion="off"] .animate-pulse,
 [data-motion="off"] .animate-spin {

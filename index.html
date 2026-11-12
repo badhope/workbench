@@ -42,8 +42,26 @@
           if (raw) {
             var parsed = JSON.parse(raw);
             var id = parsed && parsed.state && parsed.state.theme;
-            var DARK = ["midnight", "aurora", "terminal", "void"];
-            var LIGHT = ["frost", "paper", "ink", "jade"];
+            var DARK = [
+              "midnight",
+              "aurora",
+              "terminal",
+              "void",
+              "midnight-aurora",
+              "ember",
+              "matcha",
+              "grape-soda",
+            ];
+            var LIGHT = [
+              "frost",
+              "paper",
+              "ink",
+              "jade",
+              "nordic-light",
+              "sakura",
+              "mono-brutal",
+              "sky",
+            ];
             if (DARK.indexOf(id) >= 0) dark = true;
             else if (LIGHT.indexOf(id) >= 0) dark = false;
             // 自定义主题：按保存的 bg 亮度判断，与 tokens.ts 的 luminanceOf 同口径
