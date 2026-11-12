@@ -1,8 +1,8 @@
-// 运行日志页文案。key 约定：前缀 "logs." + 语义名；三语必须同 key 同全。
+// 应用日志页文案。key 约定：前缀 "logs." + 语义名；三语必须同 key 同全。
 // 由页面转换时填充；插值用 {name} 占位。
 export const dict = {
   en: {
-    "logs.title": "Logs",
+    "logs.title": "App logs",
     "logs.autoRefresh": "Auto refresh",
     "logs.refresh": "Refresh",
     "logs.clear": "Clear",
@@ -21,7 +21,7 @@ export const dict = {
     "logs.shown": "{shown} / {total} lines",
   },
   zh: {
-    "logs.title": "运行日志",
+    "logs.title": "应用日志",
     "logs.autoRefresh": "自动刷新",
     "logs.refresh": "刷新",
     "logs.clear": "清空",
@@ -40,7 +40,7 @@ export const dict = {
     "logs.shown": "{shown} / {total} 行",
   },
   ja: {
-    "logs.title": "ログ",
+    "logs.title": "アプリログ",
     "logs.autoRefresh": "自動更新",
     "logs.refresh": "更新",
     "logs.clear": "クリア",

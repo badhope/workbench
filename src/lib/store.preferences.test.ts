@@ -339,3 +339,51 @@ describe("persist 迁移 v3→v4", () => {
     expect(migratePersisted({}).backgroundImage).toBeNull();
   });
 });
+
+/** persist v6 → v7：工作方式、任务视图与当前视图。 */
+describe("persist 迁移 v6→v7", () => {
+  it("旧用户没有工作方式字段时补默认值，并视为已选择", () => {
+    const migrated = migratePersisted({ onboardingDone: true, theme: "frost" });
+    expect(migrated.workModes).toEqual(["development", "project"]);
+    expect(migrated.workModeChosen).toBe(true);
+  });
+
+  it("新用户未完成引导时保留空选择，交给首启决定", () => {
+    const migrated = migratePersisted({ onboardingDone: false });
+    expect(migrated.workModes).toEqual([]);
+    expect(migrated.workModeChosen).toBe(false);
+  });
+
+  it("合法工作方式保留，未知值丢弃，custom 互斥", () => {
+    expect(migratePersisted({ workModes: ["content", "research"] }).workModes).toEqual([
+      "content",
+      "research",
+    ]);
+    expect(migratePersisted({ workModes: ["ghost", "project"] }).workModes).toEqual([
+      "project",
+    ]);
+    expect(migratePersisted({ workModes: ["custom", "project"] }).workModes).toEqual([
+      "custom",
+    ]);
+  });
+
+  it("任务视图 / 范围 / 项目筛选做白名单回退", () => {
+    const bad = migratePersisted({
+      taskView: "grid",
+      taskScope: "someday",
+      taskProjectFilter: 42,
+    });
+    expect(bad.taskView).toBe("list");
+    expect(bad.taskScope).toBe("all");
+    expect(bad.taskProjectFilter).toBe("");
+
+    const good = migratePersisted({
+      taskView: "board",
+      taskScope: "week",
+      taskProjectFilter: "p1",
+    });
+    expect(good.taskView).toBe("board");
+    expect(good.taskScope).toBe("week");
+    expect(good.taskProjectFilter).toBe("p1");
+  });
+});

@@ -4,6 +4,7 @@ import { useT } from "../lib/i18n";
 import { BUILTIN_THEMES, swatchOf } from "../lib/theme/presets";
 import type { MotionLevel } from "../lib/theme/apply";
 import { Btn, Modal } from "../ui";
+import { WorkModeChoices } from "./WorkModeChoices";
 
 /** 引导第 3 步可选的动效档位。与外观面板同一份语义，各自维护展示文案。 */
 const MOTIONS: { id: MotionLevel; key: string }[] = [
@@ -30,9 +31,11 @@ export function OnboardingOverlay() {
   const setTheme = useStore((s) => s.setTheme);
   const motion = useStore((s) => s.motion);
   const setMotion = useStore((s) => s.setMotion);
+  const workModes = useStore((s) => s.workModes);
+  const setWorkModes = useStore((s) => s.setWorkModes);
   const setOnboardingDone = useStore((s) => s.setOnboardingDone);
   const [step, setStep] = useState(0);
-  const total = 3;
+  const total = 4;
 
   if (onboardingDone) return null;
 
@@ -49,6 +52,21 @@ export function OnboardingOverlay() {
 
         {step === 0 && (
           <div>
+            <h3 className="text-[15px] font-semibold">{t("workMode.title")}</h3>
+            <p className="mt-1 text-[12px] text-dim">{t("workMode.body")}</p>
+            <div className="mt-3">
+              <WorkModeChoices value={workModes} onChange={setWorkModes} />
+            </div>
+            <p className={`mt-2 text-[11px] ${workModes.length ? "text-faint" : "text-warn"}`}>
+              {workModes.length
+                ? t("workMode.selected", { count: workModes.length })
+                : t("workMode.required")}
+            </p>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div>
             <h3 className="text-[15px] font-semibold">{t("onboarding.step1Title")}</h3>
             <ul className="mt-2 flex flex-col gap-1.5 text-[12.5px] leading-relaxed text-dim">
               <li>{t("onboarding.step1Point1")}</li>
@@ -58,7 +76,7 @@ export function OnboardingOverlay() {
           </div>
         )}
 
-        {step === 1 && (
+        {step === 2 && (
           <div>
             <h3 className="text-[15px] font-semibold">{t("onboarding.step2Title")}</h3>
             <p className="mt-1 text-[12px] text-dim">{t("onboarding.step2Body")}</p>
@@ -102,7 +120,7 @@ export function OnboardingOverlay() {
           </div>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <div>
             <h3 className="text-[15px] font-semibold">{t("onboarding.step3Title")}</h3>
             <p className="mt-1 text-[12px] text-dim">{t("onboarding.step3Body")}</p>
@@ -134,7 +152,11 @@ export function OnboardingOverlay() {
             <Btn onClick={() => setStep(step - 1)}>{t("onboarding.back")}</Btn>
           )}
           {step < total - 1 ? (
-            <Btn variant="primary" onClick={() => setStep(step + 1)}>
+            <Btn
+              variant="primary"
+              disabled={step === 0 && workModes.length === 0}
+              onClick={() => setStep(step + 1)}
+            >
               {t("onboarding.next")}
             </Btn>
           ) : (

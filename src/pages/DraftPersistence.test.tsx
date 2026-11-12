@@ -10,7 +10,11 @@ vi.mock("../lib/echarts", () => ({ EChart: () => null }));
 
 it("keeps a task draft when saving is rejected", async () => {
   setLang("zh");
-  useStore.setState({ data: { projects: [], tasks: [] }, addTask: () => false });
+  useStore.setState({
+    data: { projects: [], tasks: [] },
+    addTask: () => false,
+    taskView: "board",
+  });
   render(<Tasks />);
   const input = screen.getAllByPlaceholderText("添加任务，回车确认")[0];
   await userEvent.type(input, "任务草稿{Enter}");

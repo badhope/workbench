@@ -22,6 +22,12 @@ import {
   type WidgetId,
 } from "./layout";
 import { getLang, t } from "./i18n";
+import {
+  DEFAULT_WORK_MODES,
+  normalizeWorkModes,
+  type WorkMode,
+} from "./workModes";
+import type { TaskScope } from "./workbench";
 import { persist } from "zustand/middleware";
 import {
   backupData,
@@ -102,6 +108,13 @@ interface UiState {
   /** 首启 3 步引导是否已完成/跳过（true 后永不复弹） */
   onboardingDone: boolean;
   /**
+   * 用户选择的工作方式（多选）。空数组 = 尚未选择；
+   * 只影响默认呈现，不锁定功能、不改变权限。
+   */
+  workModes: WorkMode[];
+  /** 是否已经明确选择过工作方式（用于设置页与首启判断）。 */
+  workModeChosen: boolean;
+  /**
    * 氛围粒子背景。默认关（省电）；开启后仍受双重约束：
    * 生效动效档为 off 时停用、页面隐藏时自动暂停（见 ParticleBackdrop）。
    */
@@ -125,6 +138,12 @@ interface UiState {
   widgetSpans: Partial<Record<WidgetId, number>>;
   /** 进程页视图：扁平列表 / 父子树 */
   procView: ProcView;
+  /** 任务页视图：列表优先，看板是第二视图 */
+  taskView: "list" | "board";
+  /** 任务页范围：全部 / 今天 / 本周 / 收件箱 */
+  taskScope: TaskScope;
+  /** 任务页项目筛选；空字符串 = 全部项目 */
+  taskProjectFilter: string;
   /** 进程页搜索词。放在 store 里是因为端口页/命令面板要能带着 PID 跳过来。 */
   procQuery: string;
   /** 跳转后要高亮的进程 PID（一次性） */
@@ -181,6 +200,13 @@ interface Store extends UiState, RuntimeState {
   setMotion: (m: MotionLevel) => void;
   /** 完成或跳过首启引导（二者同义：都永久关闭） */
   setOnboardingDone: () => void;
+  /** 设置工作方式（多选）；空数组视为尚未选择。 */
+  setWorkModes: (modes: WorkMode[]) => void;
+  /** 标记用户已明确选择工作方式。 */
+  setWorkModeChosen: (chosen: boolean) => void;
+  setTaskView: (v: "list" | "board") => void;
+  setTaskScope: (v: TaskScope) => void;
+  setTaskProjectFilter: (id: string) => void;
   /** 开关氛围粒子背景 */
   setParticles: (v: boolean) => void;
   /** 设置粒子氛围强度 0-100（自动钳制取整） */
@@ -309,9 +335,26 @@ export function migratePersisted(persisted: unknown): Record<string, unknown> {
     widgetHidden: normalizeHidden(state.widgetHidden),
     widgetSpans: normalizeSpans(state.widgetSpans),
     procView: state.procView === "tree" ? "tree" : "flat",
+    taskView: state.taskView === "board" ? "board" : "list",
+    taskScope:
+      state.taskScope === "today" ||
+      state.taskScope === "week" ||
+      state.taskScope === "inbox"
+        ? state.taskScope
+        : "all",
+    taskProjectFilter:
+      typeof state.taskProjectFilter === "string" ? state.taskProjectFilter : "",
     motion: normalizeMotion(state.motion),
     motionExplicit: state.motionExplicit === true,
     onboardingDone: state.onboardingDone === true,
+    workModes:
+      normalizeWorkModes(state.workModes).length > 0
+        ? normalizeWorkModes(state.workModes)
+        : state.onboardingDone === true
+          ? DEFAULT_WORK_MODES
+          : [],
+    workModeChosen:
+      state.workModeChosen === true || state.onboardingDone === true,
     particles: state.particles === true,
     particlesIntensity: normalizeIntensity(state.particlesIntensity),
     backgroundImage: isBackgroundDataUrl(state.backgroundImage)
@@ -359,6 +402,8 @@ export const useStore = create<Store>()(
       motion: "standard",
       motionExplicit: false,
       onboardingDone: false,
+      workModes: [],
+      workModeChosen: false,
       particles: false,
       particlesIntensity: 65,
       backgroundImage: null,
@@ -368,10 +413,13 @@ export const useStore = create<Store>()(
       widgetHidden: [],
       widgetSpans: {},
       procView: "flat",
+      taskView: "list",
+      taskScope: "all",
+      taskProjectFilter: "",
       procQuery: "",
       focusPid: null,
       refreshMs: 3000,
-      view: "overview",
+      view: "today",
       alwaysOnTop: false,
       setAlwaysOnTop: (v) => set({ alwaysOnTop: v }),
       procs: [],
@@ -417,7 +465,26 @@ export const useStore = create<Store>()(
         set({ motion: m, motionExplicit: true });
         applyMotion(effectiveMotion(get()));
       },
-      setOnboardingDone: () => set({ onboardingDone: true }),
+      setOnboardingDone: () => {
+        const current = get();
+        set({
+          onboardingDone: true,
+          workModeChosen: true,
+          workModes:
+            current.workModes.length > 0 ? current.workModes : DEFAULT_WORK_MODES,
+        });
+      },
+      setWorkModes: (modes) => {
+        const normalized = normalizeWorkModes(modes);
+        set({
+          workModes: normalized,
+          workModeChosen: normalized.length > 0,
+        });
+      },
+      setWorkModeChosen: (chosen) => set({ workModeChosen: chosen }),
+      setTaskView: (v) => set({ taskView: v }),
+      setTaskScope: (v) => set({ taskScope: v }),
+      setTaskProjectFilter: (id) => set({ taskProjectFilter: id }),
       setParticles: (v) => set({ particles: v }),
       setParticlesIntensity: (v) => set({ particlesIntensity: normalizeIntensity(v) }),
       setBackground: (dataUrl) =>
@@ -1163,8 +1230,9 @@ export const useStore = create<Store>()(
       // 版本 4：新增动效档位（motion/motionExplicit）与首启引导标记。
       // 版本 5：新增氛围粒子开关（particles，默认关）。
       // 版本 6：新增粒子强度（默认 65）与自定义背景图（默认 null）。
+      // 版本 7：新增工作方式多选与任务页视图/范围/项目筛选。
       // 迁移只做「补齐与清洗」，不覆盖用户的显式选择。
-      version: 6,
+      version: 7,
       migrate: (persisted: unknown) => migratePersisted(persisted) as never,
       partialize: (s) => ({
         theme: s.theme,
@@ -1172,6 +1240,8 @@ export const useStore = create<Store>()(
         motion: s.motion,
         motionExplicit: s.motionExplicit,
         onboardingDone: s.onboardingDone,
+        workModes: s.workModes,
+        workModeChosen: s.workModeChosen,
         particles: s.particles,
         particlesIntensity: s.particlesIntensity,
         backgroundImage: s.backgroundImage,
@@ -1181,6 +1251,9 @@ export const useStore = create<Store>()(
         widgetHidden: s.widgetHidden,
         widgetSpans: s.widgetSpans,
         procView: s.procView,
+        taskView: s.taskView,
+        taskScope: s.taskScope,
+        taskProjectFilter: s.taskProjectFilter,
         refreshMs: s.refreshMs,
         alwaysOnTop: s.alwaysOnTop,
       }),

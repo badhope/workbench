@@ -45,7 +45,7 @@ export function VerticalNav({
       {groups.map((g) => (
         <div key={g.key} className="mb-0.5">
           {collapsed ? (
-            g.key !== "monitor" && (
+            g.key !== "home" && (
               <div className="mx-2 my-2 border-t border-line/60" aria-hidden="true" />
             )
           ) : (

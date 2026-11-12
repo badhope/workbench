@@ -8,6 +8,7 @@ import {
   Server,
   Settings as SettingsIcon,
   Sparkles,
+  Sun,
   type LucideIcon,
 } from "lucide-react";
 import { lazy, memo, type ComponentType } from "react";
@@ -16,7 +17,7 @@ import { lazy, memo, type ComponentType } from "react";
  * 页面注册表：导航项、图标、分组、懒加载组件、i18n key 的唯一来源。
  *
  * 分组（group）的意义：页面到 9 个之后，平铺侧边栏让用户每次都要扫一遍。
- * 按「概览 / 监控 / AI / 工作 / 系统」分组后，用户先认组再认项，扫视成本明显降低；
+ * 按「开始 / 工作 / 工具 / 系统」分组后，用户先认组再认项，扫视成本明显降低；
  * 窄屏下组可以整体折叠，只留当前组的项。
  */
 export interface PageDef {
@@ -26,26 +27,17 @@ export interface PageDef {
   load: () => Promise<{ default: ComponentType }>;
 }
 
-export type PageGroupKey = "monitor" | "ai" | "work" | "system";
+export type PageGroupKey = "home" | "work" | "tools" | "system";
 
 export const PAGE_GROUPS: { key: PageGroupKey; label: string }[] = [
-  { key: "monitor", label: "app.group.monitor" },
-  { key: "ai", label: "app.group.ai" },
+  { key: "home", label: "app.group.home" },
   { key: "work", label: "app.group.work" },
+  { key: "tools", label: "app.group.tools" },
   { key: "system", label: "app.group.system" },
 ];
 
 export const PAGES = [
-  {
-    key: "overview",
-    icon: LayoutDashboard,
-    group: "monitor",
-    load: () => import("./Overview"),
-  },
-  { key: "processes", icon: Cpu, group: "monitor", load: () => import("./Processes") },
-  { key: "servers", icon: Server, group: "monitor", load: () => import("./Servers") },
-  { key: "ai", icon: Sparkles, group: "ai", load: () => import("./AiSessions") },
-  { key: "costs", icon: Coins, group: "ai", load: () => import("./Costs") },
+  { key: "today", icon: Sun, group: "home", load: () => import("./Today") },
   {
     key: "projects",
     icon: FolderKanban,
@@ -53,6 +45,16 @@ export const PAGES = [
     load: () => import("./Projects"),
   },
   { key: "tasks", icon: ListChecks, group: "work", load: () => import("./Tasks") },
+  {
+    key: "overview",
+    icon: LayoutDashboard,
+    group: "tools",
+    load: () => import("./Overview"),
+  },
+  { key: "processes", icon: Cpu, group: "tools", load: () => import("./Processes") },
+  { key: "servers", icon: Server, group: "tools", load: () => import("./Servers") },
+  { key: "ai", icon: Sparkles, group: "tools", load: () => import("./AiSessions") },
+  { key: "costs", icon: Coins, group: "tools", load: () => import("./Costs") },
   {
     key: "settings",
     icon: SettingsIcon,
@@ -87,7 +89,7 @@ export function pagesByGroup(): { group: PageGroupKey; pages: PageDef[] }[] {
 /** 某个视图属于哪个组（用于折叠态高亮当前组）。 */
 export function groupOf(view: ViewKey): PageGroupKey {
   const found = PAGES.find((p) => p.key === view);
-  return found ? found.group : "monitor";
+  return found ? found.group : "home";
 }
 
-export const DEFAULT_VIEW: ViewKey = "overview";
+export const DEFAULT_VIEW: ViewKey = "today";

@@ -6,11 +6,13 @@ import { useShallow } from "zustand/react/shallow";
 import { isBackend, isTauri } from "../lib/api";
 
 import { APP_VERSION, setLang, useLang, useT, type Lang } from "../lib/i18n";
-import { Badge, Btn, Card, ConfirmDialog, Field, SectionTitle, inputCls } from "../ui";
+import { Badge, Btn, Card, ConfirmDialog, Field, Modal, SectionTitle, inputCls } from "../ui";
 import { AppearancePanel } from "../components/AppearancePanel";
 import { AutostartCard } from "../components/AutostartCard";
 import { BackupPanel } from "../components/BackupPanel";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
+import { WorkModeChoices } from "../components/WorkModeChoices";
+import { WORK_MODES, type WorkMode } from "../lib/workModes";
 import { formatUsd } from "../lib/util";
 import type { CostSettings, WorkbenchData } from "../types";
 
@@ -68,6 +70,10 @@ const LANG_OPTIONS: { code: Lang; label: string }[] = [
 export default function Settings() {
   const t = useT();
   const lang = useLang();
+  const workModes = useStore((s) => s.workModes);
+  const setWorkModes = useStore((s) => s.setWorkModes);
+  const [modeOpen, setModeOpen] = useState(false);
+  const [modeDraft, setModeDraft] = useState<WorkMode[]>(workModes);
   const {
     refreshMs,
     setRefreshMs,
@@ -151,6 +157,41 @@ export default function Settings() {
         <h2 className="text-xl font-bold">{t("settings.pageTitle")}</h2>
         <span className="text-xs text-dim">{t("settings.pageSub")}</span>
       </div>
+
+      <Card>
+        <SectionTitle
+          extra={
+            <Btn
+              onClick={() => {
+                setModeDraft(workModes);
+                setModeOpen(true);
+              }}
+            >
+              {t("workMode.change")}
+            </Btn>
+          }
+        >
+          {t("workMode.title")}
+        </SectionTitle>
+        {workModes.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {workModes.map((id) => {
+              const mode = WORK_MODES.find((m) => m.id === id);
+              if (!mode) return null;
+              return (
+                <Badge key={id} tone="accent">
+                  {t(mode.labelKey)}
+                </Badge>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-[12px] text-warn">{t("workMode.none")}</p>
+        )}
+        <p className="mt-2 text-[11px] leading-relaxed text-dim">
+          {t("workMode.settingsHint")}
+        </p>
+      </Card>
 
       <AppearancePanel />
 
@@ -400,6 +441,34 @@ export default function Settings() {
           </div>{" "}
         </div>
       </div>
+
+      <Modal
+        open={modeOpen}
+        title={t("workMode.title")}
+        onClose={() => setModeOpen(false)}
+        wide
+        footer={
+          <>
+            <Btn onClick={() => setModeOpen(false)}>{t("projects.cancel")}</Btn>
+            <Btn
+              variant="primary"
+              disabled={modeDraft.length === 0}
+              onClick={() => {
+                setWorkModes(modeDraft);
+                setModeOpen(false);
+              }}
+            >
+              {t("projects.save")}
+            </Btn>
+          </>
+        }
+      >
+        <p className="mb-3 text-[12px] leading-relaxed text-dim">{t("workMode.body")}</p>
+        <WorkModeChoices value={modeDraft} onChange={setModeDraft} />
+        <p className="mt-3 text-[11px] leading-relaxed text-faint">
+          {t("workMode.settingsHint")}
+        </p>
+      </Modal>
 
       <ConfirmDialog
         open={confirmReload}

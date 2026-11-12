@@ -7,6 +7,7 @@
 //  - 插值用 {name} 占位：t("store.killSent", { pid: 123 })
 import { useMemo, useSyncExternalStore } from "react";
 import { dict as core } from "./core";
+import { dict as today } from "./today";
 import { dict as overview } from "./overview";
 import { dict as processes } from "./processes";
 import { dict as servers } from "./servers";
@@ -26,6 +27,7 @@ type Dict = Record<string, string>;
 const DICTS: Record<Lang, Dict> = {
   en: {
     ...core.en,
+    ...today.en,
     ...overview.en,
     ...processes.en,
     ...servers.en,
@@ -37,6 +39,7 @@ const DICTS: Record<Lang, Dict> = {
   },
   zh: {
     ...core.zh,
+    ...today.zh,
     ...overview.zh,
     ...processes.zh,
     ...servers.zh,
@@ -48,6 +51,7 @@ const DICTS: Record<Lang, Dict> = {
   },
   ja: {
     ...core.ja,
+    ...today.ja,
     ...overview.ja,
     ...processes.ja,
     ...servers.ja,
