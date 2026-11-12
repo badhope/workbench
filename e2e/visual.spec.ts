@@ -84,14 +84,14 @@ async function pickTheme(page: Page, name: string) {
   await gotoAppearance(page);
   await page.locator(`main button[aria-label="${name}"]`).first().click();
   await page.waitForTimeout(450);
-  await gotoPage(page, "概览");
+  await gotoPage(page, "系统概览");
 }
 
 async function pickLayout(page: Page, id: string) {
   await gotoAppearance(page);
   await page.locator(`button[data-layout="${id}"]`).click();
   await page.waitForTimeout(250);
-  await gotoPage(page, "概览");
+  await gotoPage(page, "系统概览");
 }
 
 async function pickShell(page: Page, id: string) {
@@ -173,7 +173,7 @@ test.describe("布局稳定性", () => {
     for (const shell of SHELLS) {
       await pickShell(page, shell);
       const nav = page.locator("aside, header nav");
-      const buttons = nav.locator('button[title="概览"]');
+      const buttons = nav.locator('button[title="系统概览"]');
       await expect(buttons.first()).toBeVisible();
       await expect(page).toHaveScreenshot(`shell-${shell}.png`, {
         fullPage: false,
@@ -194,6 +194,20 @@ test.describe("布局稳定性", () => {
       await gotoPage(page, label);
       await expect(page).toHaveScreenshot(`${name}.png`, { maxDiffPixelRatio: 0.005 });
     }
+  });
+
+  test("工作台首页与回顾页无布局回归", async ({ page }) => {
+    await gotoPage(page, "今天");
+    await expect(page).toHaveScreenshot("today.png", { maxDiffPixelRatio: 0.005 });
+    await gotoPage(page, "回顾");
+    await expect(page).toHaveScreenshot("review.png", { maxDiffPixelRatio: 0.005 });
+  });
+
+  test("工作小窗在独立视口下无布局回归", async ({ page }) => {
+    await page.setViewportSize({ width: 380, height: 580 });
+    await page.goto("/?mini=1");
+    await page.waitForTimeout(800);
+    await expect(page).toHaveScreenshot("mini.png", { maxDiffPixelRatio: 0.005 });
   });
 
   test("设置页的主题与版面板完整渲染", async ({ page }) => {
@@ -362,13 +376,14 @@ test.describe("组件摆放", () => {
   test("隐藏的组件在概览页消失，重新打开后出现", async ({ page }) => {
     await page.goto("/");
     await page.waitForTimeout(1500);
+    await gotoPage(page, "系统概览");
     await expect(page.getByText("本地会话文件").first()).toBeVisible();
 
     await gotoAppearance(page);
     const row = page.locator("li", { hasText: "会话文件" }).first();
     await row.locator("button").last().click();
     await page.waitForTimeout(300);
-    await gotoPage(page, "概览");
+    await gotoPage(page, "系统概览");
     await expect(page.getByText("本地会话文件").first()).toHaveCount(0);
 
     await gotoAppearance(page);
@@ -379,7 +394,7 @@ test.describe("组件摆放", () => {
       .last()
       .click();
     await page.waitForTimeout(300);
-    await gotoPage(page, "概览");
+    await gotoPage(page, "系统概览");
     await expect(page.getByText("本地会话文件").first()).toBeVisible();
   });
 

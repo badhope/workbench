@@ -31,15 +31,17 @@ const THEMES = [
   "Sky",
 ];
 const PAGES = [
-  ["概览", "overview"],
+  ["今天", "today"],
+  ["系统概览", "overview"],
   ["进程", "processes"],
   ["服务与端口", "servers"],
   ["AI 会话", "ai"],
   ["成本账本", "costs"],
   ["项目", "projects"],
   ["任务", "tasks"],
+  ["回顾", "review"],
   ["设置", "settings"],
-  ["运行日志", "logs"],
+  ["应用日志", "logs"],
 ] as const;
 
 /** 统计当前页面上不满足 WCAG AA 的文字节点。 */
@@ -123,7 +125,7 @@ test.describe("可读性（WCAG AA）", () => {
     await page.waitForTimeout(1500);
   });
 
-  test("九个页面在默认主题下零失败", async ({ page }) => {
+  test("十个页面在默认主题下零失败", async ({ page }) => {
     for (const [label] of PAGES) {
       await page
         .locator(`aside button[title="${label}"], header nav button[title="${label}"]`)
@@ -141,13 +143,13 @@ test.describe("可读性（WCAG AA）", () => {
     }
   });
 
-  test("十六套内置主题在概览页零失败", async ({ page }) => {
+  test("十六套内置主题在系统概览页零失败", async ({ page }) => {
     for (const theme of THEMES) {
       await page.locator('aside button[title="设置"]').first().click();
       await page.waitForTimeout(500);
       await page.locator(`main button[aria-label="${theme}"]`).click();
       await page.waitForTimeout(450);
-      await page.locator('aside button[title="概览"]').first().click();
+      await page.locator('aside button[title="系统概览"]').first().click();
       await page.waitForTimeout(900);
       const bad = await contrastFailures(page);
       expect(

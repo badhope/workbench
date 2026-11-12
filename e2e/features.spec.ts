@@ -64,7 +64,7 @@ test.describe("命令面板", () => {
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toBeHidden();
-    await expect(page.locator("header h1").first()).toContainText("概览");
+    await expect(page.locator("header h1").first()).toContainText("今天");
   });
 });
 
