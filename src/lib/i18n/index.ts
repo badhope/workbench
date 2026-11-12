@@ -14,6 +14,8 @@ import { dict as servers } from "./servers";
 import { dict as aisessions } from "./aisessions";
 import { dict as projects } from "./projects";
 import { dict as tasks } from "./tasks";
+import { dict as review } from "./review";
+import { dict as mini } from "./mini";
 import { dict as settings } from "./settings";
 import { dict as logs } from "./logs";
 
@@ -34,6 +36,8 @@ const DICTS: Record<Lang, Dict> = {
     ...aisessions.en,
     ...projects.en,
     ...tasks.en,
+    ...review.en,
+    ...mini.en,
     ...settings.en,
     ...logs.en,
   },
@@ -46,6 +50,8 @@ const DICTS: Record<Lang, Dict> = {
     ...aisessions.zh,
     ...projects.zh,
     ...tasks.zh,
+    ...review.zh,
+    ...mini.zh,
     ...settings.zh,
     ...logs.zh,
   },
@@ -58,6 +64,8 @@ const DICTS: Record<Lang, Dict> = {
     ...aisessions.ja,
     ...projects.ja,
     ...tasks.ja,
+    ...review.ja,
+    ...mini.ja,
     ...settings.ja,
     ...logs.ja,
   },

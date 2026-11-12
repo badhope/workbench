@@ -122,6 +122,21 @@ export async function setAlwaysOnTop(on: boolean): Promise<void> {
   return invoke("set_always_on_top", { on });
 }
 
+/** 打开/聚焦工作小窗（桌面端由后端创建独立窗口）。 */
+export async function openMiniWindow(): Promise<void> {
+  return invoke("open_mini_window");
+}
+
+/** 从工作小窗唤回主窗口。 */
+export async function showMainWindow(): Promise<void> {
+  return invoke("show_main_window");
+}
+
+/** 关闭当前窗口（工作小窗用）。 */
+export async function closeCurrentWindow(): Promise<void> {
+  return invoke("close_current_window");
+}
+
 export async function systemInfo(): Promise<SystemInfo> {
   if (isTauri()) return invoke<SystemInfo>("system_info");
   return httpJson<SystemInfo>("/api/system");

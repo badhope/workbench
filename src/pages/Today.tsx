@@ -17,6 +17,7 @@ import { useShallow } from "zustand/react/shallow";
 import { localeFor, useLang, useT } from "../lib/i18n";
 import { Badge, Btn, Empty, Modal } from "../ui";
 import { BrandMark } from "../components/BrandMark";
+import { ProgressRing } from "../components/ProgressRing";
 import { dueLabel } from "../lib/util";
 import {
   attentionCounts,
@@ -496,63 +497,6 @@ function HeroOrbit() {
         <circle cx="100" cy="172" r="2" fill="currentColor" fillOpacity=".3" />
       </g>
     </svg>
-  );
-}
-
-function ProgressRing({
-  percent,
-  size = 76,
-  strokeWidth = 6,
-  label,
-}: {
-  percent: number;
-  size?: number;
-  strokeWidth?: number;
-  label?: string;
-}) {
-  const clamped = Math.max(0, Math.min(100, Math.round(percent)));
-  const radius = 46;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - clamped / 100);
-  return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg
-        viewBox="0 0 100 100"
-        className="h-full w-full -rotate-90"
-        aria-hidden="true"
-      >
-        <circle
-          cx="50"
-          cy="50"
-          r={radius}
-          fill="none"
-          stroke="var(--color-line)"
-          strokeWidth={strokeWidth}
-        />
-        <circle
-          cx="50"
-          cy="50"
-          r={radius}
-          fill="none"
-          stroke="var(--color-accent)"
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span
-          className="num font-semibold leading-none"
-          style={{ fontSize: Math.round(size * 0.22) }}
-        >
-          {clamped}%
-        </span>
-        {label && (
-          <span className="mt-1 text-[9px] text-faint">{label}</span>
-        )}
-      </div>
-    </div>
   );
 }
 

@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   Coins,
   Cpu,
   FileText,
@@ -45,6 +46,7 @@ export const PAGES = [
     load: () => import("./Projects"),
   },
   { key: "tasks", icon: ListChecks, group: "work", load: () => import("./Tasks") },
+  { key: "review", icon: BarChart3, group: "work", load: () => import("./Review") },
   {
     key: "overview",
     icon: LayoutDashboard,

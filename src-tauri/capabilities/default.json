@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "默认权限集：核心 + opener(URL/揭示) + 通知 + 全局快捷键 + 窗口状态 + 开机自启。不含 opener:allow-open-path —— 打开目录改走带白名单校验的后端命令 open_known_path。",
-  "windows": ["main"],
+  "windows": ["main", "mini"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",

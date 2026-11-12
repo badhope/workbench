@@ -1,5 +1,6 @@
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import MiniWorkbench from "./components/MiniWorkbench";
 import { ErrorBoundary } from "./ErrorBoundary";
 import "./styles/global.css";
 import { useStore, effectiveMotion } from "./lib/store";
@@ -29,8 +30,12 @@ applyTheme(tokensFor(boot.theme, boot.customThemes), boot.shell, boot.layout);
 applyMotion(effectiveMotion(boot));
 syncDocumentLang();
 
+const isMini =
+  new URLSearchParams(window.location.search).get("mini") === "1" ||
+  (window as Window & { __WORKBENCH_MINI__?: boolean }).__WORKBENCH_MINI__ === true;
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
-    <App />
+    {isMini ? <MiniWorkbench /> : <App />}
   </ErrorBoundary>
 );

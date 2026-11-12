@@ -20,6 +20,7 @@ import { applyMotion } from "./lib/theme/apply";
 import { findTheme } from "./lib/theme/presets";
 import { shellLayout } from "./lib/useShellLayout";
 import { installGlobalDiagnostics, setViewResolver } from "./lib/diagnostics";
+import { subscribeDataChanged } from "./lib/dataSync";
 import type { ViewKey } from "./types";
 
 /** 当前视图的页面组件。注册表由 pages/registry 统一维护。 */
@@ -52,6 +53,12 @@ export default function App() {
   // 定时器、未处理的 Promise 拒绝都会绕过它直接冒到 window。
   // 不装的话这些异常在生产里完全无声，用户只能说"它坏了"。
   useEffect(() => installGlobalDiagnostics(), []);
+
+  // 工作小窗写入后通知主窗口重新读取，避免两个 WebView 各自持有旧快照。
+  useEffect(
+    () => subscribeDataChanged(() => void useStore.getState().loadAll()),
+    []
+  );
 
   // 让诊断记录带上当前页面，排障时能立刻知道是哪个页面炸的。
   useEffect(() => {

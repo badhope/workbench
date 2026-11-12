@@ -19,6 +19,18 @@
         "minHeight": 680,
         "decorations": true,
         "theme": "Light"
+      },
+      {
+        "label": "mini",
+        "title": "工作台小窗",
+        "url": "index.html?mini=1",
+        "width": 380,
+        "height": 580,
+        "minWidth": 340,
+        "minHeight": 480,
+        "visible": false,
+        "resizable": true,
+        "decorations": true
       }
     ],
     "security": {

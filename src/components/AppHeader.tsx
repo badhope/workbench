@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
-import { Menu, Moon, Pin, PinOff, RefreshCw, Search, Sun } from "lucide-react";
+import { Menu, Moon, PictureInPicture2, Pin, PinOff, RefreshCw, Search, Sun } from "lucide-react";
 import { isTauri } from "../lib/api";
+import { openMiniWindow } from "../lib/miniWindow";
 
 import { localeFor, useLang, useT } from "../lib/i18n";
 import { useStore } from "../lib/store";
@@ -76,6 +77,13 @@ export function AppHeaderControls() {
       </span>
       {loading && <Spinner />}
       <div className="flex items-center gap-0.5 rounded-full border border-line/70 bg-panel2/60 p-0.5">
+        <Btn
+          title={t("mini.open")}
+          onClick={() => void openMiniWindow()}
+          className="!rounded-full !border-0 !bg-transparent !px-1.5 !py-1 !text-dim hover:!text-text"
+        >
+          <PictureInPicture2 size={13} />
+        </Btn>
         <Btn
           title={t("app.refreshNow")}
           onClick={refreshRuntime}
