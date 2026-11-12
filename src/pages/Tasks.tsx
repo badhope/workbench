@@ -28,7 +28,7 @@ import {
   type Tone,
 } from "../ui";
 import { dueLabel } from "../lib/util";
-import { taskMatchesScope, type TaskScope } from "../lib/workbench";
+import { isBlocked, taskMatchesScope, type TaskScope } from "../lib/workbench";
 import { useT } from "../lib/i18n";
 import type { Task } from "../types";
 
@@ -51,6 +51,7 @@ const SCOPES: { key: TaskScope; labelKey: string }[] = [
   { key: "today", labelKey: "tasks.scopeToday" },
   { key: "week", labelKey: "tasks.scopeWeek" },
   { key: "inbox", labelKey: "tasks.scopeInbox" },
+  { key: "blocked", labelKey: "tasks.scopeBlocked" },
 ];
 
 function columnLabel(key: string, t: TFunc): string {
@@ -468,11 +469,16 @@ export default function Tasks() {
                     <button
                       type="button"
                       onClick={() => setTaskDetailId(task.id)}
-                      className={`min-w-0 flex-1 truncate text-left text-[12.5px] hover:text-accent ${
+                      className={`flex min-w-0 flex-1 items-center gap-1.5 text-left text-[12.5px] hover:text-accent ${
                         done ? "text-faint line-through" : ""
                       }`}
                     >
-                      {task.title}
+                      <span className="min-w-0 truncate">{task.title}</span>
+                      {isBlocked(task) && (
+                        <Badge tone="danger" className="shrink-0">
+                          {t("tasks.blocked")}
+                        </Badge>
+                      )}
                     </button>
                     <span className="hidden w-28 truncate text-[10.5px] text-faint sm:block">
                       {projectName(task.project_id) ?? t("tasks.unassigned")}
@@ -620,6 +626,7 @@ function TaskCard({
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         <Badge tone={pri.tone}>{priorityLabel(task.priority, t)}</Badge>
         <Badge tone={due.tone}>{due.text}</Badge>
+        {isBlocked(task) && <Badge tone="danger">{t("tasks.blocked")}</Badge>}
         {projectName && <Badge tone="dim">{projectName}</Badge>}
       </div>
     </div>

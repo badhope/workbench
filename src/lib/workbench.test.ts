@@ -156,18 +156,33 @@ describe("项目进度与下一步", () => {
     expect(picked?.id).toBe("p2");
   });
 
-  it("注意力计数覆盖逾期、今天、进行中和收件箱", () => {
+  it("注意力计数覆盖逾期、今天、进行中、收件箱和阻塞", () => {
     expect(
       attentionCounts(
         [
           task({ id: "overdue", due: "2026-11-10" }),
           task({ id: "today", due: "2026-11-11" }),
           task({ id: "doing", status: "doing", project_id: "p1" }),
+          task({ id: "blocked", project_id: "p1", blocked_reason: "等待后端" }),
           task({ id: "inbox" }),
         ],
         NOW
       )
-    ).toEqual({ overdue: 1, today: 1, doing: 1, inbox: 3 });
+    ).toEqual({ overdue: 1, today: 1, doing: 1, inbox: 3, blocked: 1 });
+  });
+
+  it("阻塞范围只包含写明阻塞原因且未完成的任务", () => {
+    expect(taskMatchesScope(task({ blocked_reason: "等待后端" }), "blocked", NOW)).toBe(
+      true
+    );
+    expect(taskMatchesScope(task({ blocked_reason: "  " }), "blocked", NOW)).toBe(false);
+    expect(
+      taskMatchesScope(
+        task({ status: "done", blocked_reason: "等待后端" }),
+        "blocked",
+        NOW
+      )
+    ).toBe(false);
   });
 });
 

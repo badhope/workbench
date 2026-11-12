@@ -356,7 +356,8 @@ export function migratePersisted(persisted: unknown): Record<string, unknown> {
     taskScope:
       state.taskScope === "today" ||
       state.taskScope === "week" ||
-      state.taskScope === "inbox"
+      state.taskScope === "inbox" ||
+      state.taskScope === "blocked"
         ? state.taskScope
         : "all",
     taskProjectFilter:

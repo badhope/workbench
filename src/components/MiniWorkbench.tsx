@@ -9,6 +9,7 @@ import { ProgressRing } from "./ProgressRing";
 import { dueLabel } from "../lib/util";
 import {
   explicitNextStep,
+  isBlocked,
   nextTaskForProject,
   pickCurrentProject,
   projectProgress,
@@ -217,6 +218,11 @@ export default function MiniWorkbench() {
                     <span className="min-w-0 flex-1 truncate text-[11.5px]">
                       {task.title}
                     </span>
+                    {isBlocked(task) && (
+                      <span className="shrink-0 text-[9px] text-danger">
+                        {t("tasks.blocked")}
+                      </span>
+                    )}
                     <span className="shrink-0 text-[9.5px] text-faint">
                       {due.text}
                     </span>

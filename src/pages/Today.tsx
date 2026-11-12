@@ -23,6 +23,7 @@ import { dueLabel, formatTime } from "../lib/util";
 import {
   attentionCounts,
   explicitNextStep,
+  isBlocked,
   isDueToday,
   isOpenTask,
   nextTaskForProject,
@@ -33,6 +34,7 @@ import {
   tasksForToday,
   type AttentionCounts,
   type ProjectProgress,
+  type TaskScope,
 } from "../lib/workbench";
 import { showsProjectsPanel, showsToolsSummary, WORK_MODES } from "../lib/workModes";
 import type { Project, Task } from "../types";
@@ -169,7 +171,7 @@ export default function Today() {
   );
 
   const openTaskList = (
-    scope: "all" | "today" | "week" | "inbox",
+    scope: TaskScope,
     projectId = ""
   ) => {
     setTaskScope(scope);
@@ -583,10 +585,11 @@ function AttentionBar({
   onOpen,
 }: {
   counts: AttentionCounts;
-  onOpen: (scope: "all" | "today" | "week" | "inbox") => void;
+  onOpen: (scope: TaskScope) => void;
 }) {
   const t = useT();
-  const total = counts.overdue + counts.today + counts.doing + counts.inbox;
+  const total =
+    counts.overdue + counts.today + counts.doing + counts.inbox + counts.blocked;
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="mr-1 text-[11px] font-medium tracking-[0.04em] text-faint">
@@ -609,6 +612,12 @@ function AttentionBar({
         label={t("today.doing", { count: counts.doing })}
         active={counts.doing > 0}
         onClick={() => onOpen("today")}
+      />
+      <AttentionChip
+        tone="danger"
+        label={t("today.blocked", { count: counts.blocked })}
+        active={counts.blocked > 0}
+        onClick={() => onOpen("blocked")}
       />
       <AttentionChip
         tone="dim"
@@ -1056,6 +1065,7 @@ function TaskRow({
       <span className="hidden text-[10px] text-faint sm:inline">
         {priorityLabel(task.priority, t)}
       </span>
+      {isBlocked(task) && <Badge tone="danger">{t("tasks.blocked")}</Badge>}
       <Badge tone={due.tone}>{due.text}</Badge>
     </li>
   );

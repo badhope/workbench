@@ -385,6 +385,7 @@ describe("persist 迁移 v6→v7", () => {
     expect(good.taskView).toBe("board");
     expect(good.taskScope).toBe("week");
     expect(good.taskProjectFilter).toBe("p1");
+    expect(migratePersisted({ taskScope: "blocked" }).taskScope).toBe("blocked");
   });
 });
 

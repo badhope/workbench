@@ -8,10 +8,15 @@
 import dayjs from "dayjs";
 import type { Project, Task } from "../types";
 
-export type TaskScope = "all" | "today" | "week" | "inbox";
+export type TaskScope = "all" | "today" | "week" | "inbox" | "blocked";
 
 export function isOpenTask(task: Task): boolean {
   return task.status !== "done";
+}
+
+/** 已写明阻塞原因且未完成 = 阻塞任务。 */
+export function isBlocked(task: Task): boolean {
+  return isOpenTask(task) && Boolean(task.blocked_reason?.trim());
 }
 
 function dueDay(task: Task): dayjs.Dayjs | null {
@@ -53,6 +58,8 @@ export function taskMatchesScope(task: Task, scope: TaskScope, now = dayjs()): b
       return isDueThisWeek(task, now) || isOverdue(task, now);
     case "inbox":
       return isOpenTask(task) && !task.project_id;
+    case "blocked":
+      return isBlocked(task);
     case "all":
     default:
       return true;
@@ -189,6 +196,7 @@ export interface AttentionCounts {
   today: number;
   doing: number;
   inbox: number;
+  blocked: number;
 }
 
 export function attentionCounts(tasks: Task[], now = dayjs()): AttentionCounts {
@@ -197,6 +205,7 @@ export function attentionCounts(tasks: Task[], now = dayjs()): AttentionCounts {
     today: tasks.filter((t) => isDueToday(t, now)).length,
     doing: tasks.filter((t) => isOpenTask(t) && t.status === "doing").length,
     inbox: tasks.filter((t) => isOpenTask(t) && !t.project_id).length,
+    blocked: tasks.filter(isBlocked).length,
   };
 }
 
