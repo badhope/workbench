@@ -59,3 +59,22 @@ it("renders current project, today tasks and captures to inbox", async () => {
     })
   );
 });
+
+it("collapses and restores the rail", async () => {
+  setLang("zh");
+  useStore.setState({
+    data: { projects: [], tasks: [] },
+    workModes: ["development"],
+    railCollapsed: false,
+    railSections: { projects: true, inbox: true, system: true },
+  });
+  render(<Today />);
+
+  const collapseButtons = screen.getAllByRole("button", { name: "收起侧栏" });
+  expect(collapseButtons.length).toBeGreaterThan(0);
+  await userEvent.click(collapseButtons[0]);
+  expect(screen.queryByRole("button", { name: "侧栏内容" })).toBeNull();
+
+  await userEvent.click(screen.getByRole("button", { name: "显示侧栏" }));
+  expect(screen.getByRole("button", { name: "侧栏内容" })).toBeInTheDocument();
+});

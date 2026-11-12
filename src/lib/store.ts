@@ -144,6 +144,10 @@ interface UiState {
   taskScope: TaskScope;
   /** 任务页项目筛选；空字符串 = 全部项目 */
   taskProjectFilter: string;
+  /** 首页右栏是否收起 */
+  railCollapsed: boolean;
+  /** 首页右栏各分区是否显示 */
+  railSections: { projects: boolean; inbox: boolean; system: boolean };
   /** 进程页搜索词。放在 store 里是因为端口页/命令面板要能带着 PID 跳过来。 */
   procQuery: string;
   /** 跳转后要高亮的进程 PID（一次性） */
@@ -207,6 +211,9 @@ interface Store extends UiState, RuntimeState {
   setTaskView: (v: "list" | "board") => void;
   setTaskScope: (v: TaskScope) => void;
   setTaskProjectFilter: (id: string) => void;
+  setRailCollapsed: (v: boolean) => void;
+  setRailSection: (key: keyof UiState["railSections"], v: boolean) => void;
+  resetRailSections: () => void;
   /** 开关氛围粒子背景 */
   setParticles: (v: boolean) => void;
   /** 设置粒子氛围强度 0-100（自动钳制取整） */
@@ -320,6 +327,7 @@ export function isBackgroundDataUrl(v: unknown): v is string {
  */
 export function migratePersisted(persisted: unknown): Record<string, unknown> {
   const state = (persisted ?? {}) as Record<string, unknown>;
+  const rail = (state.railSections ?? {}) as Record<string, unknown>;
   const customThemes: ThemeInput[] = Array.isArray(state.customThemes)
     ? state.customThemes
         .map((x) => parseTheme(x))
@@ -344,6 +352,12 @@ export function migratePersisted(persisted: unknown): Record<string, unknown> {
         : "all",
     taskProjectFilter:
       typeof state.taskProjectFilter === "string" ? state.taskProjectFilter : "",
+    railCollapsed: state.railCollapsed === true,
+    railSections: {
+      projects: rail.projects !== false,
+      inbox: rail.inbox !== false,
+      system: rail.system !== false,
+    },
     motion: normalizeMotion(state.motion),
     motionExplicit: state.motionExplicit === true,
     onboardingDone: state.onboardingDone === true,
@@ -416,6 +430,8 @@ export const useStore = create<Store>()(
       taskView: "list",
       taskScope: "all",
       taskProjectFilter: "",
+      railCollapsed: false,
+      railSections: { projects: true, inbox: true, system: true },
       procQuery: "",
       focusPid: null,
       refreshMs: 3000,
@@ -485,6 +501,11 @@ export const useStore = create<Store>()(
       setTaskView: (v) => set({ taskView: v }),
       setTaskScope: (v) => set({ taskScope: v }),
       setTaskProjectFilter: (id) => set({ taskProjectFilter: id }),
+      setRailCollapsed: (v) => set({ railCollapsed: v }),
+      setRailSection: (key, v) =>
+        set((s) => ({ railSections: { ...s.railSections, [key]: v } })),
+      resetRailSections: () =>
+        set({ railSections: { projects: true, inbox: true, system: true } }),
       setParticles: (v) => set({ particles: v }),
       setParticlesIntensity: (v) => set({ particlesIntensity: normalizeIntensity(v) }),
       setBackground: (dataUrl) =>
@@ -1231,8 +1252,9 @@ export const useStore = create<Store>()(
       // 版本 5：新增氛围粒子开关（particles，默认关）。
       // 版本 6：新增粒子强度（默认 65）与自定义背景图（默认 null）。
       // 版本 7：新增工作方式多选与任务页视图/范围/项目筛选。
+      // 版本 8：新增首页右栏收起状态与分区可见性。
       // 迁移只做「补齐与清洗」，不覆盖用户的显式选择。
-      version: 7,
+      version: 8,
       migrate: (persisted: unknown) => migratePersisted(persisted) as never,
       partialize: (s) => ({
         theme: s.theme,
@@ -1254,6 +1276,8 @@ export const useStore = create<Store>()(
         taskView: s.taskView,
         taskScope: s.taskScope,
         taskProjectFilter: s.taskProjectFilter,
+        railCollapsed: s.railCollapsed,
+        railSections: s.railSections,
         refreshMs: s.refreshMs,
         alwaysOnTop: s.alwaysOnTop,
       }),

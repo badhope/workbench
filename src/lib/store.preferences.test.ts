@@ -387,3 +387,40 @@ describe("persist 迁移 v6→v7", () => {
     expect(good.taskProjectFilter).toBe("p1");
   });
 });
+
+/** persist v7 → v8：右栏收起与分区可见性。 */
+describe("persist 迁移 v7→v8", () => {
+  it("旧用户默认展开右栏，三个分区都显示", () => {
+    const migrated = migratePersisted({ theme: "frost" });
+    expect(migrated.railCollapsed).toBe(false);
+    expect(migrated.railSections).toEqual({
+      projects: true,
+      inbox: true,
+      system: true,
+    });
+  });
+
+  it("用户显式收起与隐藏分区会被保留", () => {
+    const migrated = migratePersisted({
+      railCollapsed: true,
+      railSections: { projects: false, inbox: true, system: false },
+    });
+    expect(migrated.railCollapsed).toBe(true);
+    expect(migrated.railSections).toEqual({
+      projects: false,
+      inbox: true,
+      system: false,
+    });
+  });
+
+  it("脏数据回退为显示，而不是把整栏藏掉", () => {
+    const migrated = migratePersisted({
+      railSections: { projects: "no", inbox: null, system: 0 },
+    });
+    expect(migrated.railSections).toEqual({
+      projects: true,
+      inbox: true,
+      system: true,
+    });
+  });
+});

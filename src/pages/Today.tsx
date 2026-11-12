@@ -5,14 +5,17 @@ import {
   Check,
   FolderOpen,
   Inbox,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
   Server,
+  SlidersHorizontal,
   Sparkles,
 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { localeFor, useLang, useT } from "../lib/i18n";
-import { Badge, Btn, Empty } from "../ui";
+import { Badge, Btn, Empty, Modal } from "../ui";
 import { BrandMark } from "../components/BrandMark";
 import { dueLabel } from "../lib/util";
 import {
@@ -51,6 +54,7 @@ export default function Today() {
   const quickRef = useRef<HTMLInputElement>(null);
   const [quickTitle, setQuickTitle] = useState("");
   const [quickProject, setQuickProject] = useState("");
+  const [railSettingsOpen, setRailSettingsOpen] = useState(false);
 
   const {
     data,
@@ -59,12 +63,17 @@ export default function Today() {
     ports,
     runtimeError,
     workModes,
+    railCollapsed,
+    railSections,
     addTask,
     moveTask,
     setView,
     setToast,
     setTaskScope,
     setTaskProjectFilter,
+    setRailCollapsed,
+    setRailSection,
+    resetRailSections,
     openTarget,
   } = useStore(
     useShallow((s) => ({
@@ -74,12 +83,17 @@ export default function Today() {
       ports: s.ports,
       runtimeError: s.runtimeError,
       workModes: s.workModes,
+      railCollapsed: s.railCollapsed,
+      railSections: s.railSections,
       addTask: s.addTask,
       moveTask: s.moveTask,
       setView: s.setView,
       setToast: s.setToast,
       setTaskScope: s.setTaskScope,
       setTaskProjectFilter: s.setTaskProjectFilter,
+      setRailCollapsed: s.setRailCollapsed,
+      setRailSection: s.setRailSection,
+      resetRailSections: s.resetRailSections,
       openTarget: s.openTarget,
     }))
   );
@@ -179,6 +193,11 @@ export default function Today() {
     .map((id) => WORK_MODES.find((m) => m.id === id))
     .filter((m): m is NonNullable<typeof m> => Boolean(m));
 
+  const showProjects = railSections.projects && showsProjectsPanel(workModes);
+  const showInbox = railSections.inbox;
+  const showSystem = railSections.system && showsToolsSummary(workModes);
+  const railHasContent = showProjects || showInbox || showSystem;
+
   return (
     <div className="flex flex-col gap-6">
       <TodayHeader
@@ -190,7 +209,11 @@ export default function Today() {
         total={todayTotal}
       />
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div
+        className={`grid grid-cols-1 gap-6 ${
+          railCollapsed ? "xl:grid-cols-1" : "xl:grid-cols-[minmax(0,1fr)_320px]"
+        }`}
+      >
         <div className="flex min-w-0 flex-col gap-5">
           <QuickCapture
             inputRef={quickRef}
@@ -202,7 +225,29 @@ export default function Today() {
             onSubmit={capture}
           />
 
-          <AttentionBar counts={counts} onOpen={openTaskList} />
+          <div className="flex flex-wrap items-center gap-2">
+            <AttentionBar counts={counts} onOpen={openTaskList} />
+            <button
+              type="button"
+              onClick={() => setRailCollapsed(!railCollapsed)}
+              title={
+                railCollapsed ? t("today.railExpand") : t("today.railCollapse")
+              }
+              aria-label={
+                railCollapsed ? t("today.railExpand") : t("today.railCollapse")
+              }
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-line/80 bg-panel/60 px-2.5 py-1 text-[11px] text-dim transition-colors hover:border-accent/40 hover:text-text"
+            >
+              {railCollapsed ? (
+                <PanelRightOpen size={13} />
+              ) : (
+                <PanelRightClose size={13} />
+              )}
+              <span className="hidden sm:inline">
+                {railCollapsed ? t("today.railExpand") : t("today.railCollapse")}
+              </span>
+            </button>
+          </div>
 
           <CurrentProject
             project={current}
@@ -248,34 +293,108 @@ export default function Today() {
           )}
         </div>
 
-        <aside className="flex min-w-0 flex-col gap-5 rounded-[calc(var(--radius-card)+2px)] border border-line/70 bg-panel/60 p-4 xl:sticky xl:top-5 xl:self-start">
-          {showsProjectsPanel(workModes) && (
-            <ProjectsRail
-              rows={projectRows}
-              onOpen={(id) => openTaskList("all", id)}
-              onViewAll={() => setView("projects")}
-              onCreate={() => setView("projects")}
-            />
-          )}
+        {!railCollapsed && (
+          <aside className="flex min-w-0 flex-col gap-5 rounded-[calc(var(--radius-card)+2px)] border border-line/70 bg-panel/60 p-4 xl:sticky xl:top-5 xl:self-start [&>section:first-of-type]:border-t-0 [&>section:first-of-type]:pt-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10.5px] font-medium tracking-[0.04em] text-faint">
+                {t("today.rail")}
+              </span>
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setRailSettingsOpen(true)}
+                  title={t("today.railSettings")}
+                  aria-label={t("today.railSettings")}
+                  className="rounded p-1 text-faint transition-colors hover:text-text"
+                >
+                  <SlidersHorizontal size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRailCollapsed(true)}
+                  title={t("today.railCollapse")}
+                  aria-label={t("today.railCollapse")}
+                  className="rounded p-1 text-faint transition-colors hover:text-text"
+                >
+                  <PanelRightClose size={13} />
+                </button>
+              </div>
+            </div>
 
-          <InboxRail
-            tasks={inbox}
-            onOpen={(task) => openTaskList("inbox", task.project_id ?? "")}
-            onComplete={(id) => moveTask(id, "done")}
-            onViewAll={() => openTaskList("inbox")}
-          />
+            {showProjects && (
+              <ProjectsRail
+                rows={projectRows}
+                onOpen={(id) => openTaskList("all", id)}
+                onViewAll={() => setView("projects")}
+                onCreate={() => setView("projects")}
+              />
+            )}
 
-          {showsToolsSummary(workModes) && (
-            <SystemRail
-              devs={devs.length}
-              ports={ports.length}
-              ais={ais.length}
-              error={runtimeError}
-              onOpen={() => setView("overview")}
-            />
-          )}
-        </aside>
+            {showInbox && (
+              <InboxRail
+                tasks={inbox}
+                onOpen={(task) => openTaskList("inbox", task.project_id ?? "")}
+                onComplete={(id) => moveTask(id, "done")}
+                onViewAll={() => openTaskList("inbox")}
+              />
+            )}
+
+            {showSystem && (
+              <SystemRail
+                devs={devs.length}
+                ports={ports.length}
+                ais={ais.length}
+                error={runtimeError}
+                onOpen={() => setView("overview")}
+              />
+            )}
+
+            {!railHasContent && (
+              <div className="rounded-[var(--radius-btn)] border border-dashed border-line/80 px-3 py-4 text-center">
+                <div className="text-[11.5px] text-dim">{t("today.railAllHidden")}</div>
+                <Btn className="mt-2" onClick={resetRailSections}>
+                  {t("today.railRestore")}
+                </Btn>
+              </div>
+            )}
+          </aside>
+        )}
       </div>
+
+      <Modal
+        open={railSettingsOpen}
+        title={t("today.railSettings")}
+        onClose={() => setRailSettingsOpen(false)}
+        footer={
+          <Btn variant="primary" onClick={() => setRailSettingsOpen(false)}>
+            {t("tasks.done")}
+          </Btn>
+        }
+      >
+        <p className="text-[12px] leading-relaxed text-dim">{t("today.railHint")}</p>
+        <div className="mt-3 flex flex-col gap-2.5">
+          {(["projects", "inbox", "system"] as const).map((key) => (
+            <label key={key} className="flex items-center gap-2 text-[12.5px]">
+              <input
+                type="checkbox"
+                checked={railSections[key]}
+                onChange={(e) => setRailSection(key, e.target.checked)}
+                className="rounded border-line accent-accent"
+              />
+              <span>
+                {key === "projects"
+                  ? t("today.projects")
+                  : key === "inbox"
+                    ? t("today.inboxTitle")
+                    : t("today.system")}
+              </span>
+            </label>
+          ))}
+        </div>
+        <div className="mt-4">
+          <Btn onClick={resetRailSections}>{t("today.railRestore")}</Btn>
+        </div>
+      </Modal>
     </div>
   );
 }
