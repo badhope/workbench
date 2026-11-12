@@ -18,6 +18,7 @@ export function useTransportMode() {
 export function useAppRuntime() {
   const loadAll = useStore((s) => s.loadAll);
   const refreshRuntime = useStore((s) => s.refreshRuntime);
+  const refreshData = useStore((s) => s.refreshData);
   const refreshMs = useStore((s) => s.refreshMs);
   const toast = useStore((s) => s.toast);
   const clearToast = useStore((s) => s.clearToast);
@@ -41,6 +42,27 @@ export function useAppRuntime() {
     if (!isBackend()) return;
     return pollWhileVisible(refreshRuntime, refreshMs);
   }, [refreshMs, refreshRuntime]);
+
+  // 工作数据与运行时采集分开：聚焦/回到可见时补一次，并每 30 秒低频同步。
+  // refreshData 内部有未保存保护，不会覆盖本地草稿。
+  useEffect(() => {
+    if (!isBackend()) return;
+    const tick = () => {
+      if (document.visibilityState === "visible") void refreshData();
+    };
+    const onFocus = () => void refreshData();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void refreshData();
+    };
+    const timer = window.setInterval(tick, 30_000);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [refreshData]);
 
   // ESC 关闭 toast
   useEffect(() => {

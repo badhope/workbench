@@ -19,7 +19,7 @@ import {
   setAlwaysOnTop,
   showMainWindow,
 } from "../lib/api";
-import { notifyDataChanged, subscribeDataChanged } from "../lib/dataSync";
+import { subscribeDataChanged } from "../lib/dataSync";
 
 /**
  * 工作小窗：只保留“当前项目 + 今天 + 快速记录”。
@@ -35,20 +35,23 @@ export default function MiniWorkbench() {
     data,
     addTask,
     moveTask,
-    loadAll,
+    refreshData,
   } = useStore(
     useShallow((s) => ({
       data: s.data,
       addTask: s.addTask,
       moveTask: s.moveTask,
-      loadAll: s.loadAll,
+      refreshData: s.refreshData,
     }))
   );
   const [title, setTitle] = useState("");
   const [added, setAdded] = useState(false);
   const [onTop, setOnTop] = useState(false);
 
-  useEffect(() => subscribeDataChanged(() => void loadAll()), [loadAll]);
+  useEffect(
+    () => subscribeDataChanged(() => void refreshData()),
+    [refreshData]
+  );
 
   const current = useMemo(
     () => pickCurrentProject(data.projects, data.tasks),
@@ -72,13 +75,11 @@ export default function MiniWorkbench() {
       setTitle("");
       setAdded(true);
       window.setTimeout(() => setAdded(false), 1600);
-      notifyDataChanged();
     }
   };
 
   const complete = (id: string) => {
     moveTask(id, "done");
-    notifyDataChanged();
   };
 
   const expand = async () => {

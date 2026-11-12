@@ -56,7 +56,7 @@ export default function App() {
 
   // 工作小窗写入后通知主窗口重新读取，避免两个 WebView 各自持有旧快照。
   useEffect(
-    () => subscribeDataChanged(() => void useStore.getState().loadAll()),
+    () => subscribeDataChanged(() => void useStore.getState().refreshData()),
     []
   );
 

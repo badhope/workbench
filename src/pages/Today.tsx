@@ -15,10 +15,11 @@ import {
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { localeFor, useLang, useT } from "../lib/i18n";
+import { useTransportMode } from "../lib/useAppRuntime";
 import { Badge, Btn, Empty, Modal } from "../ui";
 import { BrandMark } from "../components/BrandMark";
 import { ProgressRing } from "../components/ProgressRing";
-import { dueLabel } from "../lib/util";
+import { dueLabel, formatTime } from "../lib/util";
 import {
   attentionCounts,
   isDueToday,
@@ -52,6 +53,7 @@ function priorityLabel(key: string, t: Translate): string {
 export default function Today() {
   const t = useT();
   const lang = useLang();
+  const mode = useTransportMode();
   const quickRef = useRef<HTMLInputElement>(null);
   const [quickTitle, setQuickTitle] = useState("");
   const [quickProject, setQuickProject] = useState("");
@@ -66,6 +68,7 @@ export default function Today() {
     workModes,
     railCollapsed,
     railSections,
+    lastDataUpdatedAt,
     addTask,
     moveTask,
     setView,
@@ -87,6 +90,7 @@ export default function Today() {
       workModes: s.workModes,
       railCollapsed: s.railCollapsed,
       railSections: s.railSections,
+      lastDataUpdatedAt: s.lastDataUpdatedAt,
       addTask: s.addTask,
       moveTask: s.moveTask,
       setView: s.setView,
@@ -210,7 +214,14 @@ export default function Today() {
         onChangeMode={() => setView("settings")}
         done={todayDone}
         total={todayTotal}
+        dataUpdatedAt={lastDataUpdatedAt}
       />
+
+      {mode === "demo" && (
+        <div className="rounded-[var(--radius-btn)] border border-warn/30 bg-warn/8 px-3 py-2 text-[11.5px] leading-relaxed text-warn">
+          {t("today.demoNotice")}
+        </div>
+      )}
 
       <div
         className={`grid grid-cols-1 gap-6 ${
@@ -409,6 +420,7 @@ function TodayHeader({
   onChangeMode,
   done,
   total,
+  dataUpdatedAt,
 }: {
   now: dayjs.Dayjs;
   lang: ReturnType<typeof useLang>;
@@ -416,6 +428,7 @@ function TodayHeader({
   onChangeMode: () => void;
   done: number;
   total: number;
+  dataUpdatedAt: number;
 }) {
   const t = useT();
   const percent = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -450,6 +463,12 @@ function TodayHeader({
                   </button>
                 </>
               )}
+              <span aria-hidden="true">·</span>
+              <span title={t("app.dataUpdatedAt", { time: formatTime(dataUpdatedAt) })}>
+                {dataUpdatedAt > 0
+                  ? t("app.dataUpdatedAt", { time: formatTime(dataUpdatedAt) })
+                  : t("app.dataWaiting")}
+              </span>
             </div>
             <h1 className="t-heading mt-2 text-[34px] font-semibold leading-[1.02] tracking-[-0.035em] sm:text-[44px]">
               {t("today.title")}

@@ -3,6 +3,7 @@ export const dict = {
   en: {
     "today.title": "Workbench",
     "today.subtitle": "What will you move forward today?",
+    "today.demoNotice": "Demo data only — start the desktop app or connect a backend for real data.",
     "today.quickPlaceholder": "Capture something, press Enter for Inbox…",
     "today.quickProject": "Project (optional)",
     "today.inboxOption": "Inbox",
@@ -56,6 +57,7 @@ export const dict = {
   zh: {
     "today.title": "工作台",
     "today.subtitle": "今天先推进什么？",
+    "today.demoNotice": "当前为演示数据；启动桌面端或连接后端后显示真实内容。",
     "today.quickPlaceholder": "记一件事，回车放进收件箱…",
     "today.quickProject": "项目（可选）",
     "today.inboxOption": "收件箱",
@@ -109,6 +111,7 @@ export const dict = {
   ja: {
     "today.title": "ワークベンチ",
     "today.subtitle": "今日は何を進めますか？",
+    "today.demoNotice": "現在はデモデータです。デスクトップ版またはバックエンド接続で実データを表示します。",
     "today.quickPlaceholder": "思いついたことを記録（Enter で受信箱へ）…",
     "today.quickProject": "プロジェクト（任意）",
     "today.inboxOption": "受信箱",

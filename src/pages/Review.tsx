@@ -8,6 +8,7 @@ import { useT } from "../lib/i18n";
 import { Btn, Empty, SectionTitle } from "../ui";
 import { ProgressRing } from "../components/ProgressRing";
 import { isOpenTask, isOverdue, projectProgress } from "../lib/workbench";
+import { formatTime } from "../lib/util";
 
 const STATUS_ORDER = ["todo", "doing", "done"] as const;
 const PRIORITY_ORDER = ["high", "normal", "low"] as const;
@@ -26,10 +27,11 @@ const STATUS_COLORS: Record<string, string> = {
  */
 export default function Review() {
   const t = useT();
-  const { data, theme, setView, setTaskProjectFilter, setTaskScope } = useStore(
+  const { data, theme, lastDataUpdatedAt, setView, setTaskProjectFilter, setTaskScope } = useStore(
     useShallow((s) => ({
       data: s.data,
       theme: s.theme,
+      lastDataUpdatedAt: s.lastDataUpdatedAt,
       setView: s.setView,
       setTaskProjectFilter: s.setTaskProjectFilter,
       setTaskScope: s.setTaskScope,
@@ -153,9 +155,16 @@ export default function Review() {
           </h1>
           <p className="mt-1 text-[12.5px] text-dim">{t("review.subtitle")}</p>
         </div>
-        <Btn onClick={() => setView("tasks")}>
-          {t("review.viewTasks")} <ArrowRight size={13} />
-        </Btn>
+        <div className="flex items-center gap-3">
+          <span className="hidden text-[10.5px] text-faint sm:inline">
+            {lastDataUpdatedAt > 0
+              ? t("app.dataUpdatedAt", { time: formatTime(lastDataUpdatedAt) })
+              : t("app.dataWaiting")}
+          </span>
+          <Btn onClick={() => setView("tasks")}>
+            {t("review.viewTasks")} <ArrowRight size={13} />
+          </Btn>
+        </div>
       </header>
 
       {data.tasks.length === 0 && data.projects.length === 0 ? (

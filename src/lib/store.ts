@@ -28,6 +28,7 @@ import {
   type WorkMode,
 } from "./workModes";
 import type { TaskScope } from "./workbench";
+import { notifyDataChanged } from "./dataSync";
 import { persist } from "zustand/middleware";
 import {
   backupData,
@@ -180,6 +181,8 @@ interface RuntimeState {
    *  与 toast 并存：toast 会消失，页面内联错误态需要持久状态。 */
   runtimeError: string;
   lastRefreshAt: number;
+  /** 最近一次工作数据（项目/任务）载入或本地修改的时间；与运行时采集分开。 */
+  lastDataUpdatedAt: number;
   history: { cpu: number; memGb: number; t: number }[];
   // ── 成本计量 ──
   costOverview: CostOverview | null;
@@ -242,6 +245,8 @@ interface Store extends UiState, RuntimeState {
   clearToast: () => void;
   setKillTarget: (p: ProcInfo | null) => void;
   loadAll: () => Promise<void>;
+  /** 只重读项目/任务数据（窗口聚焦、定时同步、跨窗口通知用）。 */
+  refreshData: () => Promise<void>;
   refreshRuntime: () => Promise<void>;
   refreshAi: () => Promise<void>;
   loadSessionDetail: (port: number, id: string) => Promise<void>;
@@ -400,12 +405,15 @@ function enqueueSave(data: WorkbenchData): Promise<void> {
       if (dataGeneration === null) throw new Error("数据尚未加载");
       dataGeneration = await saveData(data, dataGeneration);
       if (editSequence === dataEditSequence) dataDirty = false;
+      // 落盘成功后再通知其他窗口，避免对方在 debounce 写入前读到旧快照。
+      notifyDataChanged();
     });
   saveQueue = save;
   return save;
 }
 // 运行时刷新的在途 promise（并发调用复用它，而不是丢弃）
 let inflightRefresh: Promise<void> | null = null;
+let inflightDataRefresh: Promise<void> | null = null;
 // 在途期间又有新请求时置位，当前刷新结束后补跑一次
 let refreshAgain = false;
 let costScanAgain = false;
@@ -460,6 +468,7 @@ export const useStore = create<Store>()(
       loading: false,
       runtimeError: "",
       lastRefreshAt: 0,
+      lastDataUpdatedAt: 0,
       history: [],
       costOverview: null,
       costTrend: [],
@@ -619,6 +628,7 @@ export const useStore = create<Store>()(
           const demo = demoBundle(getLang());
           set({
             data: demo.data,
+            lastDataUpdatedAt: Date.now(),
             procs: demo.procs,
             ports: demo.ports,
             devs: demo.devs,
@@ -651,7 +661,10 @@ export const useStore = create<Store>()(
             !dataDirty
           ) {
             dataGeneration = snapshot.generation;
-            set({ data: { ...emptyData, ...snapshot.data } });
+            set({
+              data: { ...emptyData, ...snapshot.data },
+              lastDataUpdatedAt: Date.now(),
+            });
             dataSaveBlocked = false;
           }
         } catch (e) {
@@ -667,6 +680,39 @@ export const useStore = create<Store>()(
         }
         get().refreshRuntime();
         get().refreshAi();
+      },
+
+      refreshData: async () => {
+        if (!isBackend() || restoringData || dataDirty) return;
+        if (inflightDataRefresh) return inflightDataRefresh;
+        const loadSequence = ++dataLoadSequence;
+        const editSequence = dataEditSequence;
+        const generation = dataGeneration;
+        const run = (async () => {
+          try {
+            const snapshot = await loadDataVersioned();
+            if (
+              loadSequence === dataLoadSequence &&
+              editSequence === dataEditSequence &&
+              generation === dataGeneration &&
+              !restoringData &&
+              !dataDirty
+            ) {
+              dataGeneration = snapshot.generation;
+              set({
+                data: { ...emptyData, ...snapshot.data },
+                lastDataUpdatedAt: Date.now(),
+              });
+              dataSaveBlocked = false;
+            }
+          } catch {
+            // 后台刷新失败保留现有数据，避免每 30 秒弹一次 toast 打扰工作。
+          } finally {
+            inflightDataRefresh = null;
+          }
+        })();
+        inflightDataRefresh = run;
+        return run;
       },
 
       refreshRuntime: async () => {
@@ -881,8 +927,12 @@ export const useStore = create<Store>()(
           set({ toast: t("store.saveFailed", { err: "数据正在恢复或需要重新加载" }) });
           return false;
         }
-        set({ data: next });
-        if (!isBackend()) return true;
+        set({ data: next, lastDataUpdatedAt: Date.now() });
+        if (!isBackend()) {
+          // 纯浏览器演示没有磁盘；仍然广播一次，方便同源窗口看到变更。
+          notifyDataChanged();
+          return true;
+        }
         if (saveTimer) clearTimeout(saveTimer);
         pendingData = next;
         dataDirty = true;
@@ -906,7 +956,8 @@ export const useStore = create<Store>()(
           return false;
         }
         if (!isBackend()) {
-          set({ data: next });
+          set({ data: next, lastDataUpdatedAt: Date.now() });
+          notifyDataChanged();
           return true;
         }
         restoringData = true;
@@ -926,7 +977,7 @@ export const useStore = create<Store>()(
           }
           await enqueueSave(next);
           dataEditSequence += 1;
-          set({ data: next });
+          set({ data: next, lastDataUpdatedAt: Date.now() });
           return true;
         } finally {
           restoringData = false;
@@ -1027,7 +1078,10 @@ export const useStore = create<Store>()(
           try {
             const snapshot = await loadDataVersioned();
             dataGeneration = snapshot.generation;
-            set({ data: { ...emptyData, ...snapshot.data } });
+            set({
+              data: { ...emptyData, ...snapshot.data },
+              lastDataUpdatedAt: Date.now(),
+            });
             dataSaveBlocked = false;
           } catch (error) {
             if (restoreFailed) {

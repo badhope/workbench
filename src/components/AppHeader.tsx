@@ -68,7 +68,7 @@ export function AppHeaderControls() {
       </button>
       <span className="num hidden text-[11px] text-faint lg:inline">
         {lastRefreshAt
-          ? t("app.updatedAt", {
+          ? t("app.runtimeUpdatedAt", {
               time: new Date(lastRefreshAt).toLocaleTimeString(localeFor(lang), {
                 hour12: false,
               }),
