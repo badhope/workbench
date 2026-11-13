@@ -180,6 +180,8 @@ interface RuntimeState {
   /** 最近一次运行时采集的失败原因；成功时清空。
    *  与 toast 并存：toast 会消失，页面内联错误态需要持久状态。 */
   runtimeError: string;
+  /** 项目/任务数据读取失败的原因；非空时应用显示持久错误横幅。 */
+  dataLoadError: string;
   lastRefreshAt: number;
   /** 最近一次工作数据（项目/任务）载入或本地修改的时间；与运行时采集分开。 */
   lastDataUpdatedAt: number;
@@ -468,6 +470,7 @@ export const useStore = create<Store>()(
       gitBranches: {},
       loading: false,
       runtimeError: "",
+      dataLoadError: "",
       lastRefreshAt: 0,
       lastDataUpdatedAt: 0,
       history: [],
@@ -630,6 +633,7 @@ export const useStore = create<Store>()(
           set({
             data: demo.data,
             lastDataUpdatedAt: Date.now(),
+            dataLoadError: "",
             procs: demo.procs,
             ports: demo.ports,
             devs: demo.devs,
@@ -665,6 +669,7 @@ export const useStore = create<Store>()(
             set({
               data: { ...emptyData, ...snapshot.data },
               lastDataUpdatedAt: Date.now(),
+              dataLoadError: "",
             });
             dataSaveBlocked = false;
           }
@@ -676,7 +681,10 @@ export const useStore = create<Store>()(
             !dataDirty
           ) {
             dataSaveBlocked = true;
-            set({ toast: t("store.loadFailed", { err: String(e) }) });
+            set({
+              dataLoadError: String(e),
+              toast: t("store.loadFailed", { err: String(e) }),
+            });
           }
         }
         get().refreshRuntime();
@@ -703,6 +711,7 @@ export const useStore = create<Store>()(
               set({
                 data: { ...emptyData, ...snapshot.data },
                 lastDataUpdatedAt: Date.now(),
+                dataLoadError: "",
               });
               dataSaveBlocked = false;
             }
@@ -929,6 +938,7 @@ export const useStore = create<Store>()(
       },
 
       deleteProject: (id) => {
+        if (get().taskProjectFilter === id) set({ taskProjectFilter: "" });
         get().persistData({
           projects: get().data.projects.filter((p) => p.id !== id),
           tasks: get().data.tasks.map((t) =>

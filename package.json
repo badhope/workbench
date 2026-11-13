@@ -1,8 +1,8 @@
 {
   "name": "workbench",
   "private": true,
-  "version": "0.7.1",
-  "description": "Workbench - local-first desktop workbench (Tauri 2 + React 19): live process / port / dev-server visibility + AI session cost metering",
+  "version": "0.8.0",
+  "description": "Workbench - local-first desktop workbench (Tauri 2 + React 19): today's work, projects & tasks with goals and blockers, live process / port / dev-server visibility, AI session cost metering, and a compact mini window",
   "license": "MIT",
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"

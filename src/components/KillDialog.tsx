@@ -61,7 +61,7 @@ export function KillDialog() {
       onClose={closeDialog}
       footer={
         <>
-          <Btn onClick={() => setKillTarget(null)}>{t("app.kill.cancel")}</Btn>
+          <Btn onClick={closeDialog}>{t("app.kill.cancel")}</Btn>
           {killFailed && isWindowsPlatform() && (
             <Btn
               variant="danger"

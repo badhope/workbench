@@ -191,6 +191,39 @@ export function pickCurrentProject(projects: Project[], tasks: Task[]): Project 
   return [...projects].sort((a, b) => b.created_at - a.created_at)[0] ?? null;
 }
 
+/** 今天完成的任务：按 completed_at 落在本地日历日判断，不看 due。 */
+export function isCompletedToday(task: Task, now = dayjs()): boolean {
+  if (task.status !== "done" || !task.completed_at) return false;
+  return dayjs.unix(task.completed_at).isSame(now.startOf("day"), "day");
+}
+
+export interface TodayStats {
+  /** 今天到期或进行中、尚未完成 */
+  open: number;
+  /** 今天完成的 */
+  done: number;
+  total: number;
+  /** 0-100，total 为 0 时是 0 */
+  percent: number;
+}
+
+/**
+ * 首页“今天”的完成度。
+ *
+ * 分母 = 今天仍未完成 + 今天已完成。旧任务没有 completed_at，
+ * 它们的完成不会被算进今天，这是数据缺失而不是 0 —— 分母也随之少算。
+ */
+export function todayStats(
+  tasks: Task[],
+  todayOpen: Task[],
+  now = dayjs()
+): TodayStats {
+  const done = tasks.filter((task) => isCompletedToday(task, now)).length;
+  const open = todayOpen.length;
+  const total = open + done;
+  return { open, done, total, percent: total === 0 ? 0 : Math.round((done / total) * 100) };
+}
+
 export interface AttentionCounts {
   overdue: number;
   today: number;

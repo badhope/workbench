@@ -3,6 +3,7 @@
 export const dict = {
   en: {
     "logs.title": "App logs",
+    "logs.clearConfirm": "Clear all log content? This cannot be undone.",
     "logs.autoRefresh": "Auto refresh",
     "logs.refresh": "Refresh",
     "logs.clear": "Clear",
@@ -22,6 +23,7 @@ export const dict = {
   },
   zh: {
     "logs.title": "应用日志",
+    "logs.clearConfirm": "清空全部日志内容？此操作不可恢复。",
     "logs.autoRefresh": "自动刷新",
     "logs.refresh": "刷新",
     "logs.clear": "清空",
@@ -41,6 +43,7 @@ export const dict = {
   },
   ja: {
     "logs.title": "アプリログ",
+    "logs.clearConfirm": "ログをすべてクリアしますか？この操作は元に戻せません。",
     "logs.autoRefresh": "自動更新",
     "logs.refresh": "更新",
     "logs.clear": "クリア",

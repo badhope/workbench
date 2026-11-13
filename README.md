@@ -2,37 +2,36 @@
 
 **English** | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-[![Version](https://img.shields.io/badge/version-0.7.0-22d3ee)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.md#system-requirements)
-[![Tests](https://img.shields.io/badge/tests-532%20unit%20%2B%20161%20backend-8b5cf6)](#quality-gates)
+[![Tests](https://img.shields.io/badge/tests-575%20unit%20%2B%20172%20backend%20%2B%2025%20e2e-8b5cf6)](#quality-gates)
 
 ![Workbench](docs/screenshots/12-brand-hero.png)
 
-**See the port. Find the process. Know the cost.**
+**See the port. Find the process. Know the cost. Finish the work.**
 
-A local-first desktop workbench for people who run services and AI coding
-agents on their own machine. One window shows every process, listening port,
-dev server, project, task — and what your Claude Code / Codex sessions actually
-cost. Data never leaves the device, and there is no account, no cloud, no model
-to configure.
+A local-first desktop workbench for people who run services and AI coding agents on
+their own machine. One window shows today's work, every project and task, each
+listening port and its process, and what Claude Code / Codex sessions actually cost.
+Data never leaves the device — no account, no cloud, no model to configure.
 
 ## What makes it different
 
 | | |
 |---|---|
+| **Today first** | The home screen answers "what should I do now" — overdue, due today, in-progress, blocked and inbox at a glance — not a wall of CPU gauges. |
 | **Port → process → cost** | A listening port links to the process that owns it, and a process shows every port it holds. Session files connect the same machine's work to real spend. No other local tool joins those three views. |
-| **Understands dev servers** | Not just "port open": Vite, Next, Nuxt, Django, uvicorn, Rails and 30+ more are recognised from the command line, with a confidence level. |
-| **Keyboard-first** | Ctrl/Cmd+K searches every page, process, port, project and task. Flat table or parent/child tree. Everything reachable without the mouse. |
-| **Trustworthy by construction** | Protected system processes are rejected in Rust, the target identity is re-checked right before a kill, UAC elevation is opt-in per action, and every report states what it verified. |
+| **Projects, not folders** | A project has a goal, progress and next action. Tasks carry status, priority, due date, next step and blocked reason. The local folder is metadata, not identity. |
+| **Keyboard-first** | Ctrl/Cmd+K searches pages, processes, ports, projects and tasks, then lands you inside the result — filtered to the project, focused on the task. |
 | **Local-first, honestly** | SQLite ledger on your disk, CSP locked to `self`, no telemetry. The only outbound request is the optional probe of a local opencode server. |
 
 ## Three ways to run it
 
 | Mode | Start it | What you get |
 |------|----------|--------------|
-| **Desktop** | install the bundle, or `npm run tauri dev` | The full app: tray, global shortcut, elevated kill, native notifications |
-| **Web** | `workbench serve` | The same backend over HTTP on `127.0.0.1:7788`, serving the built UI to your browser. Real processes, ports and cost ledger — not demo data. Read-only for machine state: no kill endpoint, no remote access |
+| **Desktop** | install the bundle, or `npm run tauri dev` | The full app: tray, global shortcut, mini window, elevated kill, native notifications |
+| **Web** | `workbench serve` | The same backend over HTTP on `127.0.0.1:7788`, serving the built UI to your browser. Real data, not demo. Machine state is read-only; kill and log-clear stay desktop-only |
 | **Demo** | open the deployed landing page | Static sample data so the UI can be evaluated without installing anything |
 
 The header badge always says which one you are looking at — `Live`, `Web · live data`
@@ -40,103 +39,66 @@ or `Demo` — so a number on screen is never ambiguous about being real.
 
 ## Screenshots
 
-| Overview | Processes |
+| Today (workbench) | Review |
+|----------|--------|
+| ![Today](docs/screenshots/zh/01-overview.png) | ![Review](docs/screenshots/zh/05-costs.png) |
+| Current project, today list, quick capture, attention chips | Completion trend, project progress, status & priority split |
+
+| Processes | Servers & ports |
 |----------|-----------|
-| ![Overview](docs/screenshots/01-overview.png) | ![Processes](docs/screenshots/02-processes.png) |
-| CPU / memory trends, disks, process groups | Full snapshot, virtual scrolling, CSV export |
-
-| Process tree | Command palette |
-|--------------|-----------------|
-| ![Process tree](docs/screenshots/17-process-tree.png) | ![Command palette](docs/screenshots/18-command-palette.png) |
-| Parent/child grouping with per-process ports | Ctrl/Cmd+K across pages, processes, ports, projects, tasks |
-
-| Servers & ports | AI sessions |
-|-----------------|--------------|
-| ![Servers](docs/screenshots/03-servers.png) | ![AI sessions](docs/screenshots/04-ai-sessions.png) |
-| netstat / ss parsing, dev-framework tags | Session files, live sessions, tool mix |
+| ![Processes](docs/screenshots/02-processes.png) | ![Servers](docs/screenshots/03-servers.png) |
+| Flat / tree view, virtual scrolling, CSV export | netstat / ss parsing, dev-framework tags |
 
 | Cost ledger | Tasks |
 |-------------|-------|
-| ![Costs](docs/screenshots/05-costs.png) | ![Tasks](docs/screenshots/08-tasks.png) |
-| Budget progress, trend, model split | Drag-and-drop kanban |
+| ![Costs](docs/screenshots/zh/05-costs.png) | ![Tasks](docs/screenshots/zh/08-tasks.png) |
+| Budget progress, trend, model split | List + kanban, status & blocked markers |
 
-### Visual 2.0 — themes, effects, personalization
-
-| Ambient particles | Custom background |
-|-------------------|-------------------|
-| ![Particles](docs/screenshots/19-particles.png) | ![Background](docs/screenshots/20-background.png) |
-| Theme-colored drifting particles, 0–100 intensity | Any local wallpaper under a readability veil, stored on-device |
-
-| First-run tour | Empty-state art |
-|----------------|-----------------|
-| ![Onboarding](docs/screenshots/22-onboarding.png) | ![Empty art](docs/screenshots/21-empty-art.png) |
-| 3 steps: features → 16 themes → motion level | Shared illustration across every empty view |
-
-| Midnight (dark) | Midnight Aurora (glass) |
-|-----------------|-------------------------|
-| ![Dark](docs/screenshots/23-dark-overview.png) | ![Glass](docs/screenshots/24-glass-aurora.png) |
-| 16 built-in themes, 4 dark + 4 light + … | Glass material with per-theme ambient glow |
-
-### 30-second tour
-
-[![Demo](docs/screenshots/01-overview.png)](docs/screenshots/workbench-demo.mp4)
-
-Recorded from the real UI in browser demo mode (no real host, path or account
-data appears in it). [Download the MP4](docs/screenshots/workbench-demo.mp4).
+| Command palette | Mini window |
+|--------------|-----------------|
+| ![Palette](docs/screenshots/18-command-palette.png) | ![Mini](docs/screenshots/zh/01-overview.png) |
+| Ctrl/Cmd+K across pages, processes, ports, projects, tasks | Current work + today + quick capture, always on top |
 
 ## Features
 
 | Feature | What you get |
 |---------|--------------|
+| **Workbench home** | Overdue / today / doing / blocked / inbox counts; current project with goal, progress ring and next step; quick capture to inbox |
+| **Projects & tasks** | Projects with goal, status and progress; tasks with status, priority, due date, next step, blocked reason and completion timestamp; list + kanban views; keyboard and pointer workflows |
 | **Monitoring** | Live processes, listening ports (`netstat` on Windows, `ss -tulpn` on Linux with a netstat fallback) and dev-server detection with framework + confidence |
 | **Process tree** | Flat table or parent/child tree from `parent_pid`; orphan and cycle-safe, virtual scrolling, per-row detail with the process's own listening ports, CSV export |
-| **Command palette** | Ctrl/Cmd+K fuzzy search over pages, processes, ports, projects and tasks; keyboard navigation with ↑ ↓ ↵ Esc |
-| **Elevated kill** | "End as administrator" retry after a normal kill fails — triggers the OS UAC prompt; protected system processes are rejected by the backend before any prompt appears |
+| **Command palette** | Ctrl/Cmd+K fuzzy search over pages, processes, ports, projects and tasks; lands filtered on the project or focused on the task detail |
 | **AI cost metering** | Token costs of local Claude / Codex sessions in a SQLite ledger — no model, no API key, nothing leaves your machine |
+| **Review** | Completion trend (14-day), project progress, status and priority distribution — all computed from real data, with honest disclosure of what lacks history |
 | **Pricing editor** | 40+ built-in model prices; edit / add / reset overrides from the UI |
 | **Backup & restore** | Timestamped snapshots with one-click rollback and integrity checks (`VACUUM INTO` + `PRAGMA integrity_check`) |
+| **Mini window** | A compact always-on-top companion showing current project, today's tasks and quick capture; syncs with the main window via BroadcastChannel |
 | **Start at login** | Real OS registration (registry / autostart entry), toggle reads back from the OS |
 | **Environment check** | Per-item ok / warn / fail report for platform, data directory, cost DB, session folders and port tools, with a copyable summary |
-| **CLI mode** | One binary, four read-only commands: `ps`, `ports`, `diag`, `cost` (all support `--json`). Scriptable, no window |
-| **Web mode** | `workbench serve` starts the same backend over HTTP and serves the built UI to a browser on the same machine — real process/port/cost data, not a demo |
-| **Visual system** | 7 overview layouts × 8 themes × 3 shells, draggable & hideable widgets with per-widget widths, theme editor with share links |
+| **CLI mode** | One binary: `ps` / `ports` / `diag` / `cost` / `serve` (all support `--json`); scriptable, no window |
+| **Visual system** | 7 overview layouts × 16 themes × 3 shells, draggable & hideable widgets with per-widget widths, theme editor with share links |
 | **Trilingual UI** | 简体中文 (default) / English / 日本語 |
 | **Cross-platform** | CI defines Windows, Linux and macOS jobs, including Linux `.deb` and macOS `.app` builds |
 
 ## Quality gates
 
-Nothing in this repo is claimed without a command that proves it. The same
-steps run locally (`node scripts/ci-local.mjs`) and in CI:
+Every claim in this README is verified by a command. The same steps run locally
+(`node scripts/ci-local.mjs`) and in CI:
 
 | Gate | What it catches |
 |------|-----------------|
 | `npm run version:check` | the four version files drifting apart |
 | `npx tsc --noEmit` | type errors, including the generated IPC contract |
 | `npm run lint` · `npm run format:check` | zero-warning ESLint, Prettier |
-| `npm run dup` | duplicated code above 3 % |
-| `npm run coverage` | 532 frontend tests with an enforced threshold |
-| `cargo test` | 161 backend tests, plus the ts-rs binding export |
+| `npm test` | **575** frontend tests with an enforced threshold |
+| `cargo test --lib` | **172** backend tests, plus the ts-rs binding export |
+| `npm run test:e2e` | **25** Playwright cases: navigation, WCAG AA contrast, visual baselines |
 | `cargo clippy -- -D warnings` | Rust lints, zero tolerated |
 | `npm audit` · `cargo audit` | known vulnerabilities in either dependency tree |
-| `npm run test:e2e` | 28 Playwright cases: structure, WCAG AA contrast, visual baselines |
-
-## Download
-
-Check the release pages for available versions and assets. The release workflow
-is configured to build Windows NSIS, Linux `.deb` and macOS `.app` bundles;
-this does not establish that assets were published or verified on every platform.
-
-Release pages:
-
-| Mirror | Releases |
-|--------|----------|
-| GitCode | [gitcode.com/badhope/workbench/releases](https://gitcode.com/badhope/workbench/releases) |
-| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) |
-| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) |
 
 ## Build
 
-Requires Node.js `^22.22.2 || ^24.15.0 || >=26.0.0` for the locked frontend dependencies and Rust ≥ 1.90:
+Requires Node.js `^22.22.2 || ^24.15.0 || >=26.0.0` and Rust ≥ 1.90:
 
 ```bash
 npm install
@@ -162,13 +124,9 @@ workbench serve           # headless HTTP API + web UI on 127.0.0.1:7788
 workbench ports --json    # machine-readable output for scripts
 ```
 
-Tech stack, project structure, FAQ, screenshots and everything else live in
+Tech stack, project structure, FAQ and everything else live in
 the [architecture & reference doc](docs/ARCHITECTURE.md)
 ([简体中文](docs/ARCHITECTURE.zh-CN.md) / [日本語](docs/ARCHITECTURE.ja.md)).
-What ships next — and what is deliberately refused — is in
-[ROADMAP.md](docs/ROADMAP.md). How this compares with Mission Center, System
-Informer, btop++, Glances, ccusage and friends:
-[docs/COMPARISON.md](docs/COMPARISON.md).
 
 ## Contributing & License
 

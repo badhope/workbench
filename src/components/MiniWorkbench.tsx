@@ -6,6 +6,7 @@ import { useAppRuntime } from "../lib/useAppRuntime";
 import { useT } from "../lib/i18n";
 import { BrandMark } from "./BrandMark";
 import { ProgressRing } from "./ProgressRing";
+import { Toast } from "./KillDialog";
 import { dueLabel } from "../lib/util";
 import {
   explicitNextStep,
@@ -261,6 +262,7 @@ export default function MiniWorkbench() {
           </span>
         )}
       </form>
+      <Toast />
     </div>
   );
 }

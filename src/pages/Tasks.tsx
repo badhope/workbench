@@ -387,10 +387,22 @@ export default function Tasks() {
                   onAdd={() => {
                     const title = (drafts[col.key] ?? "").trim();
                     if (!title) return;
+                    // 与列表新建同一口径：今天/本周范围补今天到期；
+                    // 阻塞范围无法凭空生成阻塞原因，添加后回到全部，避免“假消失”。
+                    const due =
+                      taskScope === "today" || taskScope === "week"
+                        ? dayjs().format("YYYY-MM-DD")
+                        : null;
                     if (
-                      addTask({ title, status: col.key, project_id: projectFilter || null })
+                      addTask({
+                        title,
+                        status: col.key,
+                        due,
+                        project_id: projectFilter || null,
+                      })
                     ) {
                       setDrafts((d) => ({ ...d, [col.key]: "" }));
+                      if (taskScope === "blocked") setTaskScope("all");
                     }
                   }}
                 >

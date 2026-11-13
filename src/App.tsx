@@ -14,7 +14,7 @@ import { Sidebar } from "./components/Nav";
 import { Spinner } from "./ui";
 import { PAGE_COMPONENTS } from "./pages/registry";
 import { useBreakpoint } from "./lib/useBreakpoint";
-import { useAppRuntime } from "./lib/useAppRuntime";
+import { useAppRuntime, useTransportMode } from "./lib/useAppRuntime";
 import { effectiveMotion } from "./lib/store";
 import { applyMotion } from "./lib/theme/apply";
 import { findTheme } from "./lib/theme/presets";
@@ -32,6 +32,8 @@ function CurrentPage({ view }: { view: keyof typeof PAGE_COMPONENTS }) {
 export default function App() {
   const t = useT();
   const bp = useBreakpoint();
+  const mode = useTransportMode();
+  const dataLoadError = useStore((s) => s.dataLoadError);
   // 侧边栏折叠（桌面/平板）与抽屉（窄屏）是两套状态：
   // 折叠是用户偏好，抽屉是临时交互，混用一个布尔会在跨断点时表现错乱。
   const [collapsed, setCollapsed] = useState(false);
@@ -134,6 +136,30 @@ export default function App() {
             compact={bp === "compact"}
             onOpenDrawer={() => setDrawerOpen(true)}
           />
+        )}
+
+        {dataLoadError && (
+          <div
+            role="alert"
+            className="flex shrink-0 flex-wrap items-center gap-2 border-b border-danger/30 bg-danger/8 px-6 py-2 text-[11.5px] text-danger"
+          >
+            <span className="min-w-0 flex-1">
+              {t("app.dataLoadFailed", { err: dataLoadError })}
+            </span>
+            <button
+              type="button"
+              onClick={() => void useStore.getState().loadAll()}
+              className="rounded border border-danger/40 px-2 py-0.5 font-medium hover:bg-danger/10"
+            >
+              {t("app.retry")}
+            </button>
+          </div>
+        )}
+
+        {mode === "demo" && (
+          <div className="shrink-0 border-b border-warn/30 bg-warn/8 px-6 py-2 text-[11.5px] text-warn">
+            {t("app.demoNotice")}
+          </div>
         )}
 
         <main

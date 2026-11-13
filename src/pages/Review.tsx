@@ -199,7 +199,13 @@ export default function Review() {
               ? t("app.dataUpdatedAt", { time: formatTime(lastDataUpdatedAt) })
               : t("app.dataWaiting")}
           </span>
-          <Btn onClick={() => setView("tasks")}>
+          <Btn
+            onClick={() => {
+              setTaskScope("all");
+              setTaskProjectFilter("");
+              setView("tasks");
+            }}
+          >
             {t("review.viewTasks")} <ArrowRight size={13} />
           </Btn>
         </div>

@@ -23,7 +23,7 @@ export function BackupPanel() {
   const restoreData = useStore((state) => state.restoreData);
   const backupCurrentData = useStore((state) => state.backupCurrentData);
   const [points, setPoints] = useState<BackupPoint[] | null>(null);
-  const [error, setError] = useState("");
+  const [status, setStatus] = useState({ text: "", ok: false });
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<BackupPoint | null>(null);
 
@@ -32,9 +32,9 @@ export function BackupPanel() {
     try {
       const list = await listBackups();
       setPoints(list);
-      setError("");
+      setStatus({ text: "", ok: false });
     } catch (e) {
-      setError(String(e));
+      setStatus({ text: String(e), ok: false });
       setPoints([]);
     }
   }, []);
@@ -60,11 +60,11 @@ export function BackupPanel() {
     setBusy(true);
     try {
       const r = await backupCurrentData();
-      setError("");
+      setStatus({ text: "", ok: false });
       await refresh();
       return r;
     } catch (e) {
-      setError(String(e));
+      setStatus({ text: String(e), ok: false });
       return null;
     } finally {
       setBusy(false);
@@ -79,7 +79,7 @@ export function BackupPanel() {
             <div className="flex items-center gap-1.5">
               <Btn
                 className="!px-2 !py-1 !text-[11px]"
-                onClick={() => void openBackupDir().catch((e) => setError(String(e)))}
+                onClick={() => void openBackupDir().catch((e) => setStatus({ text: String(e), ok: false }))}
               >
                 <FolderOpen size={11} /> {t("settings.openBackup")}
               </Btn>
@@ -101,9 +101,16 @@ export function BackupPanel() {
           {t("settings.backupHint")}
         </p>
 
-        {error && (
-          <div className="mb-2 rounded-[var(--radius-btn)] border border-danger/40 bg-danger/10 px-2.5 py-1.5 text-[11px] text-danger">
-            {error}
+        {status.text && (
+          <div
+            role="status"
+            className={`mb-2 rounded-[var(--radius-btn)] border px-2.5 py-1.5 text-[11px] ${
+              status.ok
+                ? "border-ok/40 bg-ok/10 text-ok"
+                : "border-danger/40 bg-danger/10 text-danger"
+            }`}
+          >
+            {status.text}
           </div>
         )}
 
@@ -158,17 +165,18 @@ export function BackupPanel() {
           setBusy(true);
           void restoreData(target.id)
             .then((r) => {
-              setError("");
+              setStatus({ text: "", ok: false });
               void refresh();
-              // 恢复后提示回退点，用户知道「选错了还能回去」
-              setError(
-                t("settings.restored", {
+              // 恢复后提示回退点，用户知道「选错了还能回去」——用成功样式而不是红色错误
+              setStatus({
+                text: t("settings.restored", {
                   count: r.restored.length,
                   safety: formatStamp(r.safety_backup.split(/[\\/]/).pop() ?? ""),
-                })
-              );
+                }),
+                ok: true,
+              });
             })
-            .catch((e) => setError(String(e)))
+            .catch((e) => setStatus({ text: String(e), ok: false }))
             .finally(() => setBusy(false));
         }}
       />

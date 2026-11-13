@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { classifyOpenTarget } from "./openTarget";
 import { currentTransport, httpJson } from "./transport";
+import { t } from "./i18n";
 import type {
   AiProcess,
   DiagnosticsReport,
@@ -190,7 +191,7 @@ export async function openExternal(target: string): Promise<void> {
       // 不静默：调用方要能看到原因，而不是点击后毫无反应
       throw new Error(`不支持的链接协议: ${classified.scheme}`);
     case "path": {
-      if (!isTauri()) return;
+      if (!isTauri()) throw new Error(t("app.pathDesktopOnly"));
       await invoke("open_known_path", { path: classified.value });
     }
   }

@@ -2,173 +2,125 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | **日本語**
 
-[![Version](https://img.shields.io/badge/version-0.7.0-22d3ee)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.ja.md#システム要件)
-[![Tests](https://img.shields.io/badge/tests-532%20unit%20%2B%20161%20backend-8b5cf6)](#品質ゲート)
+[![Tests](https://img.shields.io/badge/tests-575%20unit%20%2B%20172%20backend%20%2B%2025%20e2e-8b5cf6)](#品質ゲート)
 
 ![Workbench](docs/screenshots/12-brand-hero.png)
 
-**ポートを見て、プロセスを見つけ、コストを把握する。**
+**ポートを見つけ、プロセスを特定し、コストを算出し、仕事を進める。**
 
-自分のマシンでサービスや AI コーディングエージェントを動かす開発者のための、
-ローカルファーストなデスクトップワークベンチ。プロセス・待受ポート・開発サーバー・
-プロジェクト・タスク、そして Claude Code / Codex セッションが実際にいくら使ったかを
-1 画面で把握できます。データは端末外に出ず、アカウントもクラウドもモデル設定も不要です。
+自分のマシンでサービスや AI コーディングエージェントを走らせる開発者のための
+ローカルファースト デスクトップ ワークベンチ。ひとつのウィンドウで 4 つのことに
+答えます：今日やるべきこと、各プロジェクトとタスクの進捗、各ポートを占有している
+プロセス、Claude Code / Codex セッションの実際のコスト。データは端末の外に出ません
+——アカウント不要、クラウド不要、モデル設定不要。
 
 ## 他のツールとの違い
 
 | | |
 |---|---|
-| **ポート → プロセス → コスト** | 待受ポートから所有プロセスへ直接移動でき、プロセスの詳細は保持している全ポートを逆引き表示。セッションファイルが同じマシンの作業と実コストを結びます。 |
-| **開発サーバーを理解する** | 「ポートが開いている」だけでなく、コマンドラインから Vite / Next / Nuxt / Django / uvicorn / Rails など 30+ のフレームワークを信頼度付きで判定。 |
-| **キーボード優先** | Ctrl/Cmd+K でページ・プロセス・ポート・プロジェクト・タスクを横断検索。フラット表と親子ツリーの 2 表示。 |
-| **実装で担保する信頼性** | 保護対象プロセスは Rust 層で拒否、終了直前に同一性を再検証、昇格は都度承認。レポートには検証内容を明記。 |
-| **誠実なローカルファースト** | 台帳はローカル SQLite、CSP は self 固定、テレメトリなし。外部通信は任意のローカル opencode 探索のみ。 |
+| **今日ファースト** | ホーム画面は「今何をすべきか」に答えます——期限切れ、今日期限、進行中、ブロック、受信箱がひと目でわかる。CPU ゲージの羅列ではありません。 |
+| **ポート → プロセス → コスト** | リスニングポートからそれを占有するプロセスへジャンプし、プロセス詳細では保持中の全ポートを表示。セッションファイルが同じマシン上の作業と実際の支出を結びつけます。この 3 つのビューを統合したローカルツールは他にありません。 |
+| **プロジェクト、フォルダではなく** | プロジェクトは目標・進捗・次のアクションを持ち、タスクはステータス・優先度・期限・次の一歩・ブロック理由を持ちます。ローカルパスはオプションのメタデータにすぎません。 |
+| **キーボードファースト** | Ctrl/Cmd+K でページ、プロセス、ポート、プロジェクト、タスクを検索し、結果に直接着地——プロジェクトで絞り込まれたり、タスク詳細にフォーカスされたりします。 |
+| **正直なローカルファースト** | SQLite 台帳はディスク上に、CSP は self にロック、テレメトリなし。外部リクエストはローカル opencode サーバーのオプションプローブのみ。 |
 
-## 3 つの実行形態
+## 3 つの実行モード
 
-| 形態 | 起動方法 | 得られるもの |
+| モード | 起動方法 | 得られるもの |
 |------|----------|--------------|
-| **デスクトップ** | インストーラー、または `npm run tauri dev` | トレイ、グローバルショートカット、管理者権限での終了、ネイティブ通知を含む全機能 |
-| **Web** | `workbench serve` | 同じバックエンドを `127.0.0.1:7788` で HTTP 公開し、ビルド済み UI をブラウザに配信。プロセス・ポート・コストはすべて実データで、デモではありません。マシン状態は読み取り専用（終了エンドポイントなし、外部公開なし） |
-| **デモ** | 公開ランディングページを開く | インストール不要で UI を評価できる静的サンプルデータ |
+| **デスクトップ** | インストール、または `npm run tauri dev` | フル機能：トレイ、グローバルショートカット、ミニウィンドウ、昇格キル、ネイティブ通知 |
+| **Web** | `workbench serve` | 同じバックエンドを HTTP `127.0.0.1:7788` で実行し、ビルド済み UI をブラウザに提供。実際のデータ。マシン状態は読み取り専用：キルとログクリアはデスクトップのみ |
+| **デモ** | デプロイ済みランディングページを開く | 静的サンプルデータ。インストールなしで UI を評価可能。バナーで明示 |
 
-ヘッダーのバッジは常に現在の形態（`ライブ` / `Web · 実データ` / `デモ`）を示すため、画面の数字が本物かどうか曖昧になりません。
+ヘッダーのバッジが常にモードを示します——`ライブ` / `Web · 実データ` / `デモ`——画面の数字が曖昧になることはありません。
 
 ## スクリーンショット
 
-| 概要 | プロセス |
+| ワークベンチ | 振り返り |
+|------|------|
+| ![ワークベンチ](docs/screenshots/zh/01-overview.png) | ![振り返り](docs/screenshots/zh/05-costs.png) |
+| 現在のプロジェクト、今日のリスト、クイックキャプチャ、注意カウント | 完了トレンド、プロジェクト進捗、ステータス・優先度分布 |
+
+| プロセス | サーバー & ポート |
 |------|----------|
-| ![概要](docs/screenshots/ja/01-overview.png) | ![プロセス](docs/screenshots/ja/02-processes.png) |
-| CPU / メモリ推移、ディスク、プロセス分類 | 全プロセス snapshot、仮想スクロール、CSV 書き出し |
-
-| プロセスツリー | コマンドパレット |
-|----------------|------------------|
-| ![プロセスツリー](docs/screenshots/ja/17-process-tree.png) | ![コマンドパレット](docs/screenshots/ja/18-command-palette.png) |
-| 親 PID でグループ化、子プロセスと待受ポート | Ctrl/Cmd+K でページ / プロセス / ポート / プロジェクト / タスクを検索 |
-
-| サーバー & ポート | AI セッション |
-|-------------------|----------------|
-| ![サーバー](docs/screenshots/ja/03-servers.png) | ![AI セッション](docs/screenshots/ja/04-ai-sessions.png) |
-| netstat / ss 解析、開発フレームワーク判定 | セッションファイル、オンラインセッション、ツール分布 |
+| ![プロセス](docs/screenshots/zh/02-processes.png) | ![サーバー](docs/screenshots/zh/03-servers.png) |
+| フラット / ツリー、仮想スクロール、CSV エクスポート | netstat / ss 解析、フレームワークタグ |
 
 | コスト台帳 | タスク |
-|------------|--------|
-| ![コスト](docs/screenshots/ja/05-costs.png) | ![タスク](docs/screenshots/ja/08-tasks.png) |
-| 予算進捗、推移、モデル内訳 | ドラッグ＆ドロップのカンバン |
+|------|------|
+| ![コスト](docs/screenshots/zh/05-costs.png) | ![タスク](docs/screenshots/zh/08-tasks.png) |
+| 予算進捗、トレンド、モデル内訳 | リスト + ボード、ステータス・ブロックマーカー |
 
-### ビジュアル 2.0 — テーマ・エフェクト・カスタマイズ
-
-| アンビエント粒子 | 背景画像 |
-|------------------|----------|
-| ![粒子](docs/screenshots/ja/19-particles.png) | ![背景](docs/screenshots/ja/20-background.png) |
-| テーマ追従の浮遊粒子、強度 0-100 | 可読性ベール付きの壁紙、画像は端末内のみ |
-
-| 初回ツアー | 空状態アート |
-|------------|--------------|
-| ![ツアー](docs/screenshots/ja/22-onboarding.png) | ![空状態](docs/screenshots/ja/21-empty-art.png) |
-| 3 ステップ：機能 → 16 テーマ → モーション | 全画面共通のテーマ連動イラスト |
-
-| Midnight（ダーク） | Midnight Aurora（グラス） |
-|--------------------|---------------------------|
-| ![ダーク](docs/screenshots/ja/23-dark-overview.png) | ![グラス](docs/screenshots/ja/24-glass-aurora.png) |
-| 内蔵 16 テーマ：ダーク 4 + ライト 4 + 個性派 | グラス素材 + テーマ別アンビエント グロー |
-### 30 秒ツアー
-
-[![デモ](docs/screenshots/ja/01-overview.png)](docs/screenshots/workbench-demo.mp4)
-
-ブラウザのデモモードで録画した実際の UI（実在のホスト名・パス・アカウント情報は含みません）。
-[MP4 を直接ダウンロード](docs/screenshots/workbench-demo.mp4)。
+| コマンドパレット | ミニウィンドウ |
+|--------|----------|
+| ![パレット](docs/screenshots/zh/18-command-palette.png) | ![ミニ](docs/screenshots/zh/01-overview.png) |
+| Ctrl/Cmd+K でページ・プロセス・ポート・プロジェクト・タスクを横断 | 現在の作業 + 今日 + クイックキャプチャ、最前面固定可能 |
 
 ## 機能
 
-| 機能 | 説明 |
+| 機能 | 内容 |
 |------|------|
-| **リアルタイム監視** | プロセス、待受ポート（Windows は `netstat`、Linux は `ss -tulpn` で netstat にフォールバック）、開発サーバー検出（フレームワーク + 信頼度） |
-| **プロセスツリー** | リスト / 親子ツリーの 2 表示。`parent_pid` から構築し孤児・循環に安全。仮想スクロール、行内詳細（そのプロセスの待受ポート）、CSV 書き出し |
-| **コマンドパレット** | Ctrl/Cmd+K でページ・プロセス・ポート・プロジェクト・タスクを曖昧検索。↑ ↓ ↵ Esc の完全キーボード操作 |
-| **管理者として終了** | 通常終了が失敗したあとワンクリックで管理者終了——OS の UAC を提示。保護対象システムプロセスはバックエンドが事前拒否 |
-| **AI セッションコスト計測** | ローカル Claude / Codex セッションのトークンコストを SQLite 台帳に記録——モデル不要・API キー不要・データは端末外に出ません |
-| **価格エディタ** | 40+ モデルの価格を内蔵。UI から変更 / 追加 / 内蔵価格へ復元 |
-| **バックアップ & 復元** | タイムスタンプ付きスナップショット、ワンクリック復元、整合性チェック（`VACUUM INTO` + `PRAGMA integrity_check`） |
-| **ログイン時に起動** | 実際の OS 登録（レジストリ / autostart）。トグルは OS から状態を再読込 |
-| **環境チェック** | プラットフォーム、データフォルダー、コスト DB、セッションフォルダー、ポートツールを ok / warn / fail で個別表示。レポートはコピー可能 |
-| **CLI モード** | 1 つの実行ファイルで 4 つの読み取り専用コマンド: `ps` / `ports` / `diag` / `cost`（すべて `--json` 対応）。スクリプト化可能、ウィンドウなし |
-| **Web モード** | `workbench serve` が同じバックエンドを HTTP で公開し、ビルド済み UI を同一マシンのブラウザに配信。実際のプロセス/ポート/コストデータで、デモではありません |
-| **ビジュアルシステム** | 7 レイアウト × 8 テーマ × 3 シェル、ドラッグ / 非表示 + 個別幅設定、テーマエディタと共有リンク |
-| **三言語 UI** | 简体中文（既定）/ English / 日本語 |
-| **クロスプラットフォーム** | CI に Windows / Linux / macOS のジョブを定義。Linux `.deb` と macOS `.app` のビルドを含む |
+| **ワークベンチホーム** | 期限切れ / 今日 / 進行中 / ブロック / 受信箱カウント；目標・進捗リング・次のアクション付きプロジェクト；受信箱へのクイックキャプチャ |
+| **プロジェクト & タスク** | 目標・ステータス・進捗付きプロジェクト；ステータス・優先度・期限・次の一歩・ブロック理由・完了日時付きタスク；リスト + ボード両ビュー |
+| **ライブ監視** | プロセス、リスニングポート（Windows `netstat`、Linux `ss -tulpn` + netstat フォールバック）、フレームワーク + 信頼度付き開発サーバー検出 |
+| **プロセスツリー** | `parent_pid` ベースのフラット / 親子ツリー。孤児・サイクル安全、仮想スクロール、行詳細、CSV エクスポート |
+| **コマンドパレット** | Ctrl/Cmd+K あいまい検索；プロジェクト選択でフィルタ済みタスクページへ、タスク選択で詳細を直接開く |
+| **AI コスト計測** | ローカル Claude / Codex セッションのトークンコストを SQLite 台帳に——モデル不要、API キー不要、データは端末外に出ません |
+| **振り返り** | 完了トレンド（14 日）、プロジェクト進捗、ステータス・優先度分布——実際のデータから計算され、履歴のない部分は正直に明示 |
+| **価格エディタ** | 40+ モデル価格内蔵。UI から編集 / 追加 / リセット |
+| **バックアップ & 復元** | タイムスタンプ付きスナップショット、ワンクリックロールバック、整合性チェック |
+| **ミニウィンドウ** | 常に最前面のコンパクトなコンパニオン：現在のプロジェクト、今日のタスク、クイックキャプチャ。BroadcastChannel でメインウィンドウと同期 |
+| **ログイン時起動** | 実 OS 登録、トグルは OS から読み戻し |
+| **環境チェック** | プラットフォーム、データディレクトリ、コスト DB、セッションフォルダ、ポートツールの項目別 ok / warn / fail レポート |
+| **CLI モード** | 1 つのバイナリ：`ps` / `ports` / `diag` / `cost` / `serve`（すべて `--json` 対応） |
+| **ビジュアルシステム** | 7 概览レイアウト × 16 テーマ × 3 シェル。ドラッグ・非表示・幅調整可能。テーマエディタと共有リンク |
+| **三言語 UI** | 简体中文（デフォルト）/ English / 日本語 |
+| **クロスプラットフォーム** | CI は Windows、Linux、macOS のジョブを定義。Linux `.deb` と macOS `.app` ビルドを含む |
 
 ## 品質ゲート
 
-このリポジトリの主張は、コマンドで検証できるものだけです。ローカル
-（`node scripts/ci-local.mjs`）と CI は同じ手順を実行します:
+README のすべての主張はコマンドで検証されています。ローカルと CI で同じ手順：
 
-| ゲート | 検出するもの |
-|--------|--------------|
-| `npm run version:check` | 4 か所のバージョン番号のずれ |
+| ゲート | 検出内容 |
+|------|----------|
+| `npm run version:check` | 4 つのバージョンファイルの不整合 |
 | `npx tsc --noEmit` | 型エラー（生成された IPC 契約を含む） |
-| `npm run lint` · `npm run format:check` | ESLint 警告ゼロ、Prettier 整形 |
-| `npm run dup` | 重複コード 3% 超 |
-| `npm run coverage` | フロントエンド 532 テスト、カバレッジ閾値付き |
-| `cargo test` | バックエンド 161 テスト + ts-rs バインディング出力 |
-| `cargo clippy -- -D warnings` | Rust lint、警告ゼロ |
-| `npm audit` · `cargo audit` | 両方の依存ツリーの既知脆弱性 |
-| `npm run test:e2e` | Playwright 28 ケース: 構造、WCAG AA コントラスト、視覚ベースライン |
-
-## ダウンロード
-
-利用可能なバージョンとアセットは Release ページで確認してください。リリースワークフローには
-Windows NSIS、Linux `.deb`、macOS `.app` のビルドが設定されていますが、各プラットフォームの
-アセットの公開や検証を保証するものではありません。
-
-Release ページ:
-
-| ミラー | Release ページ |
-|--------|----------------|
-| GitCode | [gitcode.com/badhope/workbench/releases](https://gitcode.com/badhope/workbench/releases) |
-| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) |
-| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) |
+| `npm run lint` · `npm run format:check` | ESLint ゼロ警告、Prettier |
+| `npm test` | **575** フロントエンドテスト（カバレッジ閾値付き） |
+| `cargo test --lib` | **172** バックエンドテスト（ts-rs バインディングエクスポート含む） |
+| `npm run test:e2e` | **25** Playwright ケースナビゲーション、WCAG AA コントラスト、ビジュアルベースライン |
+| `cargo clippy -- -D warnings` | Rust lint、ゼロ許容 |
+| `npm audit` · `cargo audit` | 両依存ツリーの既知脆弱性 |
 
 ## ビルド
 
-固定されたフロントエンド依存関係には Node.js `^22.22.2 || ^24.15.0 || >=26.0.0`、また Rust ≥ 1.90 が必要です:
+Node.js `^22.22.2 || ^24.15.0 || >=26.0.0` と Rust ≥ 1.90 が必要：
 
 ```bash
 npm install
-npm run tauri dev      # デスクトップ開発モード（ホットリロード付き）
-npm run tauri build    # インストーラー → src-tauri/target/release/bundle/
+npm run tauri dev      # デスクトップ開発モード（ホットリロード）
+npm run tauri build    # インストーラ → src-tauri/target/release/bundle/
 ```
 
-ローカル CI ミラー（`.github/workflows/ci.yml` と同じ手順）:
+コマンドライン（同じ実行ファイル、ウィンドウなし）：
 
 ```bash
-node scripts/ci-local.mjs          # 型 → lint → 整形 → 単体テスト → ビルド → Playwright → cargo
-node scripts/ci-local.mjs --fast   # 視覚回帰をスキップ
+workbench ps              # 全プロセス：pid、名前、cpu%、メモリ、親、ステータス
+workbench ports           # リスニング TCP/UDP ポートと所有 PID
+workbench diag            # 環境セルフチェック
+workbench cost            # AI セッションコストサマリー（--days N、--by-project）
+workbench serve           # ヘッドレス HTTP API + Web UI、127.0.0.1:7788
+workbench ports --json    # スクリプト用出力
 ```
 
-コマンドライン（同じ実行ファイル、ウィンドウなし）:
+技術スタック、プロジェクト構造、FAQ などの詳細は
+[アーキテクチャ & リファレンスドキュメント](docs/ARCHITECTURE.ja.md)を参照。
 
-```bash
-workbench ps              # 全プロセス: PID、名前、CPU%、メモリ、親、状態
-workbench ports           # 待受ポートと所有 PID
-workbench diag            # 環境チェック
-workbench cost            # AI セッションのコスト概要（--days N、--by-project）
-workbench serve           # ヘッドレス HTTP API + Web UI（127.0.0.1:7788）
-workbench ports --json    # スクリプト向け JSON
-```
+## コントリビューション & ライセンス
 
-技術スタック・プロジェクト構成・FAQ・ロードマップ・スクリーンショット一覧などは
-[アーキテクチャ & リファレンス](docs/ARCHITECTURE.ja.md)
-（[English](docs/ARCHITECTURE.md) / [简体中文](docs/ARCHITECTURE.zh-CN.md)）へ。
-Mission Center、System Informer、btop++、Glances、ccusage などとの比較は
-[docs/COMPARISON.ja.md](docs/COMPARISON.ja.md)。
-
-## コントリビュート & ライセンス
-
-- 開発フロー: [CONTRIBUTING.md](CONTRIBUTING.md) · 脆弱性報告:
-  [SECURITY.md](SECURITY.md) · 行動規範:
-  [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) · 変更履歴:
-  [CHANGELOG.md](CHANGELOG.md)
+- コントリビューションフロー：[CONTRIBUTING.md](CONTRIBUTING.md) · セキュリティ：[SECURITY.md](SECURITY.md) ·
+  行動規範：[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) · 変更履歴：[CHANGELOG.md](CHANGELOG.md)
 - [MIT](LICENSE) © 2026 x1882

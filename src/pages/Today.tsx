@@ -15,7 +15,6 @@ import {
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { localeFor, useLang, useT } from "../lib/i18n";
-import { useTransportMode } from "../lib/useAppRuntime";
 import { Badge, Btn, Empty, Modal } from "../ui";
 import { BrandMark } from "../components/BrandMark";
 import { ProgressRing } from "../components/ProgressRing";
@@ -24,7 +23,6 @@ import {
   attentionCounts,
   explicitNextStep,
   isBlocked,
-  isDueToday,
   isOpenTask,
   nextTaskForProject,
   pickCurrentProject,
@@ -32,6 +30,7 @@ import {
   projectProgress,
   sortTasksForWork,
   tasksForToday,
+  todayStats,
   type AttentionCounts,
   type ProjectProgress,
   type TaskScope,
@@ -57,7 +56,6 @@ function priorityLabel(key: string, t: Translate): string {
 export default function Today() {
   const t = useT();
   const lang = useLang();
-  const mode = useTransportMode();
   const quickRef = useRef<HTMLInputElement>(null);
   const [quickTitle, setQuickTitle] = useState("");
   const [quickProject, setQuickProject] = useState("");
@@ -112,11 +110,11 @@ export default function Today() {
   const now = dayjs();
   const counts = useMemo(() => attentionCounts(data.tasks), [data.tasks]);
   const todayTasks = useMemo(() => tasksForToday(data.tasks), [data.tasks]);
-  const todayDone = useMemo(
-    () => data.tasks.filter((task) => task.status === "done" && isDueToday(task)).length,
-    [data.tasks]
+  // 完成数按 completed_at 落在今天统计；分母含今天已完成的，不会“越做越倒退”。
+  const todayStat = useMemo(
+    () => todayStats(data.tasks, todayTasks),
+    [data.tasks, todayTasks]
   );
-  const todayTotal = todayDone + todayTasks.length;
   const todayIds = useMemo(() => new Set(todayTasks.map((x) => x.id)), [todayTasks]);
   const upcoming = useMemo(
     () =>
@@ -216,16 +214,10 @@ export default function Today() {
         lang={lang}
         modeNames={modeNames}
         onChangeMode={() => setView("settings")}
-        done={todayDone}
-        total={todayTotal}
+        done={todayStat.done}
+        total={todayStat.total}
         dataUpdatedAt={lastDataUpdatedAt}
       />
-
-      {mode === "demo" && (
-        <div className="rounded-[var(--radius-btn)] border border-warn/30 bg-warn/8 px-3 py-2 text-[11.5px] leading-relaxed text-warn">
-          {t("today.demoNotice")}
-        </div>
-      )}
 
       <div
         className={`grid grid-cols-1 gap-6 ${
@@ -275,11 +267,13 @@ export default function Today() {
             onNewTask={() => focusQuick(current?.id ?? "")}
             onOpenFolder={() => current?.path && void openTarget(current.path)}
             onCreateProject={() => setView("projects")}
+            onOpenTask={(id) => setTaskDetailId(id)}
           />
 
           <TaskList
             title={t("today.today")}
             tasks={todayTasks.slice(0, 7)}
+            totalCount={todayTasks.length}
             projects={data.projects}
             emptyText={t("today.nothingToday")}
             emptyAction={
@@ -638,6 +632,7 @@ function CurrentProject({
   onNewTask,
   onOpenFolder,
   onCreateProject,
+  onOpenTask,
 }: {
   project: Project | null;
   progress: ProjectProgress | null;
@@ -646,6 +641,7 @@ function CurrentProject({
   onNewTask: () => void;
   onOpenFolder: () => void;
   onCreateProject: () => void;
+  onOpenTask: (id: string) => void;
 }) {
   const t = useT();
   if (!project || !progress) {
@@ -705,7 +701,10 @@ function CurrentProject({
           />
         </div>
 
-        <NextAction next={next} onOpen={onOpenTasks} />
+        <NextAction
+          next={next}
+          onOpen={() => next && onOpenTask(next.id)}
+        />
 
         <div className="flex flex-wrap gap-1.5">
           <Btn variant="primary" onClick={onOpenTasks}>
@@ -725,7 +724,13 @@ function CurrentProject({
   );
 }
 
-function NextAction({ next, onOpen }: { next: Task | null; onOpen: () => void }) {
+function NextAction({
+  next,
+  onOpen,
+}: {
+  next: Task | null;
+  onOpen: () => void;
+}) {
   const t = useT();
   const due = next ? dueLabel(next.due) : null;
   const step = explicitNextStep(next);
@@ -761,6 +766,7 @@ function TaskList({
   title,
   tasks,
   projects,
+  totalCount,
   emptyText,
   emptyAction,
   extra,
@@ -770,6 +776,7 @@ function TaskList({
   title: string;
   tasks: Task[];
   projects: Project[];
+  totalCount?: number;
   emptyText?: string;
   emptyAction?: ReactNode;
   extra?: ReactNode;
@@ -777,13 +784,14 @@ function TaskList({
   onOpen: (task: Task) => void;
 }) {
   const t = useT();
+  const shown = totalCount ?? tasks.length;
   return (
     <section className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-3 border-b border-line/70 pb-2">
         <div className="flex items-baseline gap-2">
           <h2 className="text-[14px] font-semibold">{title}</h2>
-          {tasks.length > 0 && (
-            <span className="num text-[10.5px] text-faint">{tasks.length}</span>
+          {shown > 0 && (
+            <span className="num text-[10.5px] text-faint">{shown}</span>
           )}
         </div>
         {extra}

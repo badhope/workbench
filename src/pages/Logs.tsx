@@ -3,7 +3,7 @@ import { FileText, RefreshCw, Trash2 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { isBackend, readLogs, clearLogs } from "../lib/api";
 import { demoBundle } from "../lib/demo";
-import { Btn } from "../ui";
+import { Btn, ConfirmDialog } from "../ui";
 import { getLang, t as translate, useT } from "../lib/i18n";
 
 /**
@@ -37,6 +37,7 @@ export default function Logs() {
   // 没有它们，几百行日志里找一条 ERROR 只能靠肉眼滚。
   const [level, setLevel] = useState<LogLevel>("all");
   const [query, setQuery] = useState("");
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const load = useCallback(async () => {
     // 没有后端（纯静态预览）时给一段标注清楚的样例，
@@ -90,7 +91,12 @@ export default function Logs() {
     };
   }, [autoRefresh, load]);
 
-  const handleClear = async () => {
+  const handleClear = () => {
+    setConfirmClear(true);
+  };
+
+  const doClear = async () => {
+    setConfirmClear(false);
     try {
       await clearLogs();
       setContent(t("logs.cleared"));
@@ -153,6 +159,16 @@ export default function Logs() {
           </Btn>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmClear}
+        title={t("logs.clear")}
+        body={t("logs.clearConfirm")}
+        confirmLabel={t("logs.clear")}
+        cancelLabel={t("logs.title")}
+        onCancel={() => setConfirmClear(false)}
+        onConfirm={() => void doClear()}
+      />
 
       {/* 筛选条：关键字 + 级别。过滤只发生在渲染层，不重新读文件。 */}
       <div className="mt-3 flex flex-wrap items-center gap-2">

@@ -39,6 +39,8 @@ export function CommandPalette() {
     setFocusPid,
     refreshRuntime,
     setTaskDetailId,
+    setTaskProjectFilter,
+    setTaskScope,
   } = useStore(
     useShallow((s) => ({
       setView: s.setView,
@@ -49,6 +51,8 @@ export function CommandPalette() {
       setFocusPid: s.setFocusPid,
       refreshRuntime: s.refreshRuntime,
       setTaskDetailId: s.setTaskDetailId,
+      setTaskProjectFilter: s.setTaskProjectFilter,
+      setTaskScope: s.setTaskScope,
     }))
   );
 
@@ -93,7 +97,11 @@ export function CommandPalette() {
       keywords: `${p.path} ${p.tags.join(" ")}`,
       group: t("palette.projects"),
       hint: p.path,
-      run: () => setView("projects"),
+      run: () => {
+        setTaskProjectFilter(p.id);
+        setTaskScope("all");
+        setView("tasks");
+      },
     }));
     const taskActions = data.tasks.slice(0, 40).map((task) => ({
       id: `task-${task.id}`,
@@ -130,6 +138,8 @@ export function CommandPalette() {
     setFocusPid,
     refreshRuntime,
     setTaskDetailId,
+    setTaskProjectFilter,
+    setTaskScope,
   ]);
 
   const results = useMemo(() => rankCommands(actions, query, 12), [actions, query]);
