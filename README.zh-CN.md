@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/badge/version-0.8.1-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.zh-CN.md#系统要求)
-[![Tests](https://img.shields.io/badge/tests-575%20unit%20%2B%20178%20backend%20%2B%2025%20e2e-8b5cf6)](#质量门禁)
+[![Tests](https://img.shields.io/badge/tests-575%20unit%20%2B%20180%20backend%20%2B%2030%20e2e-8b5cf6)](#质量门禁)
 
 ![工作台](docs/screenshots/zh/12-brand-hero.png)
 
@@ -69,7 +69,7 @@
 | **AI 成本计量** | 本机 Claude / Codex 会话 token 成本，SQLite 本地账本——不依赖任何模型、不要 API key、数据不出本机 |
 | **回顾** | 完成趋势（14 天）、项目进度、状态与优先级分布——全部从真实数据计算，并如实说明哪些缺少历史 |
 | **价格编辑器** | 40+ 模型价格内置，界面内改价 / 新增 / 恢复内置价 |
-| **备份恢复** | 带时间戳快照，一键回滚，恢复前完整性校验 |
+| **备份恢复** | 带时间戳快照，一键回滚，恢复前完整性校验；保留最近 30 份 |
 | **工作小窗** | 始终置顶的轻量伴侣：当前项目、今天任务、快速记录；通过 BroadcastChannel 与主窗同步 |
 | **开机自启** | 真实系统级注册，开关状态回读操作系统 |
 | **环境自检** | 平台、数据目录、成本库、会话目录、端口工具逐项 ok / warn / fail，报告可一键复制 |
@@ -88,8 +88,8 @@
 | `npx tsc --noEmit` | 类型错误，含生成的 IPC 契约 |
 | `npm run lint` · `npm run format:check` | ESLint 零告警、Prettier 格式 |
 | `npm test` | **575** 个前端测试，带覆盖率阈值 |
-| `cargo test --lib` | **178** 个后端测试，含 ts-rs 绑定导出 |
-| `npm run test:e2e` | **25** 个 Playwright 用例：导航、WCAG AA 对比度、视觉基线 |
+| `cargo test --lib` | **180** 个后端测试，含 ts-rs 绑定导出 |
+| `npm run test:e2e` | **30** 个 Playwright 用例：导航、WCAG AA 对比度、视觉基线 |
 | `cargo clippy -- -D warnings` | Rust lint，零容忍 |
 | `npm audit` · `cargo audit` | 两套依赖树中的已知漏洞 |
 

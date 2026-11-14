@@ -171,7 +171,7 @@ export const dict = {
     "settings.exportJson": "Export JSON",
     "settings.backup": "Back up now",
     "settings.backupHint":
-      "Copy data.json, cost.db and pricing_overrides.json into a timestamped folder under the app data directory (the database is snapshotted consistently)",
+      "Copy data.json, cost.db and pricing_overrides.json into a timestamped folder under the app data directory (the database is snapshotted consistently). The newest 30 backups are kept; older folders are removed automatically.",
     "settings.backupDone": "Backed up {files} file(s) to {dir}",
     "settings.backupFailed": "Backup failed: {err}",
     "settings.openBackup": "Open backups",
@@ -196,6 +196,9 @@ export const dict = {
       " — nothing is uploaded to any server; changes are written to disk after a 300 ms debounce.",
     "settings.dataBrowserNote":
       " In browser preview mode nothing is persisted; import/export are for demonstration only.",
+    "settings.dataServerNote":
+      " — stored on the machine running the backend; changes are saved there.",
+    "settings.dataPathUnknown": "resolved by the backend at runtime",
     "settings.exported": "JSON backup exported",
     "settings.imported": "Imported {projects} projects and {tasks} tasks",
     "settings.importFailed": "Import failed: {err}",
@@ -389,7 +392,7 @@ export const dict = {
     "settings.exportJson": "导出 JSON",
     "settings.backup": "立即备份",
     "settings.backupHint":
-      "把 data.json、cost.db、pricing_overrides.json 复制到数据目录下带时间戳的文件夹（数据库用一致性快照）",
+      "把 data.json、cost.db、pricing_overrides.json 复制到数据目录下带时间戳的文件夹（数据库用一致性快照）。只保留最近 30 份，更早的会自动删除。",
     "settings.backupDone": "已备份 {files} 个文件到 {dir}",
     "settings.backupFailed": "备份失败：{err}",
     "settings.openBackup": "打开备份",
@@ -411,6 +414,8 @@ export const dict = {
     "settings.dataDesktop": "桌面端",
     "settings.dataLocalNote": "，不上传任何服务器；改动防抖 300ms 后自动落盘。",
     "settings.dataBrowserNote": " 浏览器预览模式下不持久化，导入导出仅作演示。",
+    "settings.dataServerNote": " — 保存在运行后端的机器上，改动会写入那里。",
+    "settings.dataPathUnknown": "由后端在运行时解析",
     "settings.exported": "已导出 JSON 备份",
     "settings.imported": "已导入 {projects} 个项目、{tasks} 个任务",
     "settings.importFailed": "导入失败: {err}",
@@ -606,7 +611,7 @@ export const dict = {
     "settings.exportJson": "JSON エクスポート",
     "settings.backup": "今すぐバックアップ",
     "settings.backupHint":
-      "data.json・cost.db・pricing_overrides.json をデータフォルダ内のタイムスタンプ付きフォルダにコピーします（DB は一貫性スナップショット）",
+      "data.json・cost.db・pricing_overrides.json をデータフォルダ内のタイムスタンプ付きフォルダにコピーします（DB は一貫性スナップショット）。最新 30 件のみ保持し、それ以前は自動削除されます。",
     "settings.backupDone": "{files} 件のファイルを {dir} にバックアップしました",
     "settings.backupFailed": "バックアップに失敗しました: {err}",
     "settings.openBackup": "バックアップを開く",
@@ -632,6 +637,8 @@ export const dict = {
       "。サーバーには一切アップロードされません。変更は 300ms のデバウンス後にローカル保存されます。",
     "settings.dataBrowserNote":
       " ブラウザプレビューモードでは永続化されず、インポート / エクスポートはデモ用途です。",
+    "settings.dataServerNote": " — バックエンドを実行しているマシンに保存され、変更もそこに書き込まれます。",
+    "settings.dataPathUnknown": "バックエンドが実行時に解決",
     "settings.exported": "JSON バックアップをエクスポートしました",
     "settings.imported":
       "{projects} 件のプロジェクトと {tasks} 件のタスクをインポートしました",

@@ -363,3 +363,13 @@ export async function runDiagnostics(): Promise<DiagnosticsReport> {
   if (isTauri()) return invoke<DiagnosticsReport>("diagnostics");
   return httpJson<DiagnosticsReport>("/api/diagnostics");
 }
+
+/** 真实数据文件路径（设置页展示用）。后端解析，跨平台正确。 */
+export async function dataFilePath(): Promise<string | null> {
+  try {
+    if (isTauri()) return await invoke<string>("data_path");
+    return await httpJson<string>("/api/data/path");
+  } catch {
+    return null;
+  }
+}

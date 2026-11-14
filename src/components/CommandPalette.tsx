@@ -15,6 +15,14 @@ interface PaletteAction extends CommandItem {
 }
 
 /**
+ * 索引上限。这不是「只收前 N 个」的截断阈值，而是防极端环境的保险：
+ * 之前写死 40，等于把第 41 个进程/端口/任务从搜索里直接抹掉——
+ * 用户明明看得见它在进程表里，却在命令面板里搜不到。
+ * 2000 已经远超真实桌面（实测整机进程 200~600），既保全量又不至于卡顿。
+ */
+const MAX_INDEX = 2000;
+
+/**
  * 命令面板（Ctrl/Cmd+K）。
  *
  * 为什么需要它：应用有 9 个页面、上百个进程、几十个端口，之前每一项都要
@@ -57,6 +65,9 @@ export function CommandPalette() {
   );
 
   const actions = useMemo<PaletteAction[]>(() => {
+    // 面板关闭时不建索引：进程/端口每 3 秒刷新一次，
+    // 若一直建这两千个对象，等于后台凭空跑一份没人用的索引。
+    if (!open) return [];
     const nav = PAGES.map((p) => ({
       id: `nav-${p.key}`,
       label: t(`app.nav.${p.key}`),
@@ -71,7 +82,7 @@ export function CommandPalette() {
     };
     const procActions = [...procs]
       .sort((a, b) => b.cpu - a.cpu)
-      .slice(0, 40)
+      .slice(0, MAX_INDEX)
       .map((p) => ({
         id: `proc-${p.pid}`,
         label: `${p.name} · ${p.pid}`,
@@ -82,7 +93,7 @@ export function CommandPalette() {
       }));
     const portActions = [...ports]
       .filter((p) => p.state === "LISTENING" || p.state === "UDP")
-      .slice(0, 40)
+      .slice(0, MAX_INDEX)
       .map((p) => ({
         id: `port-${p.protocol}-${p.local_port}-${p.local_addr}`,
         label: `:${p.local_port} ${p.protocol}`,
@@ -103,10 +114,11 @@ export function CommandPalette() {
         setView("tasks");
       },
     }));
-    const taskActions = data.tasks.slice(0, 40).map((task) => ({
+    const taskActions = data.tasks.slice(0, MAX_INDEX).map((task) => ({
       id: `task-${task.id}`,
       label: task.title,
-      keywords: task.tags.join(" "),
+      // 任务没有路径字段；补上项目id与下一步，让「按项目名搜任务」也能命中
+      keywords: `${task.tags.join(" ")} ${task.project_id ?? ""} ${task.next_step ?? ""}`,
       group: t("palette.tasks"),
       hint: task.status,
       run: () => setTaskDetailId(task.id),
@@ -129,6 +141,7 @@ export function CommandPalette() {
       ...taskActions,
     ];
   }, [
+    open,
     t,
     procs,
     ports,

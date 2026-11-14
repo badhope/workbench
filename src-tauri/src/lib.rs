@@ -219,6 +219,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::quit_app,
+            commands::data_path,
             commands::list_processes,
             commands::terminate_process,
             commands::terminate_process_elevated,

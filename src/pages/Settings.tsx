@@ -3,7 +3,7 @@ import { DollarSign, Download, Eraser, RefreshCw, Upload } from "lucide-react";
 import { useStore } from "../lib/store";
 import { useTransportMode } from "../lib/useAppRuntime";
 import { useShallow } from "zustand/react/shallow";
-import { isBackend, isTauri } from "../lib/api";
+import { dataFilePath, isBackend, isTauri } from "../lib/api";
 
 import { APP_VERSION, setLang, useLang, useT, type Lang } from "../lib/i18n";
 import { Badge, Btn, Card, ConfirmDialog, Field, Modal, SectionTitle, inputCls } from "../ui";
@@ -70,9 +70,78 @@ const LANG_OPTIONS: { code: Lang; label: string }[] = [
   { code: "ja", label: "日本語" },
 ];
 
+/**
+ * 数据文件路径由后端解析（便携模式/跨平台都对），拿不到时保持 null 由调用方
+ * 显示占位文案。抽成 hook 而不是塞进页面组件：页面本身已经接近复杂度上限，
+ * 这段异步取值的分支与页面渲染无关。
+ */
+function useDataPath(): string | null {
+  const [path, setPath] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isTauri()) return;
+    void dataFilePath().then(setPath);
+  }, []);
+  return path;
+}
+
+/**
+ * 「放弃未保存更改」相关文案：三语硬编码在组件里，集中一处便于核对。
+ * 这几条不该出现在 i18n 字典里——它们只是这一处确认框的文案。
+ */
+function reloadCopy(lang: Lang) {
+  if (lang === "zh") {
+    return {
+      button: "放弃未保存更改并重新加载",
+      title: "放弃未保存更改？",
+      body: "未保存的项目和任务将被丢弃。请先导出 JSON 备份，再确认重新加载磁盘数据。",
+      confirm: "放弃并重新加载",
+    };
+  }
+  if (lang === "ja") {
+    return {
+      button: "未保存の変更を破棄して再読込",
+      title: "未保存の変更を破棄しますか？",
+      body: "未保存のプロジェクトとタスクは失われます。先に JSON をエクスポートしてください。",
+      confirm: "破棄して再読込",
+    };
+  }
+  return {
+    button: "Discard unsaved changes and reload",
+    title: "Discard unsaved changes?",
+    body: "Unsaved projects and tasks will be discarded. Export JSON first, then reload disk data.",
+    confirm: "Discard and reload",
+  };
+}
+
+/**
+ * 数据位置说明：桌面端显示真实路径，Web 端说明数据在后端机器上。
+ * 抽成组件是因为三条分支的 JSX 让主组件的认知复杂度过线。
+ */
+function DataLocationNote({ dataPath }: { dataPath: string | null }) {
+  const t = useT();
+  if (isTauri()) {
+    return (
+      <p className="mt-2 text-[11px] leading-relaxed text-dim">
+        {t("settings.dataLocation")} {t("settings.dataDesktop")}{" "}
+        <span className="font-mono">
+          {dataPath ?? t("settings.dataPathUnknown")}
+        </span>
+        {t("settings.dataLocalNote")}
+      </p>
+    );
+  }
+  return (
+    <p className="mt-2 text-[11px] leading-relaxed text-dim">
+      {t("settings.dataLocation")}
+      {isBackend() ? t("settings.dataServerNote") : ` ${t("settings.dataBrowserNote")}`}
+    </p>
+  );
+}
+
 export default function Settings() {
   const t = useT();
   const lang = useLang();
+  const dataPath = useDataPath();
   const workModes = useStore((s) => s.workModes);
   const setWorkModes = useStore((s) => s.setWorkModes);
   const [modeOpen, setModeOpen] = useState(false);
@@ -402,13 +471,7 @@ export default function Settings() {
                   <Upload size={14} /> {t("settings.importJson")}
                 </Btn>
                 {isTauri() && (
-                  <Btn onClick={() => setConfirmReload(true)}>
-                    {lang === "zh"
-                      ? "放弃未保存更改并重新加载"
-                      : lang === "ja"
-                        ? "未保存の変更を破棄して再読込"
-                        : "Discard unsaved changes and reload"}
-                  </Btn>
+                  <Btn onClick={() => setConfirmReload(true)}>{reloadCopy(lang).button}</Btn>
                 )}
                 <input
                   ref={fileRef}
@@ -423,21 +486,7 @@ export default function Settings() {
                   }}
                 />
               </div>
-              <p className="mt-2 text-[11px] leading-relaxed text-dim">
-                {t("settings.dataLocation")}:
-                {isTauri() ? (
-                  <>
-                    {" "}
-                    {t("settings.dataDesktop")}{" "}
-                    <span className="font-mono">
-                      %APPDATA%\com.workbench.desktop\data.json
-                    </span>
-                    {t("settings.dataLocalNote")}
-                  </>
-                ) : (
-                  <> {t("settings.dataBrowserNote")}</>
-                )}
-              </p>
+              <DataLocationNote dataPath={dataPath} />
             </Card>
             <BackupPanel />
             {isBackend() && <DiagnosticsPanel />}
@@ -475,27 +524,9 @@ export default function Settings() {
 
       <ConfirmDialog
         open={confirmReload}
-        title={
-          lang === "zh"
-            ? "放弃未保存更改？"
-            : lang === "ja"
-              ? "未保存の変更を破棄しますか？"
-              : "Discard unsaved changes?"
-        }
-        body={
-          lang === "zh"
-            ? "未保存的项目和任务将被丢弃。请先导出 JSON 备份，再确认重新加载磁盘数据。"
-            : lang === "ja"
-              ? "未保存のプロジェクトとタスクは失われます。先に JSON をエクスポートしてください。"
-              : "Unsaved projects and tasks will be discarded. Export JSON first, then reload disk data."
-        }
-        confirmLabel={
-          lang === "zh"
-            ? "放弃并重新加载"
-            : lang === "ja"
-              ? "破棄して再読込"
-              : "Discard and reload"
-        }
+        title={reloadCopy(lang).title}
+        body={reloadCopy(lang).body}
+        confirmLabel={reloadCopy(lang).confirm}
         cancelLabel={t("settings.restoreCancel")}
         danger
         onCancel={() => setConfirmReload(false)}

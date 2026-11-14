@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/badge/version-0.8.1-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.ja.md#システム要件)
-[![Tests](https://img.shields.io/badge/tests-575%20unit%20%2B%20178%20backend%20%2B%2025%20e2e-8b5cf6)](#品質ゲート)
+[![Tests](https://img.shields.io/badge/tests-575%20unit%20%2B%20180%20backend%20%2B%2030%20e2e-8b5cf6)](#品質ゲート)
 
 ![Workbench](docs/screenshots/12-brand-hero.png)
 
@@ -71,7 +71,7 @@
 | **AI コスト計測** | ローカル Claude / Codex セッションのトークンコストを SQLite 台帳に——モデル不要、API キー不要、データは端末外に出ません |
 | **振り返り** | 完了トレンド（14 日）、プロジェクト進捗、ステータス・優先度分布——実際のデータから計算され、履歴のない部分は正直に明示 |
 | **価格エディタ** | 40+ モデル価格内蔵。UI から編集 / 追加 / リセット |
-| **バックアップ & 復元** | タイムスタンプ付きスナップショット、ワンクリックロールバック、整合性チェック |
+| **バックアップ & 復元** | タイムスタンプ付きスナップショット、ワンクリックロールバック、整合性チェック、最新 30 件を保持 |
 | **ミニウィンドウ** | 常に最前面のコンパクトなコンパニオン：現在のプロジェクト、今日のタスク、クイックキャプチャ。BroadcastChannel でメインウィンドウと同期 |
 | **ログイン時起動** | 実 OS 登録、トグルは OS から読み戻し |
 | **環境チェック** | プラットフォーム、データディレクトリ、コスト DB、セッションフォルダ、ポートツールの項目別 ok / warn / fail レポート |
@@ -90,8 +90,8 @@ README のすべての主張はコマンドで検証されています。ロー�
 | `npx tsc --noEmit` | 型エラー（生成された IPC 契約を含む） |
 | `npm run lint` · `npm run format:check` | ESLint ゼロ警告、Prettier |
 | `npm test` | **575** フロントエンドテスト（カバレッジ閾値付き） |
-| `cargo test --lib` | **178** バックエンドテスト（ts-rs バインディングエクスポート含む） |
-| `npm run test:e2e` | **25** Playwright ケースナビゲーション、WCAG AA コントラスト、ビジュアルベースライン |
+| `cargo test --lib` | **180** バックエンドテスト（ts-rs バインディングエクスポート含む） |
+| `npm run test:e2e` | **30** Playwright ケースナビゲーション、WCAG AA コントラスト、ビジュアルベースライン |
 | `cargo clippy -- -D warnings` | Rust lint、ゼロ許容 |
 | `npm audit` · `cargo audit` | 両依存ツリーの既知脆弱性 |
 
