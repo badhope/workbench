@@ -35,19 +35,21 @@ export default function App() {
   const mode = useTransportMode();
   const dataLoadError = useStore((s) => s.dataLoadError);
   // 侧边栏折叠（桌面/平板）与抽屉（窄屏）是两套状态：
-  // 折叠是用户偏好，抽屉是临时交互，混用一个布尔会在跨断点时表现错乱。
-  const [collapsed, setCollapsed] = useState(false);
+  // 折叠是用户偏好（存 store，重启后保持），抽屉是临时交互。
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { view, setView, shell, motion, motionExplicit, backgroundImage } = useStore(
-    useShallow((s) => ({
-      view: s.view,
-      setView: s.setView,
-      shell: s.shell,
-      motion: s.motion,
-      motionExplicit: s.motionExplicit,
-      backgroundImage: s.backgroundImage,
-    }))
-  );
+  const { view, setView, shell, motion, motionExplicit, backgroundImage, collapsed, setCollapsed } =
+    useStore(
+      useShallow((s) => ({
+        view: s.view,
+        setView: s.setView,
+        shell: s.shell,
+        motion: s.motion,
+        motionExplicit: s.motionExplicit,
+        backgroundImage: s.backgroundImage,
+        collapsed: s.navCollapsed,
+        setCollapsed: s.setNavCollapsed,
+      }))
+    );
 
   useAppRuntime();
 

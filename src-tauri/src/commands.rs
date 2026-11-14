@@ -721,6 +721,17 @@ pub fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+/// 真实数据文件路径（设置页展示用）。
+///
+/// 为什么不前端拼 `%APPDATA%\\com.workbench.desktop`：那是 Windows 专有路径，
+/// macOS/Linux 上会显示错误位置；便携模式下还会与实际使用的目录不一致。
+#[tauri::command]
+pub fn data_path(app: AppHandle) -> Result<String, String> {
+    Ok(data::data_file_path(&data_root(&app)?)
+        .to_string_lossy()
+        .to_string())
+}
+
 fn read_pricing_overrides_at(path: &std::path::Path) -> Result<cost_store::OverrideRead, String> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
@@ -990,6 +1001,17 @@ fn is_backup_id(id: &str) -> bool {
             .all(|(i, c)| if i == 8 { c == '-' } else { c.is_ascii_digit() })
 }
 
+/// 备份目录里哪些文件算「可恢复的数据」。
+///
+/// 白名单而非黑名单：清单（manifest.json）与半成品（*.tmp）都在目录里，
+/// 一旦被当成数据文件列出来，恢复流程会试图把它们写回数据目录。
+fn is_restorable_file(name: &str) -> bool {
+    if name == BACKUP_MANIFEST || name.ends_with(".tmp") {
+        return false;
+    }
+    name.ends_with(".json") || name.ends_with(".db")
+}
+
 /// 一次完整备份：把三份数据文件复制到带时间戳的目录。
 ///
 /// 为什么写到应用自己的数据目录：选目录需要额外的对话框插件（新依赖），
@@ -1006,6 +1028,14 @@ pub async fn backup_data(app: AppHandle) -> Result<BackupResult, String> {
 
 /// 同步版本：`restore_backup` 要在同一个阻塞线程里先备份再恢复。
 fn backup_now(app: &AppHandle) -> Result<BackupResult, String> {
+    backup_now_keeping(app, None)
+}
+
+/// `keep` 指定的备份 id 不参与保留策略淘汰。
+///
+/// 恢复流程会先做一次安全备份，而安全备份会触发淘汰；若要恢复的正是最旧的
+/// 那一份，淘汰就会先把源目录删掉，恢复随即失败——用户点「恢复」等于删备份。
+fn backup_now_keeping(app: &AppHandle, keep: Option<&str>) -> Result<BackupResult, String> {
     let data_root_ = data_root(app)?;
     let root = backups_root(&data_root_);
     std::fs::create_dir_all(&root).map_err(|e| format!("创建备份目录失败: {e}"))?;
@@ -1070,11 +1100,81 @@ fn backup_now(app: &AppHandle) -> Result<BackupResult, String> {
         files.len(),
         out_dir.display()
     );
+    // 清单写在备份目录里：恢复前能核对「这份备份到底包含什么、对应哪版 schema」，
+    // 也能识别半成品（文件数与清单不符）。
+    // 清单写失败不算备份失败：数据文件已经落盘，把成功报成失败只会让用户重试。
+    if let Err(e) = write_backup_manifest(&out_dir, &files, &skipped) {
+        log::warn!("写入备份清单失败（数据文件已备份）: {e}");
+    }
+    prune_old_backups(&root, keep);
     Ok(BackupResult {
         dir: out_dir.to_string_lossy().to_string(),
         files,
         skipped,
     })
+}
+
+/// 备份目录里保留的份数上限。
+///
+/// 每次备份都会全量复制 cost.db（VACUUM INTO 重写），长期只增不减会把磁盘
+/// 吃满；30 份足够回滚到一个月内任意一天，更早的历史由成本库自己的趋势数据承担。
+const MAX_BACKUPS: usize = 30;
+
+/// 备份目录里的清单文件名。它是元信息，不参与恢复。
+const BACKUP_MANIFEST: &str = "manifest.json";
+
+fn write_backup_manifest(
+    dir: &std::path::Path,
+    files: &[String],
+    skipped: &[String],
+) -> Result<(), String> {
+    let mut entries = serde_json::Map::new();
+    for name in files {
+        let path = dir.join(name);
+        let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+        entries.insert(
+            name.clone(),
+            serde_json::json!({ "size": size }),
+        );
+    }
+    let manifest = serde_json::json!({
+        "schema_version": data::SCHEMA_VERSION,
+        "app_version": env!("CARGO_PKG_VERSION"),
+        "created_at": chrono::Local::now().to_rfc3339(),
+        "files": entries,
+        "skipped": skipped,
+    });
+    let path = dir.join(BACKUP_MANIFEST);
+    crate::json_store::write_json_atomic(&path, &manifest)
+}
+
+/// 删除超出保留份数的旧备份（按目录名的时间戳排序，最旧的先删）。
+///
+/// 只删本项目自己命名的目录；失败只记日志，不影响当前备份成功。
+/// `keep` 里的目录一律跳过：恢复中的源备份不能被自己的安全备份淘汰掉。
+fn prune_old_backups(root: &std::path::Path, keep: Option<&str>) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    let mut ids: Vec<String> = entries
+        .flatten()
+        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|id| is_backup_id(id))
+        .filter(|id| Some(id.as_str()) != keep)
+        .collect();
+    if ids.len() <= MAX_BACKUPS {
+        return;
+    }
+    ids.sort();
+    let excess = ids.len() - MAX_BACKUPS;
+    for id in ids.into_iter().take(excess) {
+        let path = root.join(&id);
+        match std::fs::remove_dir_all(&path) {
+            Ok(()) => log::info!("删除超出保留份数的旧备份: {id}"),
+            Err(e) => log::warn!("删除旧备份失败 {id}: {e}"),
+        }
+    }
 }
 
 /// 列出所有备份点（新的在前）。
@@ -1101,7 +1201,7 @@ pub async fn list_backups(app: AppHandle) -> Result<Vec<BackupPoint>, String> {
             if let Ok(inner) = std::fs::read_dir(entry.path()) {
                 for f in inner.flatten() {
                     let n = f.file_name().to_string_lossy().to_string();
-                    if n.ends_with(".json") || n.ends_with(".db") {
+                    if is_restorable_file(&n) {
                         files.push(n);
                     }
                 }
@@ -1214,7 +1314,7 @@ fn restore_now(app: &AppHandle, id: &str) -> Result<RestoreResult, String> {
     }
 
     // 2) 校验通过后才备份当前状态（回退点）
-    let safety = backup_now(app)?;
+    let safety = backup_now_keeping(app, Some(id))?;
 
     // 3) 逐个原子替换（临时文件 + rename，避免写一半）
     let mut restored = Vec::new();
@@ -1634,6 +1734,63 @@ mod tests {
         assert!(!is_backup_id("20261022-11420a"), "必须全数字");
         assert!(!is_backup_id(r"C:\Windows"), "盘符路径必须拒绝");
         assert!(!is_backup_id(""));
+    }
+
+    /// 清单与半成品不能出现在可恢复文件列表里，否则恢复流程会误用它们。
+    #[test]
+    fn backup_file_list_excludes_manifest_and_partials() {
+        assert!(is_restorable_file("data.json"));
+        assert!(is_restorable_file("cost.db"));
+        assert!(!is_restorable_file(BACKUP_MANIFEST));
+        assert!(!is_restorable_file("data.json.tmp"));
+        assert!(!is_restorable_file("cost.db.tmp"));
+        assert!(!is_restorable_file("notes.txt"));
+    }
+
+    /// 保留策略必须留下最新的 MAX_BACKUPS 份，并且绝不删 keep 指定的那一份。
+    #[test]
+    fn prune_keeps_newest_and_protects_active_restore() {
+        let root = std::env::temp_dir().join(format!("wb-prune-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        // 31 份（比上限多一份），id 全部合法且按时间递增
+        let ids: Vec<String> = (0..=MAX_BACKUPS)
+            .map(|i| format!("20260101-{:06}", i))
+            .collect();
+        for id in &ids {
+            let dir = root.join(id);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("data.json"), "{}").unwrap();
+        }
+        // 另放一个非备份目录：它不属于本项目命名，必须原样保留
+        std::fs::create_dir_all(root.join("user-folder")).unwrap();
+
+        prune_old_backups(&root, None);
+        let left: Vec<String> = std::fs::read_dir(&root)
+            .unwrap()
+            .flatten()
+            .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|n| is_backup_id(n))
+            .collect();
+        let kept_newest = left.contains(ids.last().unwrap());
+        let removed_oldest = !left.contains(&ids[0]);
+        let count_ok = left.len() == MAX_BACKUPS;
+        let user_folder_kept = root.join("user-folder").is_dir();
+
+        // 再验证 keep：把最旧那份补回来并指定保护它
+        let protected = ids[0].clone();
+        std::fs::create_dir_all(root.join(&protected)).unwrap();
+        std::fs::write(root.join(&protected).join("data.json"), "{}").unwrap();
+        prune_old_backups(&root, Some(&protected));
+        let protected_alive = root.join(&protected).is_dir();
+
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(count_ok, "剩余份数应为上限: {}", left.len());
+        assert!(kept_newest, "最新备份不能被删");
+        assert!(removed_oldest, "最旧备份应被淘汰");
+        assert!(user_folder_kept, "非备份目录不能删");
+        assert!(protected_alive, "恢复中的源备份不能被淘汰");
     }
 
     // ── 提权结束进程 ──

@@ -359,7 +359,10 @@ function ProcessRow({
           variant={risky ? "danger" : "ghost"}
           className="!px-2 !py-1 !text-xs"
           title={t("procs.killTitle")}
-          onClick={() => {
+          onClick={(e) => {
+            // 结束进程不该同时展开/收起详情行：按钮在可点击行内，
+            // 不阻止冒泡时点「结束」会在弹窗背后把行折叠掉。
+            e.stopPropagation();
             useStore.getState().setKillTarget(p);
           }}
         >

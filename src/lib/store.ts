@@ -149,6 +149,8 @@ interface UiState {
   railCollapsed: boolean;
   /** 首页右栏各分区是否显示 */
   railSections: { projects: boolean; inbox: boolean; system: boolean };
+  /** 全局侧边栏是否折叠为图标条（shell=rail 时生效） */
+  navCollapsed: boolean;
   /** 进程页搜索词。放在 store 里是因为端口页/命令面板要能带着 PID 跳过来。 */
   procQuery: string;
   /** 跳转后要高亮的进程 PID（一次性） */
@@ -221,6 +223,7 @@ interface Store extends UiState, RuntimeState {
   setTaskScope: (v: TaskScope) => void;
   setTaskProjectFilter: (id: string) => void;
   setRailCollapsed: (v: boolean) => void;
+  setNavCollapsed: (v: boolean) => void;
   setRailSection: (key: keyof UiState["railSections"], v: boolean) => void;
   resetRailSections: () => void;
   /** 开关氛围粒子背景 */
@@ -365,6 +368,7 @@ export function migratePersisted(persisted: unknown): Record<string, unknown> {
     taskProjectFilter:
       typeof state.taskProjectFilter === "string" ? state.taskProjectFilter : "",
     railCollapsed: state.railCollapsed === true,
+    navCollapsed: state.navCollapsed === true,
     railSections: {
       projects: rail.projects !== false,
       inbox: rail.inbox !== false,
@@ -469,6 +473,7 @@ export const useStore = create<Store>()(
       taskProjectFilter: "",
       railCollapsed: false,
       railSections: { projects: true, inbox: true, system: true },
+      navCollapsed: false,
       procQuery: "",
       focusPid: null,
       refreshMs: 3000,
@@ -543,6 +548,7 @@ export const useStore = create<Store>()(
       setTaskScope: (v) => set({ taskScope: v }),
       setTaskProjectFilter: (id) => set({ taskProjectFilter: id }),
       setRailCollapsed: (v) => set({ railCollapsed: v }),
+      setNavCollapsed: (v) => set({ navCollapsed: v }),
       setRailSection: (key, v) =>
         set((s) => ({ railSections: { ...s.railSections, [key]: v } })),
       resetRailSections: () =>
@@ -1385,6 +1391,7 @@ export const useStore = create<Store>()(
         taskProjectFilter: s.taskProjectFilter,
         railCollapsed: s.railCollapsed,
         railSections: s.railSections,
+        navCollapsed: s.navCollapsed,
         refreshMs: s.refreshMs,
         alwaysOnTop: s.alwaysOnTop,
       }),

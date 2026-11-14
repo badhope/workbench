@@ -128,11 +128,21 @@ export default function Logs() {
   }, [lines]);
 
   const preRef = useRef<HTMLPreElement>(null);
+  // 只有「用户本来就在底部」时才跟随滚动。否则每 3 秒一次自动刷新会把
+  // 正在往上翻历史的用户拽回底部 —— 日志查看器最恼人的行为之一。
+  const stickToBottom = useRef(true);
 
-  // 自动刷新后滚动到底
+  const onScroll = () => {
+    const el = preRef.current;
+    if (!el) return;
+    // 4px 容差：亚像素/缩放会让 scrollTop+clientHeight 与 scrollHeight 差一点点
+    stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 4;
+  };
+
   useEffect(() => {
-    if (autoRefresh && preRef.current) {
-      preRef.current.scrollTop = preRef.current.scrollHeight;
+    const el = preRef.current;
+    if (autoRefresh && el && stickToBottom.current) {
+      el.scrollTop = el.scrollHeight;
     }
   }, [content, autoRefresh]);
 
@@ -222,6 +232,7 @@ export default function Logs() {
        */}
       <pre
         ref={preRef}
+        onScroll={onScroll}
         className="mt-3 flex-1 overflow-auto rounded-[var(--radius-card)] border border-line/80 bg-panel2 p-4 font-mono text-[11.5px] leading-[1.7] text-text/90"
       >
         {(query.trim() || level !== "all" ? shown.join("\n") : content) ||

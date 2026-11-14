@@ -214,6 +214,7 @@ pub fn router(state: AppState, opts: &ServeOptions) -> Router {
         .route("/system", get(system_info))
         .route("/disks", get(disks))
         .route("/data", get(load_data).put(save_data))
+        .route("/data/path", get(data_path))
         .route("/cost/overview", get(cost_overview))
         .route("/cost/trend", get(cost_trend))
         .route("/cost/trend-extended", get(cost_trend_extended))
@@ -519,6 +520,12 @@ async fn disks() -> ApiResult<Vec<crate::commands::DiskInfo>> {
         .await
         .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?;
     ok(rows)
+}
+
+async fn data_path(State(st): State<AppState>) -> ApiResult<String> {
+    ok(data::data_file_path(&st.root)
+        .to_string_lossy()
+        .to_string())
 }
 
 async fn load_data(State(st): State<AppState>) -> ApiResult<VersionedData> {
