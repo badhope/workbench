@@ -22,7 +22,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use axum::extract::{OriginalUri, Query, State};
+use axum::extract::{DefaultBodyLimit, OriginalUri, Query, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -225,7 +225,12 @@ pub fn router(state: AppState, opts: &ServeOptions) -> Router {
         .route("/cost/scan", post(cost_scan))
         .with_state(state);
 
-    let mut app = Router::new().nest("/api", api);
+    // axum 的 Json extractor 默认只收 2MB；项目/任务是整份快照，任务和备注
+    // 一多就会超，Web 模式保存直接 413，而桌面 IPC 没有这个限制。放到 32MB：
+    // 足够十万条任务级别的数据，也不至于让一个请求吃光内存。
+    let mut app = Router::new()
+        .nest("/api", api)
+        .layer(DefaultBodyLimit::max(32 * 1024 * 1024));
 
     // 静态站点，两级来源：
     // 1) 显式/自动发现的磁盘目录（开发时改完前端刷新即生效，不必重编 Rust）；

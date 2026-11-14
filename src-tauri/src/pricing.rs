@@ -261,11 +261,25 @@ impl PricingTable {
         (inp_cost + cache_cost, out_cost, total)
     }
 
-    /// 该型号在价格表里是否真的有价。0 价 = 未定价，调用方应标成 zero_pricing
-    /// 而不是让用户看到「花了 $0.00」。
+    /// 该型号是否**已知**（表里有键，含 0 价免费模型）。
+    ///
+    /// 不能只看「价格 > 0」：`glm-4-flash` 这类免费模型内置价就是 (0, 0)，
+    /// 用价格判断会把它们归进「未定价」，界面上标成数据质量缺陷。
+    /// 「已知」和「非零」是两件事，这里按前者判定。
     pub fn is_priced(&self, model: &str) -> bool {
-        let (input, output) = self.lookup(model);
-        input > 0.0 || output > 0.0
+        let key = model.to_ascii_lowercase();
+        if self.overrides.contains_key(&key) {
+            return true;
+        }
+        let builtin = builtin_table();
+        if builtin.prices.contains_key(key.as_str()) {
+            return true;
+        }
+        // 前缀/包含匹配（如带日期后缀的模型名），与 lookup 的兜底一致
+        builtin
+            .prices
+            .keys()
+            .any(|k| key.starts_with(k) || key.contains(k))
     }
 }
 
