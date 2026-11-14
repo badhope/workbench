@@ -336,18 +336,21 @@ describe("HTTP 传输分支", () => {
     expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("/api/cost/trend-extended?days=7");
   });
 
-  it("保存数据用 PUT 且带 JSON body", async () => {
+  it("保存数据用 PUT 且带 JSON body、并发令牌与写入标记头", async () => {
     fetchMock.mockImplementation(async () => ({
       ok: true,
       status: 200,
-      json: async () => ({ ok: true }),
+      json: async () => ({ ok: true, generation: "next-token" }),
     }));
     const data = { projects: [], tasks: [] };
-    await api.saveData(data, "http");
+    await api.saveData(data, "prev-token");
     const [url, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
     expect(url).toBe("/api/data");
     expect(init.method).toBe("PUT");
     expect(JSON.parse(String(init.body))).toEqual(data);
+    const headers = init.headers as Record<string, string>;
+    expect(headers["if-match"]).toBe("prev-token");
+    expect(headers["x-workbench-write"]).toBe("1");
   });
 
   it("桌面独占的不可逆操作在 Web 模式明确报错，且不发请求", async () => {

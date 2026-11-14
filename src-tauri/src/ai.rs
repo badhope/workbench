@@ -337,6 +337,27 @@ pub struct SessionFilePreview {
     pub human_preview: String,
 }
 
+/// 从会话文件路径推导项目名。
+///
+/// 两个工具目录布局不同，不能统一取父目录名：
+/// - Claude Code：`~/.claude/projects/<encoded-project>/*.jsonl` —— 父目录就是项目标识；
+/// - Codex：`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` —— 父目录是「日」，
+///   取它会得到 01…31 这种伪项目，把成本归到日期上。
+///
+/// 对 Codex 回退到 `sessions` 这一层的上一级（`.codex`），用工具名作为项目名，
+/// 至少不会把不同日期的同一项目拆散；精确归因需要等 Codex 落盘 `turn_context.cwd`
+/// 后再解析，这条留待后续。
+fn project_from_path(tool: &str, path: &Path) -> String {
+    if tool == "Codex CLI" {
+        // 精确归因的前提是读到会话里的 cwd；当前不解析内容，只做保守归并。
+        return "Codex sessions".to_string();
+    }
+    path.parent()
+        .and_then(|p| p.file_name())
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default()
+}
+
 /// 扫描 ~/.claude/projects 与 ~/.codex/sessions 下的全部会话记录（*.jsonl），按修改时间倒序。
 /// 目录不存在时返回空。成本计量必须用全量，不能只看最近几条。
 pub fn collect_all_session_files(home: &Path) -> Result<Vec<SessionFile>, &'static str> {
@@ -733,11 +754,7 @@ pub fn collect_session_files_with_budget(
                     .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
                     .map(|d| d.as_secs())
                     .unwrap_or_default();
-                let project = path
-                    .parent()
-                    .and_then(|p| p.file_name())
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_default();
+                let project = project_from_path(tool, &path);
                 files.push(SessionFile {
                     tool: tool.to_string(),
                     project,

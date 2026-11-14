@@ -103,6 +103,29 @@ pub fn data_file_path(root: &DataRoot) -> PathBuf {
     root.data_json()
 }
 
+/// 数据文件的轻量指纹，用作 HTTP 端的乐观锁令牌。
+///
+/// 为什么不用文件内容哈希：读取可能发生在大文件上，而每次 GET 都算一遍
+/// 全量哈希纯属浪费；mtime + 长度的组合足以区分「别的写方动过」，
+/// 这正是 `If-Match` 需要的语义。文件不存在时返回 `"none"`，
+/// 这样「从无到有新建」也能被检测出来。
+pub fn fingerprint(root: &DataRoot) -> Result<String, String> {
+    let path = data_file_path(root);
+    match fs::metadata(&path) {
+        Ok(meta) => {
+            let mtime = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_nanos())
+                .unwrap_or(0);
+            Ok(format!("{}-{}-{}", meta.len(), mtime, meta.created().is_ok()))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok("none".to_string()),
+        Err(e) => Err(format!("无法读取数据文件信息 {}: {e}", path.display())),
+    }
+}
+
 /// 读取项目/任务数据。文件损坏或不可读时返回 Err，由前端明确告知用户。
 ///
 /// 读到的旧格式数据会在**内存里**迁移到当前版本；真正落盘的迁移发生在
@@ -174,13 +197,41 @@ fn backup_before_upgrade(path: &Path, from_version: u32) -> Result<PathBuf, Stri
 
 /// 整文件写入。
 ///
-/// **这里也取锁**：调用方（`save_data`）是整文件替换语义，
-/// 若不加锁，它可以在 `mutate` 的「读」与「写」之间插入，
-/// 把后者刚读到的内容覆盖掉（丢更新）。`mutate` 内部的写会重入同一把锁，
-/// 因为 `std::sync::Mutex` 不可重入，所以拆出内部实现给 `mutate` 用。
+/// 两道锁：
+/// 1. 进程内 `Mutex`：挡住同进程的多线程（前端防抖保存 + 恢复操作）；
+/// 2. 跨进程文件锁：挡住 `workbench serve` 与桌面端并发写同一份 `data.json`。
+///
+/// 只加第一道时，两个进程各自读快照再各自写，后写者会覆盖前者 —— 这是
+/// 进程内锁无法解决的丢更新。
 pub fn save_to_disk(root: &DataRoot, data: &WorkbenchData) -> Result<(), String> {
     let _guard = lock();
+    let _cross = crate::lock::acquire(root.as_path())?;
     save_to_disk_unlocked(root, data)
+}
+
+/// 在**同一把跨进程锁**内做「校验当前指纹 → 保存 → 返回新指纹」。
+///
+/// HTTP 的乐观锁要求「比对」和「写入」之间不能被插队：若分成
+/// `acquire(); check(); save_to_disk()`，`save_to_disk` 会再取一次锁
+/// （同一进程内非重入 → 直接超时失败）。所以把整段收进这里，
+/// 顺便给调用方省掉一次重复取锁。
+pub fn compare_and_save(
+    root: &DataRoot,
+    expected: Option<&str>,
+    data: &WorkbenchData,
+) -> Result<String, String> {
+    let _guard = lock();
+    let _cross = crate::lock::acquire(root.as_path())?;
+    if let Some(expected) = expected {
+        if expected != "*" {
+            let current = fingerprint(root)?;
+            if expected != current {
+                return Err("数据已被其他窗口修改；请刷新后再保存".to_string());
+            }
+        }
+    }
+    save_to_disk_unlocked(root, data)?;
+    fingerprint(root)
 }
 
 fn save_to_disk_unlocked(root: &DataRoot, data: &WorkbenchData) -> Result<(), String> {
@@ -300,8 +351,10 @@ mod tests {
 
     #[test]
     fn current_version_passes_through_unchanged() {
-        let mut raw = WorkbenchData::default();
-        raw.schema_version = Some(SCHEMA_VERSION);
+        let mut raw = WorkbenchData {
+            schema_version: Some(SCHEMA_VERSION),
+            ..Default::default()
+        };
         raw.tasks.push(Task {
             id: "t1".into(),
             title: "任务".into(),

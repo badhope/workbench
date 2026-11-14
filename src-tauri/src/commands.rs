@@ -706,7 +706,19 @@ fn save_with_restore_generation(
 }
 
 fn lock_ledger_operation() -> Result<std::sync::MutexGuard<'static, ()>, String> {
-    SCAN_LOCK.lock().map_err(|e| format!("扫描锁失败: {e}"))
+    // 中毒恢复而非报错：持锁线程 panic 后若永久拒绝取锁，保存/备份/恢复
+    // 会整进程失效，用户只能重启 —— 数据本身没坏，只是锁脏了。
+    Ok(SCAN_LOCK.lock().unwrap_or_else(|p| p.into_inner()))
+}
+
+/// 前端 flush 完成后调用，真正退出。
+///
+/// 放在 commands 而不是 lib.rs：IPC 契约测试按 `commands::xxx` 收集命令名，
+/// 放这里命名一致，也不需要为它开例外。
+#[tauri::command]
+pub fn quit_app(app: AppHandle) {
+    log::info!("前端已 flush，退出应用");
+    app.exit(0);
 }
 
 fn read_pricing_overrides_at(path: &std::path::Path) -> Result<cost_store::OverrideRead, String> {
@@ -744,7 +756,9 @@ fn read_pricing_overrides(app: &AppHandle) -> Result<cost_store::OverrideRead, S
 #[tauri::command(async)]
 pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let _scan_guard = lock_ledger_operation()?;
+        // 扫描锁只保护「写成本库」那一小段。读会话文件可能持续几十秒，
+        // 把它也罩在锁里会让 save_data（前端 300ms 防抖）排队几十秒，
+        // 用户看到的是「编辑没反应」。文件读取只读用户目录，与成本库无关。
         let home = dirs_home().ok_or_else(|| "无法定位用户主目录".to_string())?;
         let session_files = ai::collect_all_session_files(&home).map_err(str::to_string)?;
 
@@ -788,8 +802,10 @@ pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String
             }
         }
         let total_scanned = records.len();
-        let outcome =
-            cost_store::import_and_aggregate(&data_root(&app)?, &records, &scanned_paths, 14)?;
+        let outcome = {
+            let _scan_guard = lock_ledger_operation()?;
+            cost_store::import_and_aggregate(&data_root(&app)?, &records, &scanned_paths, 14)?
+        };
         if !errors.is_empty() {
             return Err(format!(
                 "{} 个会话扫描失败，旧记录已保留；成功文件已更新: {}",
@@ -1034,7 +1050,10 @@ fn backup_now(app: &AppHandle) -> Result<BackupResult, String> {
         let dst = out_dir.join(name);
         let tmp = out_dir.join(format!("{name}.tmp"));
         if name.ends_with(".db") {
-            cost_store::snapshot_db(&data_root_, &tmp)?;
+            // 用 best_effort 而不是严格快照：恢复前要做安全回退点，
+            // 而严格快照在「当前成本库已损坏」时必然失败，会反过来阻断
+            // 最需要恢复的场景。
+            cost_store::snapshot_db_best_effort(&data_root_, &tmp)?;
         } else {
             std::fs::copy(&src, &tmp).map_err(|e| format!("复制 {name} 失败: {e}"))?;
         }
@@ -1146,8 +1165,18 @@ fn validate_restore_json(name: &str, text: &str) -> Result<(), String> {
         return Err(format!("备份 {name} 顶层不是对象，拒绝恢复"));
     }
     if name == "data.json" {
-        serde_json::from_value::<WorkbenchData>(value)
+        let data: WorkbenchData = serde_json::from_value(value)
             .map_err(|e| format!("备份 {name} 数据格式不兼容，拒绝恢复: {e}"))?;
+        // 未来版本的数据恢复进来后，下一次 migrate 会拒绝加载，
+        // 应用进入「读不出、也存不进」的锁死状态 —— 在恢复入口先拦住。
+        if let Some(version) = data.schema_version {
+            if version > data::SCHEMA_VERSION {
+                return Err(format!(
+                    "备份来自更新版本（数据结构 v{version}），当前版本只支持到 v{}；请先升级应用",
+                    data::SCHEMA_VERSION
+                ));
+            }
+        }
     }
     Ok(())
 }
@@ -1233,11 +1262,10 @@ fn restore_now(app: &AppHandle, id: &str) -> Result<RestoreResult, String> {
 #[tauri::command(async)]
 pub async fn open_backup_dir(app: AppHandle) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let base = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("无法定位数据目录: {e}"))?;
-        let dir = base.join("backups");
+        // 与 backup_data / list_backups / restore_backup 用同一个 root：
+        // 便携模式下它们都读 WORKBENCH_DATA_DIR，这里若用 app_data_dir
+        // 会把用户带到另一个（通常是空的）目录。
+        let dir = data_root(&app)?.backups_dir();
         std::fs::create_dir_all(&dir).map_err(|e| format!("创建备份目录失败: {e}"))?;
         tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| format!("打开失败: {e}"))?;
         Ok(dir.to_string_lossy().to_string())
@@ -1667,10 +1695,9 @@ mod tests {
 /// `Path::is_dir()` 可能触碰断开的网络盘，因此放到阻塞线程里执行。
 #[tauri::command(async)]
 pub async fn diagnostics(app: AppHandle) -> Result<DiagnosticsReport, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法定位数据目录: {e}"))?;
+    // 与数据读写、日志、备份统一走 data_root()：否则便携/隔离模式下
+    // 自检报告的是一个根本没在用的目录。
+    let data_dir = data_root(&app)?.as_path().to_path_buf();
     let version = app.package_info().version.to_string();
     tauri::async_runtime::spawn_blocking(move || diagnostics::collect(&version, &data_dir))
         .await

@@ -22,7 +22,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use axum::extract::{OriginalUri, Query, State};
+use axum::extract::{DefaultBodyLimit, OriginalUri, Query, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -163,6 +163,27 @@ impl ApiError {
             message: message.into(),
         }
     }
+
+    fn bad_request(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::BAD_REQUEST,
+            message: message.into(),
+        }
+    }
+
+    fn forbidden(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::FORBIDDEN,
+            message: message.into(),
+        }
+    }
+
+    fn conflict(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::CONFLICT,
+            message: message.into(),
+        }
+    }
 }
 
 impl IntoResponse for ApiError {
@@ -204,7 +225,12 @@ pub fn router(state: AppState, opts: &ServeOptions) -> Router {
         .route("/cost/scan", post(cost_scan))
         .with_state(state);
 
-    let mut app = Router::new().nest("/api", api);
+    // axum 的 Json extractor 默认只收 2MB；项目/任务是整份快照，任务和备注
+    // 一多就会超，Web 模式保存直接 413，而桌面 IPC 没有这个限制。放到 32MB：
+    // 足够十万条任务级别的数据，也不至于让一个请求吃光内存。
+    let mut app = Router::new()
+        .nest("/api", api)
+        .layer(DefaultBodyLimit::max(32 * 1024 * 1024));
 
     // 静态站点，两级来源：
     // 1) 显式/自动发现的磁盘目录（开发时改完前端刷新即生效，不必重编 Rust）；
@@ -495,25 +521,115 @@ async fn disks() -> ApiResult<Vec<crate::commands::DiskInfo>> {
     ok(rows)
 }
 
-async fn load_data(State(st): State<AppState>) -> ApiResult<WorkbenchData> {
+async fn load_data(State(st): State<AppState>) -> ApiResult<VersionedData> {
     let root = st.root.clone();
-    let data = tokio::task::spawn_blocking(move || data::load_from_disk(&root))
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-        .map_err(ApiError::internal)?;
-    ok(data)
+    let snapshot = tokio::task::spawn_blocking(move || {
+        let data = data::load_from_disk(&root)?;
+        // HTTP 端没有进程内的 restore generation；用数据文件指纹
+        // （文件身份 + 长度）作为乐观锁令牌，语义与桌面端 generation 等价：
+        // 别的写方动过，令牌就变。
+        let generation = data::fingerprint(&root)?;
+        Ok::<_, String>(VersionedData { data, generation })
+    })
+    .await
+    .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
+    .map_err(ApiError::internal)?;
+    ok(snapshot)
 }
 
+#[derive(Serialize)]
+struct VersionedData {
+    data: WorkbenchData,
+    generation: String,
+}
+
+/// 写入项目/任务数据。
+///
+/// 三道保护，缺一不可：
+/// 1. **同源检查**：有 `Origin` 就必须与 `Host` 同源。浏览器跨站请求一定带
+///    `Origin`，挡在这里就挡住了 CSRF 与 DNS rebinding 的第一跳；不带
+///    `Origin` 的 curl/脚本继续放行（HTTP 模式的主要用途）。
+/// 2. **写入标记头**：`X-Workbench-Write: 1`。跨源请求带自定义头会触发 CORS
+///    预检，而本服务默认不放行任何来源，因此这个头只有自家 UI 加得上。
+/// 3. **版本 + 并发**：拒绝未来 schema、强制盖当前版本号，并用 `If-Match`
+///    防止两个标签页互相覆盖。
 async fn save_data(
     State(st): State<AppState>,
+    headers: axum::http::HeaderMap,
     Json(payload): Json<WorkbenchData>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    require_same_origin(&headers)?;
+    require_write_header(&headers)?;
+
+    // 与 IPC save_data 完全相同的版本判定，避免 HTTP 成为绕过口。
+    if let Some(version) = payload.schema_version {
+        if version > data::SCHEMA_VERSION {
+            return Err(ApiError::bad_request(format!(
+                "数据来自更新版本（v{version}），当前版本只支持到 v{}；请升级应用后再保存",
+                data::SCHEMA_VERSION
+            )));
+        }
+    }
+    let mut payload = payload;
+    payload.schema_version = Some(data::SCHEMA_VERSION);
+
     let root = st.root.clone();
-    tokio::task::spawn_blocking(move || data::save_to_disk(&root, &payload))
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-        .map_err(ApiError::internal)?;
-    Ok(Json(json!({ "ok": true })))
+    let expected = header_str(&headers, "if-match");
+    let new_token = tokio::task::spawn_blocking(move || {
+        // compare_and_save 把「比对指纹 + 写入」收在同一把跨进程锁内，
+        // 避免检查与写入之间被别的进程插队。
+        data::compare_and_save(&root, expected.as_deref(), &payload)
+    })
+    .await
+    .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
+    .map_err(|e| {
+        if e.contains("已被其他窗口修改") {
+            ApiError::conflict(e)
+        } else {
+            ApiError::internal(e)
+        }
+    })?;
+    Ok(Json(json!({ "ok": true, "generation": new_token })))
+}
+
+fn header_str(headers: &axum::http::HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get(name)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+}
+
+/// 有 `Origin` 就必须同源；没有（curl / 脚本）放行。
+fn require_same_origin(headers: &axum::http::HeaderMap) -> Result<(), ApiError> {
+    let Some(origin) = header_str(headers, "origin") else {
+        return Ok(());
+    };
+    let Some(host) = header_str(headers, "host") else {
+        return Err(ApiError::forbidden("缺少 Host 头"));
+    };
+    let origin_host = origin
+        .split("://")
+        .nth(1)
+        .unwrap_or("")
+        .trim_end_matches('/');
+    if origin_host.eq_ignore_ascii_case(&host) {
+        Ok(())
+    } else {
+        Err(ApiError::forbidden(
+            "拒绝跨源写入；请从 Workbench 自己的页面操作",
+        ))
+    }
+}
+
+/// 写入标记头：跨源请求带自定义头会触发预检，默认 CORS 不放行，
+/// 因此这个头只有自家 UI 加得上。
+fn require_write_header(headers: &axum::http::HeaderMap) -> Result<(), ApiError> {
+    match header_str(headers, "x-workbench-write").as_deref() {
+        Some("1") => Ok(()),
+        _ => Err(ApiError::forbidden(
+            "缺少写入标记头 X-Workbench-Write；只接受 Workbench 界面发起的写入",
+        )),
+    }
 }
 
 async fn cost_overview(State(st): State<AppState>) -> ApiResult<cost_store::CostOverview> {
@@ -615,8 +731,11 @@ async fn cost_settings(State(st): State<AppState>) -> ApiResult<CostSettings> {
 
 async fn save_cost_settings(
     State(st): State<AppState>,
+    headers: axum::http::HeaderMap,
     Json(settings): Json<CostSettings>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    require_same_origin(&headers)?;
+    require_write_header(&headers)?;
     let root = st.root.clone();
     tokio::task::spawn_blocking(move || cost_store::save_cost_settings(&root, settings))
         .await
@@ -648,8 +767,11 @@ async fn pricing_view(State(st): State<AppState>) -> ApiResult<crate::commands::
 /// 保存定价覆盖：与桌面 IPC 共用同一份校验（任一条非法整体拒绝）。
 async fn save_pricing_view(
     State(st): State<AppState>,
+    headers: axum::http::HeaderMap,
     Json(payload): Json<std::collections::HashMap<String, (f64, f64)>>,
 ) -> Result<Json<crate::commands::PricingView>, ApiError> {
+    require_same_origin(&headers)?;
+    require_write_header(&headers)?;
     let root = st.root.clone();
     let v = tokio::task::spawn_blocking(move || crate::commands::save_pricing_at(&root, payload))
         .await
@@ -658,7 +780,13 @@ async fn save_pricing_view(
     ok(v)
 }
 
-async fn cost_scan(State(st): State<AppState>) -> Result<Json<ScanResponse>, ApiError> {
+async fn cost_scan(
+    State(st): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<ScanResponse>, ApiError> {
+    // 扫描会写成本库，属于写操作：与 data/pricing 用同一套门槛。
+    require_same_origin(&headers)?;
+    require_write_header(&headers)?;
     let root = st.root.clone();
     let result = tokio::task::spawn_blocking(move || scan_sessions(&root))
         .await
@@ -870,6 +998,7 @@ mod http_tests {
             .oneshot(
                 Request::put("/api/data")
                     .header("content-type", "application/json")
+                    .header("x-workbench-write", "1")
                     .body(Body::from(payload.to_string()))
                     .unwrap(),
             )
@@ -886,7 +1015,83 @@ mod http_tests {
             .await
             .unwrap();
         let body = body_json(get).await;
-        assert_eq!(body["projects"][0]["id"], "p1");
+        // GET 现在返回 { data, generation }：generation 是并发写保护的令牌。
+        assert_eq!(body["data"]["projects"][0]["id"], "p1");
+        assert!(body["generation"].is_string());
+        std::fs::remove_dir_all(root.as_path()).ok();
+    }
+
+    /// 没有写入标记头的请求必须被拒绝：跨源请求带不上自定义头。
+    #[tokio::test]
+    async fn data_put_without_write_header_is_forbidden() {
+        let root = temp_root("no-write-header");
+        let res = app_for(&root)
+            .oneshot(
+                Request::put("/api/data")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"projects":[],"tasks":[]}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        // 被拒绝的请求不能留下数据文件
+        assert!(!root.data_json().exists());
+        std::fs::remove_dir_all(root.as_path()).ok();
+    }
+
+    /// 跨源请求（Origin 与 Host 不同）必须被拒绝。
+    #[tokio::test]
+    async fn data_put_from_foreign_origin_is_forbidden() {
+        let root = temp_root("foreign-origin");
+        let res = app_for(&root)
+            .oneshot(
+                Request::put("/api/data")
+                    .header("content-type", "application/json")
+                    .header("x-workbench-write", "1")
+                    .header("origin", "https://evil.example")
+                    .header("host", "127.0.0.1:7788")
+                    .body(Body::from(r#"{"projects":[],"tasks":[]}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        assert!(!root.data_json().exists());
+        std::fs::remove_dir_all(root.as_path()).ok();
+    }
+
+    /// 过期 If-Match 必须 409，而不是覆盖别人刚写入的数据。
+    #[tokio::test]
+    async fn stale_if_match_is_conflict() {
+        let root = temp_root("if-match");
+        let app = app_for(&root);
+        let first = serde_json::json!({"projects":[],"tasks":[]});
+        let res = app
+            .clone()
+            .oneshot(
+                Request::put("/api/data")
+                    .header("content-type", "application/json")
+                    .header("x-workbench-write", "1")
+                    .body(Body::from(first.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let res = app
+            .oneshot(
+                Request::put("/api/data")
+                    .header("content-type", "application/json")
+                    .header("x-workbench-write", "1")
+                    .header("if-match", "definitely-stale")
+                    .body(Body::from(first.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::CONFLICT);
         std::fs::remove_dir_all(root.as_path()).ok();
     }
 
@@ -991,6 +1196,7 @@ mod http_tests {
             .oneshot(
                 Request::put("/api/cost/settings")
                     .header("content-type", "application/json")
+                    .header("x-workbench-write", "1")
                     .body(Body::from(settings.to_string()))
                     .unwrap(),
             )

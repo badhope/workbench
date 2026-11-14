@@ -7,6 +7,7 @@ pub mod devserver;
 pub mod diagnostics;
 pub mod ipc_guard;
 pub mod json_store;
+pub mod lock;
 pub mod logging_setup;
 pub mod paths;
 pub mod ports;
@@ -43,6 +44,26 @@ fn toggle_window(app: &AppHandle) {
             let _ = win.set_focus();
         }
     }
+}
+
+/// 退出前让前端把 300ms 防抖中的编辑落盘。
+///
+/// 前端保存是防抖的，`app.exit(0)` 不等待 WebView 的异步请求，最后一批编辑
+/// 会直接丢。调用约定：Rust 只发 `workbench://quit-requested` 事件，
+/// 由前端 flush 完再调 `quit_app` 命令真正退出；超过 1 秒没回应则强制退出
+/// （WebView 崩了也不能让用户关不掉窗口）。
+fn request_graceful_quit(app: &AppHandle) {
+    use tauri::Emitter;
+    let app_handle = app.clone();
+    if app.emit("workbench://quit-requested", ()).is_err() {
+        app.exit(0);
+        return;
+    }
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        log::warn!("退出前 flush 超时，强制退出");
+        app_handle.exit(0);
+    });
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -150,8 +171,8 @@ pub fn run() {
                         .on_menu_event(|app, event| match event.id.as_ref() {
                             "toggle" => toggle_window(app),
                             "quit" => {
-                                log::info!("托盘菜单退出");
-                                app.exit(0);
+                                log::info!("托盘菜单退出，先让前端 flush");
+                                request_graceful_quit(app);
                             }
                             _ => {}
                         })
@@ -187,7 +208,8 @@ pub fn run() {
                         } else {
                             // 没有托盘：正常退出，否则用户无法再唤回窗口
                             log::info!("无托盘可用，关闭窗口即退出");
-                            handle2.exit(0);
+                            request_graceful_quit(&handle2);
+                            api.prevent_close();
                         }
                     }
                 });
@@ -196,6 +218,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::quit_app,
             commands::list_processes,
             commands::terminate_process,
             commands::terminate_process_elevated,

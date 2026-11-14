@@ -340,14 +340,15 @@ fn migrate_legacy_json(root: &DataRoot) -> Result<(), String> {
         return Ok(());
     }
     let text = std::fs::read_to_string(&legacy).map_err(|e| format!("读取旧成本库失败: {e}"))?;
-    let parsed: Option<LegacyCostData> = serde_json::from_str(&text)
-        .map_err(|e| format!("旧成本库不是合法 JSON（保留原文件不迁移）: {e}"))
-        .ok();
-    let Some(old) = parsed else {
-        // 空文件：直接改名，避免每次启动都重试解析失败
+    // 空文件才允许「改名跳过」；非空但解析失败必须报错并保留原文件 ——
+    // 把损坏文件当空文件改名，等于用户的成本历史静默消失且永不重试。
+    if text.trim().is_empty() {
         let _ = std::fs::rename(&legacy, legacy.with_extension("json.migrated"));
         return Ok(());
-    };
+    }
+    let old: LegacyCostData = serde_json::from_str(&text).map_err(|e| {
+        format!("旧成本库不是合法 JSON（保留原文件不迁移，请修复或移走）: {e}")
+    })?;
 
     let mut conn = open(root)?;
     let tx = conn
@@ -523,10 +524,39 @@ pub fn get_cost_settings(root: &DataRoot) -> Result<CostSettings, String> {
 }
 
 pub fn save_cost_settings(root: &DataRoot, settings: CostSettings) -> Result<(), String> {
+    let settings = validate_settings(settings)?;
     let _guard = lock();
     migrate_legacy_json(root)?;
     let conn = open(root)?;
     save_settings_row(&conn, &settings)
+}
+
+/// 预算设置的合法范围。
+///
+/// 为什么要在后端校验：前端输入框只做「非空」检查，负数预算会被
+/// `daily_budget > 0.0` 当成「没设预算」而静默失效；阈值 0 会让告警永远
+/// 触发、u32::MAX 会让它永不触发。这些值一旦落库，用户只能手改 SQLite。
+const MAX_BUDGET: f64 = 1_000_000.0;
+
+fn validate_settings(s: CostSettings) -> Result<CostSettings, String> {
+    for (label, value) in [
+        ("每日预算", s.daily_budget),
+        ("每月预算", s.monthly_budget),
+    ] {
+        if !value.is_finite() {
+            return Err(format!("{label}必须是有限数字"));
+        }
+        if value < 0.0 {
+            return Err(format!("{label}不能为负数"));
+        }
+        if value > MAX_BUDGET {
+            return Err(format!("{label}不能超过 {MAX_BUDGET:.0}"));
+        }
+    }
+    if s.alert_threshold_pct == 0 || s.alert_threshold_pct > 100 {
+        return Err("告警阈值必须在 1-100 之间".to_string());
+    }
+    Ok(s)
 }
 
 // ── 导入 ───────────────────────────────────────────────────
@@ -823,18 +853,36 @@ fn trend_sql(
     days: usize,
     include_estimated: bool,
 ) -> Result<Vec<CostTrendRow>, String> {
+    let today = chrono::Local::now().date_naive();
+    trend_sql_at(conn, days, include_estimated, today)
+}
+
+/// 趋势查询本体，`today` 显式传入以便单测固定时间。
+///
+/// 用日历窗口而不是「有记录的前 N 天」：`LIMIT N` 在中间有大段空档时
+/// 会让图上的 30 个点横跨好几个月，与 UI 标注的「最近 N 天」不符。
+/// 没有记录的日子由调用方补 0（`trend_fill_missing_days`）。
+fn trend_sql_at(
+    conn: &Connection,
+    days: usize,
+    include_estimated: bool,
+    today: chrono::NaiveDate,
+) -> Result<Vec<CostTrendRow>, String> {
+    let cutoff = (today - chrono::Duration::days(days.saturating_sub(1) as i64))
+        .format("%Y-%m-%d")
+        .to_string();
     let sql = format!(
         "SELECT day, SUM(input_tokens), SUM(output_tokens), SUM(cache_read_tokens),
                 SUM(cache_creation_tokens), SUM(cost_total), COUNT(*)
-         FROM records WHERE {}
-         GROUP BY day ORDER BY day DESC LIMIT ?1",
+         FROM records WHERE {} AND day >= ?1
+         GROUP BY day ORDER BY day ASC",
         counted(include_estimated)
     );
     let mut stmt = conn
         .prepare(&sql)
         .map_err(|e| format!("准备趋势查询失败: {e}"))?;
     let rows = stmt
-        .query_map(params![days as i64], |r| {
+        .query_map(params![cutoff], |r| {
             Ok(CostTrendRow {
                 day: r.get(0)?,
                 input_tokens: r.get::<_, i64>(1)? as u64,
@@ -850,8 +898,7 @@ fn trend_sql(
     for row in rows {
         out.push(row.map_err(|e| format!("读取趋势失败: {e}"))?);
     }
-    // SQL 取的是「最近 N 天」的倒序，图表需要正序
-    out.reverse();
+    // SQL 已按 day ASC 排序，图表直接用
     Ok(out)
 }
 
@@ -954,12 +1001,14 @@ fn month_trend_sql(
     Ok(out)
 }
 
-/// 原始账目导出：包含估算行（`cost_source` 自己说明来源），
-/// 按天、文件排序保证同一次会话的多条记录在导出里相邻。
+/// 原始账目导出：包含估算行（`cost_source` 自己说明来源）。
+///
+/// 排序：先按天**降序**取最近 N 条（超限时丢最早的数据，而不是丢最近的），
+/// 再把结果翻回升序输出 —— 导出的时间轴仍是正序，同一次会话的多条记录相邻。
 fn export_records_sql(conn: &Connection, limit: usize) -> Result<Vec<CostExportRow>, String> {
     let sql = "SELECT day, project, tool, model, input_tokens, output_tokens, cache_read_tokens,
                 cache_creation_tokens, cost_input, cost_output, cost_total, cost_source, file_path
-         FROM records ORDER BY day, file_path LIMIT ?1";
+         FROM records ORDER BY day DESC, file_path DESC LIMIT ?1";
     let mut stmt = conn
         .prepare(sql)
         .map_err(|e| format!("准备导出查询失败: {e}"))?;
@@ -986,6 +1035,8 @@ fn export_records_sql(conn: &Connection, limit: usize) -> Result<Vec<CostExportR
     for row in rows {
         out.push(row.map_err(|e| format!("读取导出行失败: {e}"))?);
     }
+    // SQL 为了「丢最早、留最近」按 DESC 取数；输出翻回时间正序。
+    out.reverse();
     Ok(out)
 }
 
@@ -1004,6 +1055,30 @@ pub fn snapshot_db(root: &DataRoot, dest: &Path) -> Result<(), String> {
     conn.execute("VACUUM INTO ?1", params![dest.to_string_lossy()])
         .map_err(|e| format!("生成成本库快照失败: {e}"))?;
     Ok(())
+}
+
+/// 尽力快照：成本库损坏时退化为直接复制文件。
+///
+/// 恢复流程会先做「安全回退点」，而安全回退点又要快照当前成本库。
+/// 如果当前成本库已经损坏（NOTADB），严格快照会失败，恢复就此中止 ——
+/// 恰恰在最需要恢复的时候拒绝恢复。这里在快照失败时退回字节复制：
+/// 损坏的库本身也是「用户当时的数据」，留一份总比一点不给强。
+pub fn snapshot_db_best_effort(root: &DataRoot, dest: &Path) -> Result<(), String> {
+    match snapshot_db(root, dest) {
+        Ok(()) => Ok(()),
+        Err(snapshot_err) => {
+            let src = cost_db_path(root);
+            if !src.exists() {
+                // 库还没有文件：不算失败，留空即可
+                return Ok(());
+            }
+            std::fs::copy(&src, dest).map_err(|e| {
+                format!("成本库快照失败（{snapshot_err}），退回复制也失败: {e}")
+            })?;
+            log::warn!("成本库快照失败，已退化为字节复制: {snapshot_err}");
+            Ok(())
+        }
+    }
 }
 
 /// 恢复后必须清掉日志/共享内存旁文件，否则 SQLite 会把旧事务重放到新文件上。
@@ -1040,6 +1115,16 @@ pub fn validate_db(path: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `N` 天前的本地日期（YYYY-MM-DD）。
+    ///
+    /// 趋势查询已改成「日历窗口」，用固定历史日期写测试会随真实时间流逝
+    /// 落到窗口外而失败 —— 这类测试必须相对今天构造数据。
+    fn date_days_ago(days: i64) -> String {
+        (chrono::Local::now().date_naive() - chrono::Duration::days(days))
+            .format("%Y-%m-%d")
+            .to_string()
+    }
 
     fn record(path: &str, day: &str, source: &str, model: &str, cost: f64) -> CostRecord {
         CostRecord {
@@ -1255,8 +1340,8 @@ mod tests {
         insert(
             &conn,
             &[
-                record("/s/a.jsonl", "2026-10-01", "measured", "m", 1.0),
-                record("/s/b.jsonl", "2026-10-01", "estimated", "m", 9.0),
+                record("/s/a.jsonl", &date_days_ago(0), "measured", "m", 1.0),
+                record("/s/b.jsonl", &date_days_ago(0), "estimated", "m", 9.0),
             ],
         );
         let mut settings = CostSettings::default();
@@ -1294,11 +1379,12 @@ mod tests {
     fn trend_keeps_only_latest_days_in_ascending_order() {
         let (dir, db) = temp_db("trend");
         let conn = open_at(&db).unwrap();
-        let records: Vec<CostRecord> = (1..=20)
-            .map(|d| {
+        // 最近 20 天各一条；窗口取 7 天，应只返回最近 7 天且按日期升序。
+        let records: Vec<CostRecord> = (0..20)
+            .map(|ago| {
                 record(
-                    &format!("/s/{d}.jsonl"),
-                    &format!("2026-05-{d:02}"),
+                    &format!("/s/{ago}.jsonl"),
+                    &date_days_ago(ago),
                     "measured",
                     "m",
                     0.1,
@@ -1308,8 +1394,8 @@ mod tests {
         insert(&conn, &records);
         let rows = trend_sql(&conn, 7, true).unwrap();
         assert_eq!(rows.len(), 7);
-        assert_eq!(rows.first().unwrap().day, "2026-05-14");
-        assert_eq!(rows.last().unwrap().day, "2026-05-20");
+        assert_eq!(rows.first().unwrap().day, date_days_ago(6));
+        assert_eq!(rows.last().unwrap().day, date_days_ago(0));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1394,11 +1480,13 @@ mod tests {
     fn monthly_buckets_stop_at_daily_window_without_overlap() {
         let (dir, db) = temp_db("monthly");
         let conn = open_at(&db).unwrap();
-        let records: Vec<CostRecord> = (1..=20)
-            .map(|d| {
+        // 最近 20 天各一条，日粒度窗口取 7 天；月度桶只补窗口之前的同月日期，
+        // 两者不得重叠（这条约束与具体日期无关，用相对今天的数据即可验证）。
+        let records: Vec<CostRecord> = (0..20)
+            .map(|ago| {
                 record(
-                    &format!("/s/{d}.jsonl"),
-                    &format!("2026-05-{d:02}"),
+                    &format!("/s/{ago}.jsonl"),
+                    &date_days_ago(ago),
                     "measured",
                     "m",
                     0.1,
@@ -1406,24 +1494,32 @@ mod tests {
             })
             .collect();
         insert(&conn, &records);
+        let daily = trend_sql(&conn, 7, true).unwrap();
+        assert_eq!(daily.len(), 7);
+        assert_eq!(daily.first().unwrap().day, date_days_ago(6));
         let ext = ExtendedTrend {
             days: 7,
-            daily: trend_sql(&conn, 7, true).unwrap(),
-            monthly: month_trend_sql(&conn, "2026-05-14", true).unwrap(),
+            monthly: month_trend_sql(&conn, &daily[0].day, true).unwrap(),
+            daily,
         };
-        assert_eq!(ext.daily.len(), 7);
-        assert_eq!(ext.daily.first().unwrap().day, "2026-05-14");
-        // 月度桶只含 05-01..05-13 这 13 天，且是升序
-        assert_eq!(ext.monthly.len(), 1);
-        let m = &ext.monthly[0];
-        assert_eq!(m.month, "2026-05");
-        assert_eq!(m.record_count, 13, "月度桶不得与日粒度窗口重叠");
-        assert!((m.cost - 1.3).abs() < 1e-9);
-        // 拼接后的时间轴无重叠：月度最后一天 < 日粒度第一天
-        assert!(month_trend_sql(&conn, &ext.daily[0].day, true)
-            .unwrap()
-            .iter()
-            .all(|_| true));
+        // 月度桶只含窗口之前的数据；可能跨月（例如窗口是本月 7 天，
+        // 剩下的 13 天横跨上个月末），所以按「总记录数」而不是桶数断言。
+        let before_window = 20 - 7;
+        let monthly_records: u32 = ext.monthly.iter().map(|m| m.record_count).sum();
+        assert_eq!(
+            monthly_records as usize, before_window,
+            "月度桶不得与日粒度窗口重叠，也不能漏掉更早的记录"
+        );
+        let monthly_cost: f64 = ext.monthly.iter().map(|m| m.cost).sum();
+        assert!((monthly_cost - 0.1 * before_window as f64).abs() < 1e-9);
+        // 月度桶按月份升序返回（与日粒度一致，图表可直接拼接）。
+        let months: Vec<&str> = ext.monthly.iter().map(|m| m.month.as_str()).collect();
+        let sorted = {
+            let mut c = months.clone();
+            c.sort_unstable();
+            c
+        };
+        assert_eq!(months, sorted, "月度桶必须按月份升序");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1479,10 +1575,9 @@ mod tests {
 
         let limited = export_records_sql(&conn, 2).unwrap();
         assert_eq!(limited.len(), 2, "limit 生效");
-        assert_eq!(
-            limited[0].day, "2026-05-01",
-            "限长时保留最早的天（与趋势的『最近』互补）"
-        );
+        // 保留最近的 2 天（05-02、05-03），丢掉最早的 05-01；输出仍是时间正序。
+        assert_eq!(limited[0].day, "2026-05-02");
+        assert_eq!(limited[1].day, "2026-05-03");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
