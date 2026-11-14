@@ -157,16 +157,20 @@ export async function loadDataVersioned(): Promise<{
   generation: string;
 }> {
   if (isTauri()) return invoke("load_data_versioned");
-  // HTTP 端没有 generation 乐观锁：浏览器是单写者场景（同一标签页），
-  // 用固定值占位，store 的版本检查逻辑对它是恒等比较。
-  const data = await httpJson<WorkbenchData>("/api/data");
-  return { data, generation: "http" };
+  // HTTP 端用数据文件指纹做乐观锁令牌，与桌面端 generation 语义一致：
+  // 别的窗口动过数据，令牌就变，保存会被后端 409 拒绝。
+  return httpJson<{ data: WorkbenchData; generation: string }>("/api/data");
 }
 
 export async function saveData(data: WorkbenchData, generation: string): Promise<string> {
   if (isTauri()) return invoke("save_data", { data, generation });
-  await httpJson<{ ok: boolean }>("/api/data", { method: "PUT", body: data });
-  return generation;
+  const res = await httpJson<{ ok: boolean; generation: string }>("/api/data", {
+    method: "PUT",
+    body: data,
+    // If-Match 提供并发保护；写入标记头用于挡住跨源请求（会触发 CORS 预检）。
+    headers: { "if-match": generation, "x-workbench-write": "1" },
+  });
+  return res.generation ?? generation;
 }
 
 /** 用系统默认方式打开 URL / 目录。
@@ -254,7 +258,10 @@ export async function clearLogs(): Promise<void> {
 /** 扫描 session 文件 → 提取 usage → 计算成本 → 持久化 */
 export async function scanSessionCosts(): Promise<ScanCostResult> {
   if (isTauri()) return invoke<ScanCostResult>("scan_session_costs");
-  return httpJson<ScanCostResult>("/api/cost/scan", { method: "POST" });
+  return httpJson<ScanCostResult>("/api/cost/scan", {
+    method: "POST",
+    write: true,
+  });
 }
 
 /** 获取成本总览（不重新扫描） */
@@ -305,6 +312,7 @@ export async function saveCostSettings(settings: CostSettings): Promise<void> {
   await httpJson<{ ok: boolean }>("/api/cost/settings", {
     method: "PUT",
     body: settings,
+    write: true,
   });
 }
 
@@ -334,7 +342,11 @@ export async function savePricing(
   overrides: Record<string, [number, number]>
 ): Promise<PricingView> {
   if (isTauri()) return invoke<PricingView>("save_pricing", { overrides });
-  return httpJson<PricingView>("/api/cost/pricing", { method: "PUT", body: overrides });
+  return httpJson<PricingView>("/api/cost/pricing", {
+    method: "PUT",
+    body: overrides,
+    write: true,
+  });
 }
 
 export async function clearCostRecords(): Promise<void> {

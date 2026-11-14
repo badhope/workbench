@@ -67,7 +67,12 @@ pub fn parse_ss(output: &str) -> Vec<PortEntry> {
         let Some((local_addr, local_port)) = split_host_port(tokens[4]) else {
             continue;
         };
-        let (remote_addr, _) = split_host_port(tokens[5]).unwrap_or((tokens[5].to_string(), 0));
+        // 用 get(5) 而不是 tokens[5]：截断输出（恰好 5 列）会越界 panic，
+        // 而外部命令输出不是类型安全输入。
+        let Some(peer) = tokens.get(5) else {
+            continue;
+        };
+        let (remote_addr, _) = split_host_port(peer).unwrap_or((peer.to_string(), 0));
         // 状态词必须与 netstat 方言统一：netstat 给 "LISTENING"，ss 给 "LISTEN"。
         // 消费方（Servers 页、list_dev_servers）只认一种，
         // 不统一就会在某个平台上整片丢掉监听端口。

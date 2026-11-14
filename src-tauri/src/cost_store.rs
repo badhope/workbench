@@ -340,14 +340,15 @@ fn migrate_legacy_json(root: &DataRoot) -> Result<(), String> {
         return Ok(());
     }
     let text = std::fs::read_to_string(&legacy).map_err(|e| format!("读取旧成本库失败: {e}"))?;
-    let parsed: Option<LegacyCostData> = serde_json::from_str(&text)
-        .map_err(|e| format!("旧成本库不是合法 JSON（保留原文件不迁移）: {e}"))
-        .ok();
-    let Some(old) = parsed else {
-        // 空文件：直接改名，避免每次启动都重试解析失败
+    // 空文件才允许「改名跳过」；非空但解析失败必须报错并保留原文件 ——
+    // 把损坏文件当空文件改名，等于用户的成本历史静默消失且永不重试。
+    if text.trim().is_empty() {
         let _ = std::fs::rename(&legacy, legacy.with_extension("json.migrated"));
         return Ok(());
-    };
+    }
+    let old: LegacyCostData = serde_json::from_str(&text).map_err(|e| {
+        format!("旧成本库不是合法 JSON（保留原文件不迁移，请修复或移走）: {e}")
+    })?;
 
     let mut conn = open(root)?;
     let tx = conn
@@ -1004,6 +1005,30 @@ pub fn snapshot_db(root: &DataRoot, dest: &Path) -> Result<(), String> {
     conn.execute("VACUUM INTO ?1", params![dest.to_string_lossy()])
         .map_err(|e| format!("生成成本库快照失败: {e}"))?;
     Ok(())
+}
+
+/// 尽力快照：成本库损坏时退化为直接复制文件。
+///
+/// 恢复流程会先做「安全回退点」，而安全回退点又要快照当前成本库。
+/// 如果当前成本库已经损坏（NOTADB），严格快照会失败，恢复就此中止 ——
+/// 恰恰在最需要恢复的时候拒绝恢复。这里在快照失败时退回字节复制：
+/// 损坏的库本身也是「用户当时的数据」，留一份总比一点不给强。
+pub fn snapshot_db_best_effort(root: &DataRoot, dest: &Path) -> Result<(), String> {
+    match snapshot_db(root, dest) {
+        Ok(()) => Ok(()),
+        Err(snapshot_err) => {
+            let src = cost_db_path(root);
+            if !src.exists() {
+                // 库还没有文件：不算失败，留空即可
+                return Ok(());
+            }
+            std::fs::copy(&src, dest).map_err(|e| {
+                format!("成本库快照失败（{snapshot_err}），退回复制也失败: {e}")
+            })?;
+            log::warn!("成本库快照失败，已退化为字节复制: {snapshot_err}");
+            Ok(())
+        }
+    }
 }
 
 /// 恢复后必须清掉日志/共享内存旁文件，否则 SQLite 会把旧事务重放到新文件上。

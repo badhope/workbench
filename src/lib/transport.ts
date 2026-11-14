@@ -122,17 +122,26 @@ export class HttpError extends Error {
   }
 }
 
-/** 统一的 fetch 封装：JSON 编解码 + 错误归一化。 */
+/** 统一的 fetch 封装：JSON 编解码 + 错误归一化。
+ * `headers` 用于传递 `If-Match` 之类的条件请求头；
+ * `write: true` 自动带写入标记头（后端用它挡住跨源写请求）。 */
 export async function httpJson<T>(
   path: string,
-  init: { method?: string; body?: unknown } = {}
+  init: {
+    method?: string;
+    body?: unknown;
+    headers?: Record<string, string>;
+    write?: boolean;
+  } = {}
 ): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: init.method ?? "GET",
-    headers:
-      init.body === undefined
-        ? { accept: "application/json" }
-        : { accept: "application/json", "content-type": "application/json" },
+    headers: {
+      accept: "application/json",
+      ...(init.body === undefined ? {} : { "content-type": "application/json" }),
+      ...(init.write ? { "x-workbench-write": "1" } : {}),
+      ...init.headers,
+    },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
   });
   if (!res.ok) {

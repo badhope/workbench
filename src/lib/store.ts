@@ -422,6 +422,28 @@ let refreshAgain = false;
 let costScanAgain = false;
 let aiRefreshId = 0;
 
+// 退出前把 300ms 防抖窗口内的数据立刻落盘。
+//
+// 为什么需要：托盘「退出工作台」是 app.exit(0)，Rust 侧不等待前端；
+// 用户点完退出，最后 300ms 内的编辑还在 setTimeout 里没发出去，直接丢。
+// 用同步入口 `flushPendingSave()` 暴露给 Tauri 的 close 钩子（通过
+// window.__workbenchFlush 由 Rust 的初始化脚本调用），异步保存则尽力
+// 发最后一次请求。
+export async function flushPendingSave(): Promise<void> {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  const data = pendingData;
+  pendingData = null;
+  if (!data) return;
+  try {
+    await enqueueSave(data);
+  } catch {
+    // 退出路径上无法再提示；数据仍在磁盘的上一版，至少不是半截文件。
+  }
+}
+
 export const useStore = create<Store>()(
   persist(
     (set, get) => ({

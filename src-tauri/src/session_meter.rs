@@ -298,11 +298,19 @@ fn usage_from_value(v: &serde_json::Value) -> Option<Usage> {
 }
 
 fn parse_usage_from_value(v: &serde_json::Value, strict: bool) -> Result<Option<Usage>, String> {
-    let Some(usage) = v
+    // Codex rollout 的用量在 `payload.info.total_token_usage`（token_count 事件），
+    // 不在 `message.usage`。只查后者会让 Codex 会话全部退化成字符估算：
+    // 模型名读得到、token 却在猜，是最容易被误信的「假精确」。
+    let usage = v
         .get("message")
         .and_then(|m| m.get("usage"))
         .or_else(|| v.get("usage"))
-    else {
+        .or_else(|| {
+            v.get("payload")
+                .and_then(|p| p.get("info"))
+                .and_then(|i| i.get("total_token_usage"))
+        });
+    let Some(usage) = usage else {
         return Ok(None);
     };
     let keys = [
@@ -314,6 +322,8 @@ fn parse_usage_from_value(v: &serde_json::Value, strict: bool) -> Result<Option<
         "completion_tokens",
         "cache_read_input_tokens",
         "cache_creation_input_tokens",
+        "cached_input_tokens",
+        "reasoning_output_tokens",
     ];
     if strict {
         for key in keys {
@@ -338,7 +348,9 @@ fn parse_usage_from_value(v: &serde_json::Value, strict: bool) -> Result<Option<
     };
     let input = pick(["input_tokens", "inputTokens", "prompt_tokens"]);
     let output = pick(["output_tokens", "outputTokens", "completion_tokens"]);
-    let cache_read = usage_token_u64(usage.get("cache_read_input_tokens")).unwrap_or(0);
+    let cache_read = usage_token_u64(usage.get("cache_read_input_tokens"))
+        .or_else(|| usage_token_u64(usage.get("cached_input_tokens")))
+        .unwrap_or(0);
     let cache_creation = usage_token_u64(usage.get("cache_creation_input_tokens")).unwrap_or(0);
     Ok(Some(Usage {
         input,

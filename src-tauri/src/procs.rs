@@ -10,7 +10,19 @@ use sysinfo::{Pid, ProcessesToUpdate, System};
 ///
 /// Windows 上必须带 CREATE_NO_WINDOW：GUI 程序派生控制台子进程会闪黑窗，
 /// 而端口采样是周期性的，闪窗会非常明显。
+///
+/// 有超时：netstat/ss 挂起时，`output()` 会永久阻塞。端口采样是在全局锁里
+/// 调用的，一旦卡死，端口页、开发服务器、HTTP 端点全部排队等它。
+/// 超时后杀掉子进程并返回错误，让上层退化成「本次采样失败」而不是「应用死了」。
 pub fn run_quiet(program: &str, args: &[&str]) -> std::io::Result<String> {
+    run_quiet_with_timeout(program, args, Duration::from_secs(15))
+}
+
+pub fn run_quiet_with_timeout(
+    program: &str,
+    args: &[&str],
+    timeout: Duration,
+) -> std::io::Result<String> {
     let mut cmd = Command::new(program);
     cmd.args(args);
     #[cfg(windows)]
@@ -19,8 +31,48 @@ pub fn run_quiet(program: &str, args: &[&str]) -> std::io::Result<String> {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
-    let output = cmd.output()?;
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::null());
+    let mut child = cmd.spawn()?;
+    // 必须并发读 stdout：管道容量有限（Windows 约 64KB），只等进程退出而
+    // 不读管道时，子进程会写满缓冲区后阻塞，永远不退出 —— 于是超时逻辑
+    // 反而把正常的大输出（netstat 几千行）误判成挂起。
+    let stdout = child.stdout.take();
+    let reader = std::thread::spawn(move || {
+        use std::io::Read;
+        let mut buf = Vec::new();
+        if let Some(mut out) = stdout {
+            let _ = out.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait()? {
+            Some(status) => break status,
+            None if started.elapsed() >= timeout => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = reader.join();
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    format!("{} 超过 {} 秒未返回", program, timeout.as_secs()),
+                ));
+            }
+            None => std::thread::sleep(Duration::from_millis(20)),
+        }
+    };
+    let buf = reader.join().unwrap_or_default();
+    if !status.success() {
+        // 退出码非零且没有输出，多半是命令不存在或权限不足；
+        // 返回错误而不是空字符串，避免上层把「失败」当成「没有端口」。
+        return Err(std::io::Error::other(format!(
+            "{} 退出码 {:?}",
+            program,
+            status.code()
+        )));
+    }
+    Ok(String::from_utf8_lossy(&buf).into_owned())
 }
 
 /// 一次前端刷新会并发请求「进程 / 端口 / 开发服务器 / AI 进程」四个命令，

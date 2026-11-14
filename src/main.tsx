@@ -3,7 +3,7 @@ import App from "./App";
 import MiniWorkbench from "./components/MiniWorkbench";
 import { ErrorBoundary } from "./ErrorBoundary";
 import "./styles/global.css";
-import { useStore, effectiveMotion } from "./lib/store";
+import { useStore, effectiveMotion, flushPendingSave } from "./lib/store";
 import { t, syncDocumentLang } from "./lib/i18n";
 import { applyMotion, applyTheme } from "./lib/theme/apply";
 import { tokensFor } from "./lib/theme/presets";
@@ -33,6 +33,27 @@ syncDocumentLang();
 const isMini =
   new URLSearchParams(window.location.search).get("mini") === "1" ||
   (window as Window & { __WORKBENCH_MINI__?: boolean }).__WORKBENCH_MINI__ === true;
+
+// 退出前 flush 待保存数据。
+//
+// 前端保存是 300ms 防抖，`app.exit(0)` 不会等异步请求。桌面端在退出前
+// 发 `workbench://quit-requested` 事件，这里 flush 完再调 `quit_app`
+// 真正退出；浏览器用 `pagehide` 兜底（刷新同样会丢防抖窗口内的编辑）。
+const w = window as Window & { __workbenchFlush?: () => Promise<void> };
+w.__workbenchFlush = flushPendingSave;
+window.addEventListener("pagehide", () => {
+  void flushPendingSave();
+});
+
+if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+  void import("@tauri-apps/api/event").then(({ listen }) =>
+    listen("workbench://quit-requested", async () => {
+      await flushPendingSave();
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("quit_app").catch(() => undefined);
+    })
+  );
+}
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
