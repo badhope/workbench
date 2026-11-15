@@ -80,6 +80,21 @@ pub fn init_logging(app: &AppHandle) {
         Some(p) => p,
         None => return,
     };
+    init_logging_at(log_path);
+}
+
+/// `serve` / CLI 入口用的版本：日志目录只由数据根目录决定，不需要 AppHandle。
+///
+/// 为什么必须补：`init_logging` 只在 Tauri 的 setup 里调用，`workbench serve`
+/// 从不初始化 logger —— Web 模式打开「应用日志」永远是空白，后端也不落盘，
+/// 出问题时完全没有线索。两个入口必须写同一个文件（同一个数据根）。
+pub fn init_logging_for_data_root(root: &Path) {
+    if let Some(path) = log_file_path_in(root) {
+        init_logging_at(path);
+    }
+}
+
+fn init_logging_at(log_path: PathBuf) {
     prune_if_needed(&log_path);
 
     // release 默认 Info：此前 Debug 恒定开启，一次 UI 刷新会打两条
@@ -234,6 +249,20 @@ fn read_tail(path: &Path, max_lines: usize) -> String {
 /// 清空日志文件。
 pub fn clear_logs(app: &AppHandle) -> Result<(), String> {
     let path = log_file_path(app).ok_or("无法定位日志路径")?;
+    fs::write(&path, "").map_err(|e| format!("清空日志失败: {e}"))
+}
+
+/// 按数据根目录读日志（`serve` 用；不需要 AppHandle）。
+pub fn read_recent_logs_at(root: &Path, max_lines: usize) -> String {
+    match log_file_path_in(root) {
+        Some(p) => read_tail(&p, max_lines),
+        None => String::new(),
+    }
+}
+
+/// 按数据根目录清空日志（`serve` 用）。
+pub fn clear_logs_at(root: &Path) -> Result<(), String> {
+    let path = log_file_path_in(root).ok_or("无法定位日志路径")?;
     fs::write(&path, "").map_err(|e| format!("清空日志失败: {e}"))
 }
 

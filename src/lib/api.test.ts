@@ -358,8 +358,24 @@ describe("HTTP 传输分支", () => {
     await expect(api.terminateProcess(1234)).rejects.toThrow(/桌面应用/);
     await expect(api.terminateProcessElevated(1234)).rejects.toThrow(/桌面应用/);
     await expect(api.clearCostRecords()).rejects.toThrow(/桌面应用/);
-    await expect(api.readLogs(10)).rejects.toThrow(/桌面应用/);
     expect(fetchMock.mock.calls.length).toBe(before);
+  });
+
+  /// 日志不再是桌面独占：Web 模式读后端同一个 workbench.log。
+  it("Web 模式读日志走 GET /api/logs 并带 max_lines", async () => {
+    await api.readLogs(10);
+    const [url, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
+    expect(url).toBe("/api/logs?max_lines=10");
+    expect(init.method ?? "GET").toBe("GET");
+  });
+
+  /// 清空日志是写操作：Web 模式必须带写入标记头，后端才放行。
+  it("Web 模式清空日志用 DELETE 且带写入标记头", async () => {
+    await api.clearLogs();
+    const [url, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
+    expect(url).toBe("/api/logs");
+    expect(init.method).toBe("DELETE");
+    expect((init.headers as Record<string, string>)["x-workbench-write"]).toBe("1");
   });
 
   it("opencode 未运行时把 available:false 归一化成抛错", async () => {

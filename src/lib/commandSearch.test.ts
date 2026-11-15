@@ -44,4 +44,38 @@ describe("rankCommands", () => {
   it("respects the limit", () => {
     expect(rankCommands(items, "", 2)).toHaveLength(2);
   });
+
+  /**
+   * 回归：搜 `cost` 时，十几个 conhost.exe 曾靠散字母子序列命中把
+   * 「成本账本」页挤出前 12（真实截图里 12 条结果全是 conhost.exe）。
+   * 连续/前缀匹配必须无条件压过散字母匹配。
+   */
+  it("never lets subsequence noise outrank a real prefix match", () => {
+    const noisy = Array.from({ length: 30 }, (_, i) => ({
+      id: `proc-${i}`,
+      label: `conhost.exe · ${1000 + i}`,
+      keywords: `${1000 + i} C:\\Windows\\system32\\conhost.exe`,
+    }));
+    const real = [
+      { id: "nav-costs", label: "成本账本", keywords: "costs ledger" },
+      { id: "nav-costs-en", label: "Cost ledger", keywords: "costs spend" },
+    ];
+    const ranked = rankCommands([...noisy, ...real], "cost", 12);
+    const firstReal = ranked.findIndex((x) => x.id.startsWith("nav-"));
+    expect(firstReal).toBe(0);
+    expect(ranked.filter((x) => x.id.startsWith("nav-"))).toHaveLength(2);
+  });
+
+  it("keeps word-start and contains matches above subsequences", () => {
+    const items = [
+      { id: "sub", label: "c_o_s_t artifact" },
+      { id: "contains", label: "my costs" },
+      { id: "word", label: "Cost ledger" },
+    ];
+    expect(rankCommands(items, "cost").map((x) => x.id)).toEqual([
+      "word",
+      "contains",
+      "sub",
+    ]);
+  });
 });

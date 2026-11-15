@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/badge/version-0.8.1-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.ja.md#システム要件)
-[![Tests](https://img.shields.io/badge/tests-575%20unit%20%2B%20180%20backend%20%2B%2030%20e2e-8b5cf6)](#品質ゲート)
+[![Tests](https://img.shields.io/badge/tests-579%20unit%20%2B%20182%20backend%20%2B%2030%20e2e-8b5cf6)](#品質ゲート)
 
 ![Workbench](docs/screenshots/12-brand-hero.png)
 
@@ -89,8 +89,8 @@ README のすべての主張はコマンドで検証されています。ロー�
 | `npm run version:check` | 4 つのバージョンファイルの不整合 |
 | `npx tsc --noEmit` | 型エラー（生成された IPC 契約を含む） |
 | `npm run lint` · `npm run format:check` | ESLint ゼロ警告、Prettier |
-| `npm test` | **575** フロントエンドテスト（カバレッジ閾値付き） |
-| `cargo test --lib` | **180** バックエンドテスト（ts-rs バインディングエクスポート含む） |
+| `npm test` | **579** フロントエンドテスト（カバレッジ閾値付き） |
+| `cargo test --lib` | **182** バックエンドテスト（ts-rs バインディングエクスポート含む） |
 | `npm run test:e2e` | **30** Playwright ケースナビゲーション、WCAG AA コントラスト、ビジュアルベースライン |
 | `cargo clippy -- -D warnings` | Rust lint、ゼロ許容 |
 | `npm audit` · `cargo audit` | 両依存ツリーの既知脆弱性 |

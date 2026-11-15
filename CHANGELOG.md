@@ -62,6 +62,14 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `parse_ss` 越界 panic 修复；`netstat`/`ss` 子进程加超时与退出码判断，
   并并发读取 stdout（避免管道写满导致的假超时）。
 - 备份目录与环境自检统一走 `data_root()`。
+- **Web 模式的「应用日志」此前永远是空白**：`init_logging` 只在 Tauri 的
+  setup 里调用，`workbench serve` 从不初始化 logger，既不落盘也没有日志
+  端点。现在 `serve` 启动即写同一个 `workbench.log`，并补 `GET /api/logs`
+  与 `DELETE /api/logs`（清空同样要求同源 + 写入标记头）。
+- **命令面板搜 `cost` 出来 12 条 `conhost.exe`，「成本账本」被挤出结果**：
+  散字母子序列匹配累加分最高能到 54，而页面名 `成本账本` 的 keywords 命中
+  还要乘 0.8 权重，于是真页面输给了噪音进程。匹配改为分档（精确 > 前缀 >
+  词首 > 包含 > 子序列），低档永远压不过高档。
 - Codex 成本归因不再用「日目录」当项目名，并解析
   `payload.info.total_token_usage` 的真实 token。
 
