@@ -215,6 +215,7 @@ pub fn router(state: AppState, opts: &ServeOptions) -> Router {
         .route("/disks", get(disks))
         .route("/data", get(load_data).put(save_data))
         .route("/data/path", get(data_path))
+        .route("/logs", get(read_logs).delete(clear_logs))
         .route("/cost/overview", get(cost_overview))
         .route("/cost/trend", get(cost_trend))
         .route("/cost/trend-extended", get(cost_trend_extended))
@@ -295,6 +296,9 @@ async fn serve_embedded(OriginalUri(uri): OriginalUri) -> Response {
 }
 
 pub async fn serve(opts: ServeOptions) -> Result<(), String> {
+    // 日志必须先于任何业务初始化：serve 此前完全没有 logger，
+    // 「应用日志」页在 Web 模式下永远是空白，后端也不落盘。
+    crate::logging_setup::init_logging_for_data_root(opts.data_root.as_path());
     let state = AppState::new(opts.data_root.clone());
     let app = router(state, &opts);
     let listener = tokio::net::TcpListener::bind(opts.addr)
@@ -526,6 +530,45 @@ async fn data_path(State(st): State<AppState>) -> ApiResult<String> {
     ok(data::data_file_path(&st.root)
         .to_string_lossy()
         .to_string())
+}
+
+/// `GET /api/logs?max_lines=N`：读后端日志尾部。
+///
+/// 与桌面端 `read_logs` 读同一个文件（同一个数据根）。日志里可能含本机
+/// 路径，所以只在监听回环时才有意义——默认就只听 127.0.0.1。
+async fn read_logs(
+    State(st): State<AppState>,
+    Query(q): Query<LogQuery>,
+) -> ApiResult<String> {
+    let root = st.root.clone();
+    let max = q.max_lines.unwrap_or(500).clamp(1, 5000);
+    let text = tokio::task::spawn_blocking(move || {
+        crate::logging_setup::read_recent_logs_at(root.as_path(), max)
+    })
+    .await
+    .map_err(|e| ApiError::internal(format!("读取日志失败: {e}")))?;
+    ok(text)
+}
+
+/// `DELETE /api/logs`：清空日志（与桌面端同样的二次确认由前端负责）。
+async fn clear_logs(
+    State(st): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> ApiResult<bool> {
+    require_same_origin(&headers)?;
+    require_write_header(&headers)?;
+    let root = st.root.clone();
+    tokio::task::spawn_blocking(move || crate::logging_setup::clear_logs_at(root.as_path()))
+        .await
+        .map_err(|e| ApiError::internal(format!("清空日志失败: {e}")))?
+        .map_err(ApiError::internal)?;
+    log::info!("应用日志已清空（HTTP）");
+    ok(true)
+}
+
+#[derive(Debug, Deserialize)]
+struct LogQuery {
+    max_lines: Option<usize>,
 }
 
 async fn load_data(State(st): State<AppState>) -> ApiResult<VersionedData> {
@@ -983,6 +1026,70 @@ mod http_tests {
         let body = body_json(res).await;
         assert_eq!(body["name"], "workbench");
         assert_eq!(body["schema"], 1);
+        std::fs::remove_dir_all(root.as_path()).ok();
+    }
+
+    /// 日志端点必须真的读到后端写下的日志（Web 模式此前完全没有日志）。
+    #[tokio::test]
+    async fn logs_endpoint_reads_the_backend_log_file() {
+        let root = temp_root("logs-read");
+        std::fs::write(
+            root.as_path().join("workbench.log"),
+            "[2026-11-15 10:00:00] [INFO]: boot\n[2026-11-15 10:00:01] [ERROR]: boom\n",
+        )
+        .unwrap();
+        let res = app_for(&root)
+            .oneshot(
+                Request::get("/api/logs?max_lines=10")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let text: String = serde_json::from_value(body_json(res).await).unwrap();
+        assert!(text.contains("boot"), "实际: {text}");
+        assert!(text.contains("boom"), "实际: {text}");
+        std::fs::remove_dir_all(root.as_path()).ok();
+    }
+
+    /// 清空日志是写操作：没有标记头/跨源必须被拒，且原文件不能被清掉。
+    #[tokio::test]
+    async fn logs_delete_requires_write_header_and_same_origin() {
+        let root = temp_root("logs-clear");
+        let log = root.as_path().join("workbench.log");
+        std::fs::write(&log, "keep me\n").unwrap();
+
+        let res = app_for(&root)
+            .oneshot(Request::delete("/api/logs").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        let res = app_for(&root)
+            .oneshot(
+                Request::delete("/api/logs")
+                    .header("x-workbench-write", "1")
+                    .header("origin", "http://evil.example")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        assert_eq!(std::fs::read_to_string(&log).unwrap(), "keep me\n");
+
+        let res = app_for(&root)
+            .oneshot(
+                Request::delete("/api/logs")
+                    .header("x-workbench-write", "1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(std::fs::read_to_string(&log).unwrap(), "");
         std::fs::remove_dir_all(root.as_path()).ok();
     }
 

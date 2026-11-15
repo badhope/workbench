@@ -241,16 +241,17 @@ export async function notify(title: string, body: string): Promise<void> {
 // ── 日志读取 ──────────────────────────────────────────────
 
 export async function readLogs(maxLines: number): Promise<string> {
-  if (!isTauri()) {
-    // 服务端日志文件不在 HTTP 暴露面内（可能含本机路径），Web 模式明确不支持。
-    throw new Error("运行日志仅在桌面应用中可读");
-  }
-  return invoke<string>("read_logs", { maxLines });
+  if (isTauri()) return invoke<string>("read_logs", { maxLines });
+  // Web 模式读后端同一个日志文件（同一个数据根），不再是「不可用」。
+  return httpJson<string>(`/api/logs?max_lines=${maxLines}`);
 }
 
 export async function clearLogs(): Promise<void> {
-  if (!isTauri()) throw new Error("运行日志仅在桌面应用中可管理");
-  await invoke("clear_logs");
+  if (isTauri()) {
+    await invoke("clear_logs");
+    return;
+  }
+  await httpJson("/api/logs", { method: "DELETE", write: true });
 }
 
 // ── 成本计量 ──────────────────────────────────────────────

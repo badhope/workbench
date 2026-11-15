@@ -42,7 +42,7 @@ export default function Logs() {
   const load = useCallback(async () => {
     // 没有后端（纯静态预览）时给一段标注清楚的样例，
     // 而不是把整页渲染成「不可用」——那看起来像功能坏了。
-    // Web 模式（连 HTTP 后端）日志端点未开放，同样落到这个分支。
+    // 有后端（桌面 IPC 或 Web 的 HTTP）都读同一份 workbench.log。
     if (!isBackend()) {
       setContent(demoBundle(getLang()).logs);
       return;

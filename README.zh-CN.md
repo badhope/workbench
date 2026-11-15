@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/badge/version-0.8.1-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.zh-CN.md#系统要求)
-[![Tests](https://img.shields.io/badge/tests-575%20unit%20%2B%20180%20backend%20%2B%2030%20e2e-8b5cf6)](#质量门禁)
+[![Tests](https://img.shields.io/badge/tests-579%20unit%20%2B%20182%20backend%20%2B%2030%20e2e-8b5cf6)](#质量门禁)
 
 ![工作台](docs/screenshots/zh/12-brand-hero.png)
 
@@ -87,8 +87,8 @@
 | `npm run version:check` | 四处版本号互相漂移 |
 | `npx tsc --noEmit` | 类型错误，含生成的 IPC 契约 |
 | `npm run lint` · `npm run format:check` | ESLint 零告警、Prettier 格式 |
-| `npm test` | **575** 个前端测试，带覆盖率阈值 |
-| `cargo test --lib` | **180** 个后端测试，含 ts-rs 绑定导出 |
+| `npm test` | **579** 个前端测试，带覆盖率阈值 |
+| `cargo test --lib` | **182** 个后端测试，含 ts-rs 绑定导出 |
 | `npm run test:e2e` | **30** 个 Playwright 用例：导航、WCAG AA 对比度、视觉基线 |
 | `cargo clippy -- -D warnings` | Rust lint，零容忍 |
 | `npm audit` · `cargo audit` | 两套依赖树中的已知漏洞 |
