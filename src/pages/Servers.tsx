@@ -62,6 +62,21 @@ export default function Servers() {
     [ports]
   );
 
+  /**
+   * UDP 端口单列一组。
+   *
+   * 后端一直采集 UDP（`netstat -ano` / `ss -tulpn` 都带），但页面此前只
+   * 过滤 `TCP + LISTENING`，等于把 DNS、mDNS、QUIC、游戏/语音服务整片丢掉。
+   * UDP 没有「监听」状态（无连接），`state` 字段统一是 `UDP`。
+   */
+  const udpPorts = useMemo<PortEntry[]>(
+    () =>
+      ports
+        .filter((p) => p.protocol === "UDP")
+        .sort((a, b) => a.local_port - b.local_port),
+    [ports]
+  );
+
   const procByPid = useMemo(() => {
     const m = new Map<number, string>();
     for (const p of procs) m.set(p.pid, p.name);
@@ -128,8 +143,9 @@ export default function Servers() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ── 摘要条 ── */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/* ── 摘要条 ── 四张卡片从 3 列改成 2/4 列，避免 4 张在 3 列网格里
+          换行后最后一张单独占一行的尴尬留白。 */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           icon={Server}
           label={t("servers.stats.devServers")}
@@ -141,6 +157,12 @@ export default function Servers() {
           label={t("servers.stats.tcpListening")}
           value={listening.length}
           tone="accent"
+        />
+        <StatCard
+          icon={Network}
+          label={t("servers.stats.udp")}
+          value={udpPorts.length}
+          tone="dim"
         />
         <StatCard
           icon={BarChart3}
@@ -248,6 +270,65 @@ export default function Servers() {
                     );
                   })()}
                 </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* ── UDP 绑定端口 ──
+          UDP 是无连接协议，没有 LISTENING 状态；这些端口（DNS 53、mDNS 5353、
+          QUIC/HTTP3、游戏与语音）以前被 `TCP + LISTENING` 过滤整片丢掉。 */}
+      <Card className="">
+        <SectionTitle
+          extra={
+            udpPorts.length > 0 ? (
+              <Btn
+                className="!py-1 !text-xs"
+                onClick={() => {
+                  const rows: (string | number)[][] = [
+                    ["protocol", "local_address", "port", "pid", "process"],
+                    ...udpPorts.map((p) => [
+                      p.protocol,
+                      p.local_addr,
+                      p.local_port,
+                      p.pid,
+                      procByPid.get(p.pid) ?? "",
+                    ]),
+                  ];
+                  const stamp = new Date()
+                    .toISOString()
+                    .slice(0, 19)
+                    .replace(/[:T]/g, "-");
+                  downloadText(`workbench-udp-${stamp}.csv`, toCsv(rows));
+                }}
+              >
+                {t("servers.exportCsv")}
+              </Btn>
+            ) : undefined
+          }
+        >
+          {t("servers.allUdpPorts", { count: udpPorts.length })}
+        </SectionTitle>
+        {udpPorts.length === 0 ? (
+          <Empty>{t("servers.noUdpPorts")}</Empty>
+        ) : (
+          <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {udpPorts.map((p) => (
+              <div
+                key={`udp-${p.local_addr}-${p.local_port}-${p.pid}`}
+                className="flex items-center gap-2 rounded-[var(--radius-btn)] border border-line/50 bg-panel2 px-3 py-2 text-xs hover:border-accent/40 transition-colors"
+              >
+                <Network size={12} className="text-warn shrink-0" />
+                <span className="font-mono font-semibold text-warn">:{p.local_port}</span>
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 truncate text-left text-dim hover:text-accent"
+                  onClick={() => showProcess(p.pid)}
+                  title={t("servers.showProcess")}
+                >
+                  {procByPid.get(p.pid) ?? `PID ${p.pid}`}
+                </button>
               </div>
             ))}
           </div>

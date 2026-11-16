@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import dayjs from "dayjs";
-import { Check, LayoutGrid, List, Plus, Trash2 } from "lucide-react";
+import { Check, LayoutGrid, List, Plus, Search, Trash2, X } from "lucide-react";
 import { EChart } from "../lib/echarts";
 import { chartGapColor, FIXED_COLORS } from "../lib/chartTheme";
 import { isPieWorthRendering } from "../lib/aggregate";
@@ -116,6 +116,9 @@ export default function Tasks() {
   const [newTitle, setNewTitle] = useState("");
   const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
   const [showStats, setShowStats] = useState(false);
+  // 任务一旦多起来，「翻列表找一条」是最高频的操作。搜索只在当前范围+项目
+  // 筛选之内生效：换范围时保留搜索词，符合「先缩小范围再找」的实际用法。
+  const [query, setQuery] = useState("");
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -124,15 +127,22 @@ export default function Tasks() {
   const projectName = (id: string | null) =>
     data.projects.find((p) => p.id === id)?.name ?? null;
 
-  const visible = useMemo(
-    () =>
-      data.tasks.filter(
-        (task) =>
-          taskMatchesScope(task, taskScope) &&
-          (!projectFilter || task.project_id === projectFilter)
-      ),
-    [data.tasks, projectFilter, taskScope]
-  );
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return data.tasks.filter((task) => {
+      if (!taskMatchesScope(task, taskScope)) return false;
+      if (projectFilter && task.project_id !== projectFilter) return false;
+      if (!q) return true;
+      // 标题、下一步、阻塞原因、标签都参与搜索：用户记得的往往是「卡在哪」
+      // 或那个标签，而不是标题原文。
+      return (
+        task.title.toLowerCase().includes(q) ||
+        (task.next_step ?? "").toLowerCase().includes(q) ||
+        (task.blocked_reason ?? "").toLowerCase().includes(q) ||
+        task.tags.some((tag) => tag.toLowerCase().includes(q))
+      );
+    });
+  }, [data.tasks, projectFilter, taskScope, query]);
 
   const addFromList = () => {
     const title = newTitle.trim();
@@ -140,9 +150,7 @@ export default function Tasks() {
     // 在「今天/本周」范围下新建时补今天到期，否则新任务会立刻被当前筛选隐藏，
     // 用户会以为没有创建成功。收件箱/全部范围保持无日期。
     const due =
-      taskScope === "today" || taskScope === "week"
-        ? dayjs().format("YYYY-MM-DD")
-        : null;
+      taskScope === "today" || taskScope === "week" ? dayjs().format("YYYY-MM-DD") : null;
     if (
       addTask({
         title,
@@ -219,7 +227,9 @@ export default function Tasks() {
             aria-pressed={taskView === "list"}
             onClick={() => setTaskView("list")}
             className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition-colors ${
-              taskView === "list" ? "bg-panel text-text shadow-sm" : "text-dim hover:text-text"
+              taskView === "list"
+                ? "bg-panel text-text shadow-sm"
+                : "text-dim hover:text-text"
             }`}
           >
             <List size={12} /> {t("tasks.viewList")}
@@ -229,7 +239,9 @@ export default function Tasks() {
             aria-pressed={taskView === "board"}
             onClick={() => setTaskView("board")}
             className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition-colors ${
-              taskView === "board" ? "bg-panel text-text shadow-sm" : "text-dim hover:text-text"
+              taskView === "board"
+                ? "bg-panel text-text shadow-sm"
+                : "text-dim hover:text-text"
             }`}
           >
             <LayoutGrid size={12} /> {t("tasks.viewBoard")}
@@ -252,6 +264,31 @@ export default function Tasks() {
               {t(scope.labelKey)}
             </button>
           ))}
+        </div>
+
+        <div className="relative min-w-[150px] flex-1 sm:max-w-[240px]">
+          <Search
+            size={12}
+            className="absolute left-2 top-1/2 -translate-y-1/2 text-dim"
+            aria-hidden="true"
+          />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("tasks.searchPlaceholder")}
+            aria-label={t("tasks.searchPlaceholder")}
+            className="w-full rounded-[var(--radius-btn)] border border-line bg-panel2 py-1 pl-7 pr-6 text-xs text-text placeholder:text-faint focus:border-accent focus:outline-none"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label={t("tasks.clearSearch")}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-dim hover:text-text"
+            >
+              <X size={11} />
+            </button>
+          )}
         </div>
 
         <select
@@ -334,8 +371,7 @@ export default function Tasks() {
               </div>
             </div>
             <div className="text-center text-xs text-dim">
-              {visible.filter((task) => task.status === "done").length} /{" "}
-              {visible.length}
+              {visible.filter((task) => task.status === "done").length} / {visible.length}
             </div>
           </Card>
 
@@ -452,7 +488,9 @@ export default function Tasks() {
           </div>
           {visible.length === 0 ? (
             <div className="p-4">
-              <Empty>{data.tasks.length === 0 ? t("tasks.emptyTasks") : t("tasks.noMatch")}</Empty>
+              <Empty>
+                {data.tasks.length === 0 ? t("tasks.emptyTasks") : t("tasks.noMatch")}
+              </Empty>
             </div>
           ) : (
             <ul>

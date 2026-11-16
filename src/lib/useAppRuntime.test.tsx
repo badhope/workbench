@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useAppRuntime } from "./useAppRuntime";
+import { pollWhileVisible, useAppRuntime } from "./useAppRuntime";
 import { useStore } from "./store";
 
 /**
@@ -40,5 +40,57 @@ describe("useAppRuntime", () => {
     });
     expect(useStore.getState().toast).toBe("");
     unmount();
+  });
+});
+
+/**
+ * 「窗口隐藏时停止轮询」是省电的实际来源：看不见界面时继续每 3 秒采一次
+ * 进程表纯属浪费电。这里直接驱动定时器验证启停，而不是只看渲染结果。
+ */
+describe("pollWhileVisible", () => {
+  function setVisibility(state: "visible" | "hidden") {
+    Object.defineProperty(document, "visibilityState", {
+      value: state,
+      configurable: true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+    setVisibility("visible");
+  });
+
+  it("可见时按间隔触发，隐藏后停止，再可见时立刻补一次", () => {
+    vi.useFakeTimers();
+    setVisibility("visible");
+    const tick = vi.fn();
+    const stop = pollWhileVisible(tick, 3000);
+
+    vi.advanceTimersByTime(9000);
+    expect(tick).toHaveBeenCalledTimes(3);
+
+    setVisibility("hidden");
+    vi.advanceTimersByTime(9000);
+    expect(tick).toHaveBeenCalledTimes(3);
+
+    setVisibility("visible");
+    expect(tick).toHaveBeenCalledTimes(4);
+    vi.advanceTimersByTime(3000);
+    expect(tick).toHaveBeenCalledTimes(5);
+
+    stop();
+    vi.advanceTimersByTime(9000);
+    expect(tick).toHaveBeenCalledTimes(5);
+  });
+
+  it("卸载后不再触发", () => {
+    vi.useFakeTimers();
+    setVisibility("visible");
+    const tick = vi.fn();
+    const stop = pollWhileVisible(tick, 1000);
+    stop();
+    vi.advanceTimersByTime(5000);
+    expect(tick).not.toHaveBeenCalled();
   });
 });

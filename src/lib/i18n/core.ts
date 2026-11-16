@@ -78,8 +78,7 @@ export const dict = {
     "onboarding.done": "Done",
     "onboarding.step1Title": "What Workbench does",
     "onboarding.step1Point1": "See today's work and the project you're in at a glance",
-    "onboarding.step1Point2":
-      "Organize tasks, services and AI sessions around projects",
+    "onboarding.step1Point2": "Organize tasks, services and AI sessions around projects",
     "onboarding.step1Point3":
       "Developer tools and cost metering live in Tools — data stays local",
     "onboarding.step2Title": "Pick your theme",
@@ -107,7 +106,8 @@ export const dict = {
     "workMode.none": "Not chosen yet",
     "workMode.change": "Change",
     "workMode.required": "Pick at least one way of working, or skip to use the default.",
-    "workMode.settingsHint": "This only changes the default presentation. It never grants permissions or starts sensitive scans.",
+    "workMode.settingsHint":
+      "This only changes the default presentation. It never grants permissions or starts sensitive scans.",
     "app.kill.title": "End process (irreversible)",
     "app.kill.cancel": "Cancel",
     "app.kill.confirm": "End {pid}",
@@ -399,8 +399,7 @@ export const dict = {
     "onboarding.done": "完了",
     "onboarding.step1Title": "Workbench のできること",
     "onboarding.step1Point1": "今日のタスクと現在のプロジェクトが一目で分かる",
-    "onboarding.step1Point2":
-      "プロジェクトを中心にタスク・サービス・AI セッションを整理",
+    "onboarding.step1Point2": "プロジェクトを中心にタスク・サービス・AI セッションを整理",
     "onboarding.step1Point3":
       "開発ツールとコスト計測はツールにまとめ、データはローカル保存",
     "onboarding.step2Title": "テーマを選ぶ",
@@ -428,7 +427,8 @@ export const dict = {
     "workMode.none": "未選択",
     "workMode.change": "変更",
     "workMode.required": "1 つ以上選択するか、「スキップ」で既定値を使います。",
-    "workMode.settingsHint": "表示の初期値だけを変えます。権限は付与せず、機密スキャンも開始しません。",
+    "workMode.settingsHint":
+      "表示の初期値だけを変えます。権限は付与せず、機密スキャンも開始しません。",
     "app.kill.title": "プロセスの終了（取り消せません）",
     "app.kill.cancel": "キャンセル",
     "app.kill.confirm": "{pid} を終了",

@@ -65,3 +65,13 @@ describe("useBreakpoint", () => {
     expect(result.current).toBe("compact");
   });
 });
+
+describe("useIsCompact", () => {
+  it("只在 compact 断点返回 true", async () => {
+    const { useIsCompact } = await import("./useBreakpoint");
+    setWidth(390);
+    expect(renderHook(() => useIsCompact()).result.current).toBe(true);
+    setWidth(1440);
+    expect(renderHook(() => useIsCompact()).result.current).toBe(false);
+  });
+});

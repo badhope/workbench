@@ -119,7 +119,12 @@ pub fn fingerprint(root: &DataRoot) -> Result<String, String> {
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|d| d.as_nanos())
                 .unwrap_or(0);
-            Ok(format!("{}-{}-{}", meta.len(), mtime, meta.created().is_ok()))
+            Ok(format!(
+                "{}-{}-{}",
+                meta.len(),
+                mtime,
+                meta.created().is_ok()
+            ))
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok("none".to_string()),
         Err(e) => Err(format!("无法读取数据文件信息 {}: {e}", path.display())),
@@ -340,10 +345,9 @@ mod tests {
 
     #[test]
     fn newer_version_is_rejected_not_guessed() {
-        let raw: WorkbenchData = serde_json::from_str(
-            r#"{ "schema_version": 99, "projects": [], "tasks": [] }"#,
-        )
-        .unwrap();
+        let raw: WorkbenchData =
+            serde_json::from_str(r#"{ "schema_version": 99, "projects": [], "tasks": [] }"#)
+                .unwrap();
         let err = migrate(raw).unwrap_err();
         assert!(err.contains("更新版本"), "应说明是版本问题：{err}");
         assert!(err.contains("99"), "应报出实际版本：{err}");
@@ -437,9 +441,18 @@ mod tests {
             }],
         };
         let text = serde_json::to_string(&data).unwrap();
-        assert!(!text.contains("next_step"), "未设置的字段不该写出来：{text}");
-        assert!(!text.contains("completed_at"), "未设置的字段不该写出来：{text}");
-        assert!(text.contains("\"schema_version\":2"), "版本号必须落盘：{text}");
+        assert!(
+            !text.contains("next_step"),
+            "未设置的字段不该写出来：{text}"
+        );
+        assert!(
+            !text.contains("completed_at"),
+            "未设置的字段不该写出来：{text}"
+        );
+        assert!(
+            text.contains("\"schema_version\":2"),
+            "版本号必须落盘：{text}"
+        );
     }
 
     #[test]

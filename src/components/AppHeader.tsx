@@ -1,5 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
-import { Menu, Moon, PictureInPicture2, Pin, PinOff, RefreshCw, Search, Sun } from "lucide-react";
+import {
+  Menu,
+  Moon,
+  PictureInPicture2,
+  Pin,
+  PinOff,
+  RefreshCw,
+  Search,
+  Sun,
+} from "lucide-react";
 import { isTauri } from "../lib/api";
 import { openMiniWindow } from "../lib/miniWindow";
 

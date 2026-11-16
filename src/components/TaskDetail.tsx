@@ -13,13 +13,7 @@ import type { Project, Task } from "../types";
  * 带进新任务；保存走现有 updateTask，删除沿用带确认的 ConfirmDialog。
  */
 export function TaskDetail() {
-  const {
-    task,
-    projects,
-    updateTask,
-    deleteTask,
-    setTaskDetailId,
-  } = useStore(
+  const { task, projects, updateTask, deleteTask, setTaskDetailId } = useStore(
     useShallow((s) => ({
       task:
         s.taskDetailId === null

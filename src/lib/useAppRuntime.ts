@@ -76,7 +76,8 @@ export function useAppRuntime() {
 }
 
 /** 可见时轮询、隐藏时停表；恢复可见立即补一次。 */
-function pollWhileVisible(tick: () => void, intervalMs: number): () => void {
+/** 导出仅为单测可直接驱动「隐藏即停止轮询」的行为。 */
+export function pollWhileVisible(tick: () => void, intervalMs: number): () => void {
   let timer: ReturnType<typeof setInterval> | null = null;
   const stop = () => {
     if (timer) clearInterval(timer);

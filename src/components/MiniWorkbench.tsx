@@ -16,12 +16,7 @@ import {
   projectProgress,
   tasksForToday,
 } from "../lib/workbench";
-import {
-  closeCurrentWindow,
-  isTauri,
-  setAlwaysOnTop,
-  showMainWindow,
-} from "../lib/api";
+import { closeCurrentWindow, isTauri, setAlwaysOnTop, showMainWindow } from "../lib/api";
 import { subscribeDataChanged } from "../lib/dataSync";
 
 /**
@@ -34,12 +29,7 @@ import { subscribeDataChanged } from "../lib/dataSync";
 export default function MiniWorkbench() {
   const t = useT();
   useAppRuntime();
-  const {
-    data,
-    addTask,
-    moveTask,
-    refreshData,
-  } = useStore(
+  const { data, addTask, moveTask, refreshData } = useStore(
     useShallow((s) => ({
       data: s.data,
       addTask: s.addTask,
@@ -51,10 +41,7 @@ export default function MiniWorkbench() {
   const [added, setAdded] = useState(false);
   const [onTop, setOnTop] = useState(false);
 
-  useEffect(
-    () => subscribeDataChanged(() => void refreshData()),
-    [refreshData]
-  );
+  useEffect(() => subscribeDataChanged(() => void refreshData()), [refreshData]);
 
   const current = useMemo(
     () => pickCurrentProject(data.projects, data.tasks),
@@ -174,9 +161,7 @@ export default function MiniWorkbench() {
           {current && progress ? (
             <div className="mt-1 flex items-center gap-3">
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-semibold">
-                  {current.name}
-                </div>
+                <div className="truncate text-[13px] font-semibold">{current.name}</div>
                 <div className="mt-1 truncate text-[11px] text-dim">
                   {next
                     ? explicitNextStep(next) || next.title
@@ -224,9 +209,7 @@ export default function MiniWorkbench() {
                         {t("tasks.blocked")}
                       </span>
                     )}
-                    <span className="shrink-0 text-[9.5px] text-faint">
-                      {due.text}
-                    </span>
+                    <span className="shrink-0 text-[9.5px] text-faint">{due.text}</span>
                   </li>
                 );
               })}

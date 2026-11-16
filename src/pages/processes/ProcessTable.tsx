@@ -8,6 +8,7 @@ import { localeFor, useLang, useT } from "../../lib/i18n";
 import { statusKeyOf } from "../../lib/processStatus";
 import type { ProcInfo } from "../../types";
 import type { TreeRow } from "./tree";
+import type { ProcSortKey } from "../processFilter";
 
 /** 虚拟滚动估算尺寸：普通行固定，展开详情行内容高度不定，交由实测修正 */
 const ROW_H = 37;
@@ -32,6 +33,8 @@ export function ProcessTable({
   focusPid,
   expandedNodes,
   onToggleNode,
+  sort,
+  onSortChange,
 }: {
   rows: TreeRow[];
   aiPids: Set<number>;
@@ -42,6 +45,9 @@ export function ProcessTable({
   /** 树形视图里已展开的父节点 PID */
   expandedNodes?: Set<number>;
   onToggleNode?: (pid: number) => void;
+  /** 当前排序键；表头点击在 cpu / memory / pid / name 之间切换 */
+  sort?: ProcSortKey;
+  onSortChange?: (key: ProcSortKey) => void;
 }) {
   const t = useT();
   const [expandedPid, setExpandedPid] = useState<number | null>(null);
@@ -111,11 +117,44 @@ export function ProcessTable({
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10">
           <tr className="border-b border-line text-left text-xs text-dim">
-            {headers(t).map((h, i) => (
-              <th key={i} className="whitespace-nowrap bg-panel px-3 py-2 font-medium">
-                {h}
-              </th>
-            ))}
+            {headers(t).map((h, i) => {
+              // 只有 4 列可排序，其余是展示列。可排序列做成按钮，
+              // 与任务管理器 / btop 的「点表头排序」一致——比下拉框少一步。
+              const key = SORTABLE[i];
+              if (!key || !onSortChange) {
+                return (
+                  <th
+                    key={i}
+                    className="whitespace-nowrap bg-panel px-3 py-2 font-medium"
+                  >
+                    {h}
+                  </th>
+                );
+              }
+              const active = sort === key;
+              return (
+                <th
+                  key={i}
+                  scope="col"
+                  aria-sort={active ? "descending" : "none"}
+                  className="whitespace-nowrap bg-panel px-3 py-2 font-medium"
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSortChange(key)}
+                    className={`inline-flex items-center gap-1 transition-colors ${
+                      active ? "text-accent" : "text-dim hover:text-text"
+                    }`}
+                    title={h}
+                  >
+                    {h}
+                    <span aria-hidden="true" className="text-[9px]">
+                      {active ? "▼" : "⇅"}
+                    </span>
+                  </button>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
@@ -178,6 +217,17 @@ function headers(t: (key: string) => string): string[] {
     t("procs.colAction"),
   ];
 }
+
+/**
+ * 哪几列可排序。索引对应 headers()：1=PID 2=名称 3=CPU 4=内存。
+ * 其余列（状态/启动时间/路径/操作）没有对应排序键，点了也不该有反应。
+ */
+const SORTABLE: Record<number, ProcSortKey> = {
+  1: "pid",
+  2: "name",
+  3: "cpu",
+  4: "memory",
+};
 
 /** 虚拟滚动的上下占位行：保持滚动条总高度与实际内容一致。 */
 function Spacer({ height }: { height: number }) {

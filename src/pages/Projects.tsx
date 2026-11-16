@@ -176,7 +176,12 @@ export default function Projects() {
 
                 <div>
                   <div className="mb-1 flex items-center justify-between text-[10.5px] text-dim">
-                    <span>{t("projects.progress", { done: progress.done, total: progress.total })}</span>
+                    <span>
+                      {t("projects.progress", {
+                        done: progress.done,
+                        total: progress.total,
+                      })}
+                    </span>
                     <span className="flex items-center gap-1.5">
                       {progress.overdue > 0 && (
                         <span className="text-danger">

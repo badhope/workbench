@@ -213,6 +213,8 @@ export default function Processes() {
             setChip("all");
           }}
           focusPid={focusPid}
+          sort={sort}
+          onSortChange={setSort}
           expandedNodes={
             procView === "tree"
               ? (expanded ?? new Set(forest.map((n) => n.p.pid)))

@@ -168,10 +168,7 @@ export default function Today() {
     [data.tasks]
   );
 
-  const openTaskList = (
-    scope: TaskScope,
-    projectId = ""
-  ) => {
+  const openTaskList = (scope: TaskScope, projectId = "") => {
     setTaskScope(scope);
     setTaskProjectFilter(projectId);
     setView("tasks");
@@ -240,12 +237,8 @@ export default function Today() {
             <button
               type="button"
               onClick={() => setRailCollapsed(!railCollapsed)}
-              title={
-                railCollapsed ? t("today.railExpand") : t("today.railCollapse")
-              }
-              aria-label={
-                railCollapsed ? t("today.railExpand") : t("today.railCollapse")
-              }
+              title={railCollapsed ? t("today.railExpand") : t("today.railCollapse")}
+              aria-label={railCollapsed ? t("today.railExpand") : t("today.railCollapse")}
               className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-line/80 bg-panel/60 px-2.5 py-1 text-[11px] text-dim transition-colors hover:border-accent/40 hover:text-text"
             >
               {railCollapsed ? (
@@ -619,7 +612,9 @@ function AttentionBar({
         active={counts.inbox > 0}
         onClick={() => onOpen("inbox")}
       />
-      {total === 0 && <span className="text-[11px] text-faint">{t("today.allClear")}</span>}
+      {total === 0 && (
+        <span className="text-[11px] text-faint">{t("today.allClear")}</span>
+      )}
     </div>
   );
 }
@@ -701,10 +696,7 @@ function CurrentProject({
           />
         </div>
 
-        <NextAction
-          next={next}
-          onOpen={() => next && onOpenTask(next.id)}
-        />
+        <NextAction next={next} onOpen={() => next && onOpenTask(next.id)} />
 
         <div className="flex flex-wrap gap-1.5">
           <Btn variant="primary" onClick={onOpenTasks}>
@@ -724,13 +716,7 @@ function CurrentProject({
   );
 }
 
-function NextAction({
-  next,
-  onOpen,
-}: {
-  next: Task | null;
-  onOpen: () => void;
-}) {
+function NextAction({ next, onOpen }: { next: Task | null; onOpen: () => void }) {
   const t = useT();
   const due = next ? dueLabel(next.due) : null;
   const step = explicitNextStep(next);
@@ -790,9 +776,7 @@ function TaskList({
       <div className="flex items-center justify-between gap-3 border-b border-line/70 pb-2">
         <div className="flex items-baseline gap-2">
           <h2 className="text-[14px] font-semibold">{title}</h2>
-          {shown > 0 && (
-            <span className="num text-[10.5px] text-faint">{shown}</span>
-          )}
+          {shown > 0 && <span className="num text-[10.5px] text-faint">{shown}</span>}
         </div>
         {extra}
       </div>
@@ -804,9 +788,7 @@ function TaskList({
             <TaskRow
               key={task.id}
               task={task}
-              projectName={
-                projects.find((p) => p.id === task.project_id)?.name ?? null
-              }
+              projectName={projects.find((p) => p.id === task.project_id)?.name ?? null}
               onComplete={() => onComplete(task.id)}
               onOpen={() => onOpen(task)}
             />
@@ -831,7 +813,11 @@ function ProjectsRail({
   const t = useT();
   return (
     <section>
-      <RailHeader title={t("today.projects")} action={t("today.viewProjects")} onAction={onViewAll} />
+      <RailHeader
+        title={t("today.projects")}
+        action={t("today.viewProjects")}
+        onAction={onViewAll}
+      />
       {rows.length === 0 ? (
         <div className="pt-2">
           <Empty
@@ -943,7 +929,11 @@ function SystemRail({
   const t = useT();
   return (
     <section className="border-t border-line/60 pt-4">
-      <RailHeader title={t("today.system")} action={t("today.openTools")} onAction={onOpen} />
+      <RailHeader
+        title={t("today.system")}
+        action={t("today.openTools")}
+        onAction={onOpen}
+      />
       {error ? (
         <div className="mt-2 rounded-[var(--radius-btn)] border border-danger/30 bg-danger/8 px-2.5 py-2 text-[11px] text-danger">
           {t("today.systemError", { err: error })}

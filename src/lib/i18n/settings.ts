@@ -423,7 +423,8 @@ export const dict = {
     "settings.importBadProject": "项目字段类型错误（id / name 必须为字符串）",
     "settings.importBadTask": "任务字段类型错误（id / title 必须为字符串）",
     "settings.importBadStatus": "任务状态非法（需为 todo / doing / done）",
-    "settings.importNewerVersion": "该文件来自更新版本（数据结构 v{version}），请先升级应用",
+    "settings.importNewerVersion":
+      "该文件来自更新版本（数据结构 v{version}），请先升级应用",
     "diag.title": "环境自检",
     "diag.sub":
       "逐项检查平台、数据目录、成本库、AI 会话目录与端口工具。结果只在本机，不会上传。",
@@ -637,7 +638,8 @@ export const dict = {
       "。サーバーには一切アップロードされません。変更は 300ms のデバウンス後にローカル保存されます。",
     "settings.dataBrowserNote":
       " ブラウザプレビューモードでは永続化されず、インポート / エクスポートはデモ用途です。",
-    "settings.dataServerNote": " — バックエンドを実行しているマシンに保存され、変更もそこに書き込まれます。",
+    "settings.dataServerNote":
+      " — バックエンドを実行しているマシンに保存され、変更もそこに書き込まれます。",
     "settings.dataPathUnknown": "バックエンドが実行時に解決",
     "settings.exported": "JSON バックアップをエクスポートしました",
     "settings.imported":

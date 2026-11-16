@@ -22,6 +22,13 @@ export default defineConfig({
     coverage: {
       reporter: ["text", "lcov"],
       include: ["src/lib/**", "src/ui.tsx", "src/ErrorBoundary.tsx"],
+      // 图表渲染层排除在单元测试之外，理由具体到可核对：
+      // `echartsImpl` 与 `echarts` 入口做的事是「注册 ECharts 模块、init
+      // canvas、随主题 dispose 重建」，jsdom 没有 canvas 实现，测出来只能是
+      // 一堆 mock 断言 mock（零真实信号）。它们的行为由 E2E 覆盖：
+      // `e2e/visual.spec.ts` 的「图表不重叠」断言每个 canvas 都有实际尺寸，
+      // 「十六种主题」用例验证换肤后图表仍然渲染。
+      exclude: ["src/lib/echarts.tsx", "src/lib/echartsImpl.tsx"],
       // 阈值取 2026-11-02 实测值（stmts 92.56 / branch 87.61 / funcs 92.16
       // / lines 93.79）的保守下沿：足以拦住覆盖率回退，又不会因为无关的
       // 一两行新增代码就红。

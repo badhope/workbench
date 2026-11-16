@@ -87,7 +87,23 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // 窗口位置/大小/最大化跨启动保持，但**不持久化可见性**。
+        //
+        // 插件默认 `StateFlags::all()` 含 VISIBLE：用户点关闭把主窗口收进托盘
+        // （此时窗口是隐藏的）再退出，下次启动就会按「隐藏」恢复 —— 应用启动了
+        // 却看不见窗口，只剩一个托盘图标。安装版实测复现：桌面上只出现
+        // 「工作台小窗」，主窗口完全消失，用户会以为程序坏了。
+        // 尺寸/位置值得记住，可见性必须由应用自己决定（启动时总是显示）。
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::POSITION
+                        | tauri_plugin_window_state::StateFlags::MAXIMIZED
+                        | tauri_plugin_window_state::StateFlags::FULLSCREEN,
+                )
+                .build(),
+        )
         // 开机自启：注册项由各平台自己管理（Windows 是 HKCU Run，Linux 是
         // ~/.config/autostart 下的 .desktop，macOS 是 LaunchAgent）。
         // 「是否已启用」每次向操作系统查询，本地不存布尔 —— 用户可能在
@@ -96,6 +112,14 @@ pub fn run() {
         .setup(|app| {
             logging_setup::init_logging(app.handle());
             log::info!("工作台 v{} 启动", app.package_info().version);
+
+            // 主窗口启动时必须可见：即使旧版本把「隐藏」写进了窗口状态文件，
+            // 也不能让用户打开应用后什么都看不到（见上面 with_state_flags 的说明）。
+            if let Some(main) = app.get_webview_window("main") {
+                let _ = main.show();
+                let _ = main.unminimize();
+                let _ = main.set_focus();
+            }
 
             // IPC 反向入参守卫：目录与端口白名单，随扫描/加载动态登记
             app.manage(ipc_guard::KnownDirs::default());

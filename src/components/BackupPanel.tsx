@@ -79,7 +79,11 @@ export function BackupPanel() {
             <div className="flex items-center gap-1.5">
               <Btn
                 className="!px-2 !py-1 !text-[11px]"
-                onClick={() => void openBackupDir().catch((e) => setStatus({ text: String(e), ok: false }))}
+                onClick={() =>
+                  void openBackupDir().catch((e) =>
+                    setStatus({ text: String(e), ok: false })
+                  )
+                }
               >
                 <FolderOpen size={11} /> {t("settings.openBackup")}
               </Btn>
