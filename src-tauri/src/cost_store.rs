@@ -346,9 +346,8 @@ fn migrate_legacy_json(root: &DataRoot) -> Result<(), String> {
         let _ = std::fs::rename(&legacy, legacy.with_extension("json.migrated"));
         return Ok(());
     }
-    let old: LegacyCostData = serde_json::from_str(&text).map_err(|e| {
-        format!("旧成本库不是合法 JSON（保留原文件不迁移，请修复或移走）: {e}")
-    })?;
+    let old: LegacyCostData = serde_json::from_str(&text)
+        .map_err(|e| format!("旧成本库不是合法 JSON（保留原文件不迁移，请修复或移走）: {e}"))?;
 
     let mut conn = open(root)?;
     let tx = conn
@@ -539,10 +538,7 @@ pub fn save_cost_settings(root: &DataRoot, settings: CostSettings) -> Result<(),
 const MAX_BUDGET: f64 = 1_000_000.0;
 
 fn validate_settings(s: CostSettings) -> Result<CostSettings, String> {
-    for (label, value) in [
-        ("每日预算", s.daily_budget),
-        ("每月预算", s.monthly_budget),
-    ] {
+    for (label, value) in [("每日预算", s.daily_budget), ("每月预算", s.monthly_budget)] {
         if !value.is_finite() {
             return Err(format!("{label}必须是有限数字"));
         }
@@ -1072,9 +1068,8 @@ pub fn snapshot_db_best_effort(root: &DataRoot, dest: &Path) -> Result<(), Strin
                 // 库还没有文件：不算失败，留空即可
                 return Ok(());
             }
-            std::fs::copy(&src, dest).map_err(|e| {
-                format!("成本库快照失败（{snapshot_err}），退回复制也失败: {e}")
-            })?;
+            std::fs::copy(&src, dest)
+                .map_err(|e| format!("成本库快照失败（{snapshot_err}），退回复制也失败: {e}"))?;
             log::warn!("成本库快照失败，已退化为字节复制: {snapshot_err}");
             Ok(())
         }

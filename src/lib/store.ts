@@ -22,11 +22,7 @@ import {
   type WidgetId,
 } from "./layout";
 import { getLang, t } from "./i18n";
-import {
-  DEFAULT_WORK_MODES,
-  normalizeWorkModes,
-  type WorkMode,
-} from "./workModes";
+import { DEFAULT_WORK_MODES, normalizeWorkModes, type WorkMode } from "./workModes";
 import type { TaskScope } from "./workbench";
 import { notifyDataChanged } from "./dataSync";
 import { persist } from "zustand/middleware";
@@ -383,8 +379,7 @@ export function migratePersisted(persisted: unknown): Record<string, unknown> {
         : state.onboardingDone === true
           ? DEFAULT_WORK_MODES
           : [],
-    workModeChosen:
-      state.workModeChosen === true || state.onboardingDone === true,
+    workModeChosen: state.workModeChosen === true || state.onboardingDone === true,
     particles: state.particles === true,
     particlesIntensity: normalizeIntensity(state.particlesIntensity),
     backgroundImage: isBackgroundDataUrl(state.backgroundImage)

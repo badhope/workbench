@@ -93,11 +93,7 @@ export function tasksForToday(tasks: Task[], now = dayjs()): Task[] {
   const seen = new Set<string>();
   const picked: Task[] = [];
   for (const task of sortTasksForWork(tasks.filter(isOpenTask))) {
-    if (
-      isOverdue(task, now) ||
-      isDueToday(task, now) ||
-      task.status === "doing"
-    ) {
+    if (isOverdue(task, now) || isDueToday(task, now) || task.status === "doing") {
       if (!seen.has(task.id)) {
         seen.add(task.id);
         picked.push(task);
@@ -115,7 +111,11 @@ export interface ProjectProgress {
   percent: number;
 }
 
-export function projectProgress(projectId: string, tasks: Task[], now = dayjs()): ProjectProgress {
+export function projectProgress(
+  projectId: string,
+  tasks: Task[],
+  now = dayjs()
+): ProjectProgress {
   const own = tasks.filter((t) => t.project_id === projectId);
   const done = own.filter((t) => t.status === "done").length;
   const overdue = own.filter((t) => isOverdue(t, now)).length;
@@ -213,15 +213,16 @@ export interface TodayStats {
  * 分母 = 今天仍未完成 + 今天已完成。旧任务没有 completed_at，
  * 它们的完成不会被算进今天，这是数据缺失而不是 0 —— 分母也随之少算。
  */
-export function todayStats(
-  tasks: Task[],
-  todayOpen: Task[],
-  now = dayjs()
-): TodayStats {
+export function todayStats(tasks: Task[], todayOpen: Task[], now = dayjs()): TodayStats {
   const done = tasks.filter((task) => isCompletedToday(task, now)).length;
   const open = todayOpen.length;
   const total = open + done;
-  return { open, done, total, percent: total === 0 ? 0 : Math.round((done / total) * 100) };
+  return {
+    open,
+    done,
+    total,
+    percent: total === 0 ? 0 : Math.round((done / total) * 100),
+  };
 }
 
 export interface AttentionCounts {

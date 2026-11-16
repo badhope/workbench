@@ -1,7 +1,12 @@
 import { useMemo } from "react";
 import { ArrowRight } from "lucide-react";
 import { EChart } from "../lib/echarts";
-import { chartGapColor, chartTheme, FIXED_COLORS, horizontalBarOption } from "../lib/chartTheme";
+import {
+  chartGapColor,
+  chartTheme,
+  FIXED_COLORS,
+  horizontalBarOption,
+} from "../lib/chartTheme";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { useT } from "../lib/i18n";
@@ -33,16 +38,17 @@ const STATUS_COLORS: Record<string, string> = {
  */
 export default function Review() {
   const t = useT();
-  const { data, theme, lastDataUpdatedAt, setView, setTaskProjectFilter, setTaskScope } = useStore(
-    useShallow((s) => ({
-      data: s.data,
-      theme: s.theme,
-      lastDataUpdatedAt: s.lastDataUpdatedAt,
-      setView: s.setView,
-      setTaskProjectFilter: s.setTaskProjectFilter,
-      setTaskScope: s.setTaskScope,
-    }))
-  );
+  const { data, theme, lastDataUpdatedAt, setView, setTaskProjectFilter, setTaskScope } =
+    useStore(
+      useShallow((s) => ({
+        data: s.data,
+        theme: s.theme,
+        lastDataUpdatedAt: s.lastDataUpdatedAt,
+        setView: s.setView,
+        setTaskProjectFilter: s.setTaskProjectFilter,
+        setTaskScope: s.setTaskScope,
+      }))
+    );
 
   const stats = useMemo(() => {
     const total = data.tasks.length;
@@ -83,9 +89,8 @@ export default function Review() {
             : priority === "normal"
               ? t("tasks.priorityNormal")
               : t("tasks.priorityLow"),
-        value: data.tasks.filter(
-          (task) => isOpenTask(task) && task.priority === priority
-        ).length,
+        value: data.tasks.filter((task) => isOpenTask(task) && task.priority === priority)
+          .length,
         color:
           priority === "high"
             ? FIXED_COLORS.high
@@ -244,9 +249,7 @@ export default function Review() {
                 <h2 className="text-[14px] font-semibold">
                   {t("review.projectProgress")}
                 </h2>
-                <span className="text-[10.5px] text-faint">
-                  {t("review.snapshot")}
-                </span>
+                <span className="text-[10.5px] text-faint">{t("review.snapshot")}</span>
               </div>
               {projectRows.length === 0 ? (
                 <div className="py-6 text-center text-[12px] text-faint">
@@ -300,9 +303,7 @@ export default function Review() {
             <section className="flex flex-col gap-2">
               <div className="flex items-center justify-between border-b border-line/70 pb-2">
                 <h2 className="text-[14px] font-semibold">{t("review.status")}</h2>
-                <span className="text-[10.5px] text-faint">
-                  {t("review.statusHint")}
-                </span>
+                <span className="text-[10.5px] text-faint">{t("review.statusHint")}</span>
               </div>
               {statusData.length === 0 ? (
                 <div className="py-6 text-center text-[12px] text-faint">
@@ -321,8 +322,7 @@ export default function Review() {
                           className="inline-block h-1.5 w-1.5 rounded-full"
                           style={{ background: item.color }}
                         />
-                        {item.name}{" "}
-                        <span className="num text-text">{item.value}</span>
+                        {item.name} <span className="num text-text">{item.value}</span>
                       </span>
                     ))}
                   </div>

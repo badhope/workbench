@@ -37,19 +37,27 @@ export default function App() {
   // 侧边栏折叠（桌面/平板）与抽屉（窄屏）是两套状态：
   // 折叠是用户偏好（存 store，重启后保持），抽屉是临时交互。
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { view, setView, shell, motion, motionExplicit, backgroundImage, collapsed, setCollapsed } =
-    useStore(
-      useShallow((s) => ({
-        view: s.view,
-        setView: s.setView,
-        shell: s.shell,
-        motion: s.motion,
-        motionExplicit: s.motionExplicit,
-        backgroundImage: s.backgroundImage,
-        collapsed: s.navCollapsed,
-        setCollapsed: s.setNavCollapsed,
-      }))
-    );
+  const {
+    view,
+    setView,
+    shell,
+    motion,
+    motionExplicit,
+    backgroundImage,
+    collapsed,
+    setCollapsed,
+  } = useStore(
+    useShallow((s) => ({
+      view: s.view,
+      setView: s.setView,
+      shell: s.shell,
+      motion: s.motion,
+      motionExplicit: s.motionExplicit,
+      backgroundImage: s.backgroundImage,
+      collapsed: s.navCollapsed,
+      setCollapsed: s.setNavCollapsed,
+    }))
+  );
 
   useAppRuntime();
 
@@ -59,10 +67,7 @@ export default function App() {
   useEffect(() => installGlobalDiagnostics(), []);
 
   // 工作小窗写入后通知主窗口重新读取，避免两个 WebView 各自持有旧快照。
-  useEffect(
-    () => subscribeDataChanged(() => void useStore.getState().refreshData()),
-    []
-  );
+  useEffect(() => subscribeDataChanged(() => void useStore.getState().refreshData()), []);
 
   // 让诊断记录带上当前页面，排障时能立刻知道是哪个页面炸的。
   useEffect(() => {

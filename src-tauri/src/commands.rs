@@ -265,6 +265,18 @@ pub async fn list_ai_processes() -> Result<Vec<AiProcess>, String> {
         .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
+/// 只在「首次」发现 opencode 不可用时记一条 debug。
+///
+/// 轮询型探测不能每条都打日志：AI 会话页每 3 秒问一次，未安装 opencode 的
+/// 机器会把日志刷成清一色的 WARN，真正的问题反而看不见。
+fn log_once_no_opencode(error: &str) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static WARNED: AtomicBool = AtomicBool::new(false);
+    if !WARNED.swap(true, Ordering::Relaxed) {
+        log::debug!("opencode 未运行（之后不再重复记录）: {error}");
+    }
+}
+
 /// opencode 会话列表 + 实际命中的服务端口（前端详情请求必须复用该端口）。
 #[derive(serde::Serialize, ts_rs::TS)]
 pub struct OpencodeSessionsResult {
@@ -291,7 +303,10 @@ pub async fn opencode_sessions(
                 Err(e) => last_err = e,
             }
         }
-        log::warn!("opencode 服务未检测到（默认端口 4096）: {last_err}");
+        // 「本机没装 opencode」是正常状态，不是错误：AI 会话页每 3 秒轮询一次，
+        // 记 WARN 会把这个事实刷成每 5 秒两条，把真正的故障日志淹掉
+        // （安装版实测 20 分钟就写满一屏）。只记一次 debug，错误仍原样返回给前端。
+        log_once_no_opencode(&last_err);
         Err(format!(
             "未检测到运行中的 opencode 服务（默认端口 4096）：{last_err}"
         ))
@@ -374,9 +389,7 @@ pub fn set_always_on_top(window: tauri::Window, on: bool) -> Result<(), String> 
 #[tauri::command]
 pub fn open_mini_window(app: AppHandle) -> Result<(), String> {
     if let Some(existing) = app.get_webview_window("mini") {
-        existing
-            .show()
-            .map_err(|e| format!("显示小窗失败: {e}"))?;
+        existing.show().map_err(|e| format!("显示小窗失败: {e}"))?;
         existing
             .set_focus()
             .map_err(|e| format!("聚焦小窗失败: {e}"))?;
@@ -385,22 +398,16 @@ pub fn open_mini_window(app: AppHandle) -> Result<(), String> {
     let main = app
         .get_webview_window("main")
         .ok_or_else(|| "主窗口不存在".to_string())?;
-    let mut url = main
-        .url()
-        .map_err(|e| format!("读取主窗口地址失败: {e}"))?;
+    let mut url = main.url().map_err(|e| format!("读取主窗口地址失败: {e}"))?;
     url.set_query(Some("mini=1"));
-    tauri::WebviewWindowBuilder::new(
-        &app,
-        "mini",
-        tauri::WebviewUrl::External(url),
-    )
-    .title("工作台小窗")
-    .inner_size(380.0, 580.0)
-    .min_inner_size(340.0, 480.0)
-    .resizable(true)
-    .decorations(true)
-    .build()
-    .map_err(|e| format!("打开小窗失败: {e}"))?;
+    tauri::WebviewWindowBuilder::new(&app, "mini", tauri::WebviewUrl::External(url))
+        .title("工作台小窗")
+        .inner_size(380.0, 580.0)
+        .min_inner_size(340.0, 480.0)
+        .resizable(true)
+        .decorations(true)
+        .build()
+        .map_err(|e| format!("打开小窗失败: {e}"))?;
     Ok(())
 }
 
@@ -1132,10 +1139,7 @@ fn write_backup_manifest(
     for name in files {
         let path = dir.join(name);
         let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-        entries.insert(
-            name.clone(),
-            serde_json::json!({ "size": size }),
-        );
+        entries.insert(name.clone(), serde_json::json!({ "size": size }));
     }
     let manifest = serde_json::json!({
         "schema_version": data::SCHEMA_VERSION,

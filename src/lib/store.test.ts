@@ -225,3 +225,81 @@ describe("refreshRuntime 重入", () => {
     await expect(Promise.all(calls)).resolves.toBeDefined();
   });
 });
+
+// 这些 setter 看似平凡，但每一个都带归一化或合并逻辑；漏测时最容易出的
+// 事故是「界面改了但持久化的还是旧值」，而这种问题在类型检查里看不见。
+describe("store 偏好 setter 的归一化", () => {
+  it("setWorkModes 过滤非法值并同步 workModeChosen", () => {
+    useStore.getState().setWorkModes([]);
+    expect(useStore.getState().workModes).toEqual([]);
+    expect(useStore.getState().workModeChosen).toBe(false);
+
+    useStore.getState().setWorkModes(["development"]);
+    expect(useStore.getState().workModes).toEqual(["development"]);
+    expect(useStore.getState().workModeChosen).toBe(true);
+  });
+
+  it("setWidgetSpan 只改目标组件，保留其余跨度", () => {
+    useStore.setState({ widgetSpans: { kpis: 4 } });
+    useStore.getState().setWidgetSpan("resources", 8);
+    const spans = useStore.getState().widgetSpans;
+    expect(spans.kpis).toBe(4);
+    expect(spans.resources).toBe(8);
+  });
+
+  it("resetWidgets 恢复默认顺序并清空隐藏与跨度", () => {
+    useStore.getState().setWidgetHidden(["kpis"]);
+    useStore.getState().setWidgetSpan("kpis", 12);
+    useStore.getState().resetWidgets();
+    expect(useStore.getState().widgetHidden).toEqual([]);
+    expect(useStore.getState().widgetSpans).toEqual({});
+    expect(useStore.getState().widgetOrder.length).toBeGreaterThan(0);
+  });
+
+  it("setRailSection / resetRailSections 控制分区可见性", () => {
+    useStore.getState().setRailSection("inbox", false);
+    expect(useStore.getState().railSections.inbox).toBe(false);
+    useStore.getState().resetRailSections();
+    expect(useStore.getState().railSections).toEqual({
+      projects: true,
+      inbox: true,
+      system: true,
+    });
+  });
+
+  it("setBackground 拒绝非 data URL，接受合法图片", () => {
+    useStore.getState().setBackground("https://evil.example/x.png");
+    expect(useStore.getState().backgroundImage).toBeNull();
+    useStore.getState().setBackground("data:image/png;base64,AAAA");
+    expect(useStore.getState().backgroundImage).toBe("data:image/png;base64,AAAA");
+    useStore.getState().setBackground(null);
+    expect(useStore.getState().backgroundImage).toBeNull();
+  });
+
+  it("setParticlesIntensity 把越界值收敛到合法区间", () => {
+    useStore.getState().setParticlesIntensity(-50);
+    const low = useStore.getState().particlesIntensity;
+    useStore.getState().setParticlesIntensity(9999);
+    const high = useStore.getState().particlesIntensity;
+    expect(low).toBeGreaterThanOrEqual(0);
+    expect(high).toBeLessThanOrEqual(100);
+  });
+
+  it("导航与视图 setter 写入对应字段", () => {
+    useStore.getState().setTaskView("board");
+    useStore.getState().setTaskScope("week");
+    useStore.getState().setTaskProjectFilter("p1");
+    useStore.getState().setRailCollapsed(true);
+    useStore.getState().setNavCollapsed(true);
+    useStore.getState().setProcView("tree");
+    const s = useStore.getState();
+    expect([s.taskView, s.taskScope, s.taskProjectFilter]).toEqual([
+      "board",
+      "week",
+      "p1",
+    ]);
+    expect(s.railCollapsed).toBe(true);
+    expect(s.navCollapsed).toBe(true);
+    expect(s.procView).toBe("tree");
+  });
+});

@@ -153,6 +153,7 @@ export const dict = {
     "projects.progress": "{done}/{total} タスク",
     "projects.overdueCount": "期限切れ {count} 件",
     "projects.openTasks": "タスクを見る",
-    "projects.workspaceHint": "プロジェクトをクリックすると、タスクとコンテキストを表示します。",
+    "projects.workspaceHint":
+      "プロジェクトをクリックすると、タスクとコンテキストを表示します。",
   },
 } as const;

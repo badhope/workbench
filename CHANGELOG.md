@@ -3,6 +3,49 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0] - 2026-11-16
+
+### Fixed — 安装版实测暴露的启动缺陷（P0）
+
+- **装完之后打开应用看不到主窗口**：`tauri-plugin-window-state` 默认保存
+  `StateFlags::all()`，其中包含 `VISIBLE`。用户点关闭把主窗口收进托盘时窗口是
+  隐藏的，退出后该状态被持久化，下次启动就按「隐藏」恢复 —— 桌面上只剩一个
+  托盘图标（实测还残留一个「工作台小窗」），用户会以为程序坏了。
+  现在只持久化 `SIZE | POSITION | MAXIMIZED | FULLSCREEN`，可见性由应用自己
+  决定；`setup` 里再兜底 `show() + unminimize() + set_focus()`，旧版本留下的
+  隐藏状态也不会让窗口消失。
+
+### Fixed — 日志被噪音淹没（P1）
+
+- 未安装 opencode 的机器上，AI 会话页每 3 秒轮询一次，每次都记一条
+  `WARN opencode 服务未检测到`。实测 20 分钟就写满一屏，真正的故障反而看不见。
+  「本机没装 opencode」是正常状态，改为只记一次 `debug`。
+
+### Added — 采集了却没用起来的数据
+
+- **UDP 端口**：后端一直用 `netstat -ano` / `ss -tulpn` 采集 UDP，页面却只
+  过滤 `TCP + LISTENING`，DNS 53、mDNS 5353、QUIC/HTTP3、游戏与语音服务
+  整片丢失。现在单列「UDP 绑定」统计卡与端口列表，可导出 CSV。
+
+### Added — 日常检索
+
+- **任务搜索**：任务页此前只能按范围（今天/本周/收件箱/阻塞）和项目筛选，
+  任务一多就只能翻列表。现在支持按标题、下一步、阻塞原因、标签搜索，与范围
+  和项目筛选叠加生效，带清除按钮。
+
+### Changed — 与同类工具对齐
+
+- **进程表点表头排序**：此前只能从下拉框选 CPU/内存/PID/名称。现在
+  PID、名称、CPU、内存四列表头可直接点击，带 `aria-sort` 与当前排序指示，
+  与 Windows 任务管理器 / btop / Mission Center 的操作习惯一致。
+
+### Changed — 打包
+
+- 安装包改为 **currentUser 模式**：不再需要管理员权限与 UAC 确认，装到
+  `%LOCALAPPDATA%\Workbench`，卸载走系统「应用和功能」。
+- 补齐 bundle 元数据：发布者、版权、分类（DeveloperTool）、简短/详细描述，
+  NSIS 支持 English / 简体中文 / 日本語 并显示语言选择器。
+
 ## [0.8.1] - 2026-11-14
 
 ### Fixed — 审计出的「看起来能用、实际没闭环」

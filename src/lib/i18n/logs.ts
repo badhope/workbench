@@ -8,7 +8,8 @@ export const dict = {
     "logs.refresh": "Refresh",
     "logs.clear": "Clear",
     "logs.empty": "(No logs)",
-    "logs.unavailable": "(Could not read logs — check the backend is running and can write to its data directory)",
+    "logs.unavailable":
+      "(Could not read logs — check the backend is running and can write to its data directory)",
     "logs.cleared": "(Cleared)",
     "logs.clearedToast": "Logs cleared",
     "logs.clearFailed": "Failed to clear logs",
@@ -48,7 +49,8 @@ export const dict = {
     "logs.refresh": "更新",
     "logs.clear": "クリア",
     "logs.empty": "（ログはありません）",
-    "logs.unavailable": "（ログを読み取れません — バックエンドが起動しているか、データフォルダに書き込めるか確認してください）",
+    "logs.unavailable":
+      "（ログを読み取れません — バックエンドが起動しているか、データフォルダに書き込めるか確認してください）",
     "logs.cleared": "（クリア済み）",
     "logs.clearedToast": "ログをクリアしました",
     "logs.clearFailed": "ログのクリアに失敗",

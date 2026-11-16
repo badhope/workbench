@@ -57,7 +57,9 @@ export function OnboardingOverlay() {
             <div className="mt-3">
               <WorkModeChoices value={workModes} onChange={setWorkModes} />
             </div>
-            <p className={`mt-2 text-[11px] ${workModes.length ? "text-faint" : "text-warn"}`}>
+            <p
+              className={`mt-2 text-[11px] ${workModes.length ? "text-faint" : "text-warn"}`}
+            >
               {workModes.length
                 ? t("workMode.selected", { count: workModes.length })
                 : t("workMode.required")}

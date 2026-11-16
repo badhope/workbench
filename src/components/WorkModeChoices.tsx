@@ -35,7 +35,11 @@ export function WorkModeChoices({
 }) {
   const t = useT();
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="group" aria-label={t("workMode.title")}>
+    <div
+      className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+      role="group"
+      aria-label={t("workMode.title")}
+    >
       {WORK_MODES.map((mode) => {
         const active = value.includes(mode.id);
         const Icon = ICONS[mode.id];
@@ -66,7 +70,10 @@ export function WorkModeChoices({
                   {t(mode.labelKey)}
                 </span>
                 {active && (
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" />
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
+                    aria-hidden="true"
+                  />
                 )}
               </span>
               <span className="mt-0.5 block text-[11px] leading-relaxed text-dim">

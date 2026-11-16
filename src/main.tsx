@@ -56,7 +56,5 @@ if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <ErrorBoundary>
-    {isMini ? <MiniWorkbench /> : <App />}
-  </ErrorBoundary>
+  <ErrorBoundary>{isMini ? <MiniWorkbench /> : <App />}</ErrorBoundary>
 );

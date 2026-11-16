@@ -10,12 +10,7 @@
  */
 
 export type WorkMode =
-  | "development"
-  | "project"
-  | "content"
-  | "research"
-  | "personal"
-  | "custom";
+  "development" | "project" | "content" | "research" | "personal" | "custom";
 
 export interface WorkModeDef {
   id: WorkMode;

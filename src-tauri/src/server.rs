@@ -527,19 +527,14 @@ async fn disks() -> ApiResult<Vec<crate::commands::DiskInfo>> {
 }
 
 async fn data_path(State(st): State<AppState>) -> ApiResult<String> {
-    ok(data::data_file_path(&st.root)
-        .to_string_lossy()
-        .to_string())
+    ok(data::data_file_path(&st.root).to_string_lossy().to_string())
 }
 
 /// `GET /api/logs?max_lines=N`：读后端日志尾部。
 ///
 /// 与桌面端 `read_logs` 读同一个文件（同一个数据根）。日志里可能含本机
 /// 路径，所以只在监听回环时才有意义——默认就只听 127.0.0.1。
-async fn read_logs(
-    State(st): State<AppState>,
-    Query(q): Query<LogQuery>,
-) -> ApiResult<String> {
+async fn read_logs(State(st): State<AppState>, Query(q): Query<LogQuery>) -> ApiResult<String> {
     let root = st.root.clone();
     let max = q.max_lines.unwrap_or(500).clamp(1, 5000);
     let text = tokio::task::spawn_blocking(move || {
@@ -551,10 +546,7 @@ async fn read_logs(
 }
 
 /// `DELETE /api/logs`：清空日志（与桌面端同样的二次确认由前端负责）。
-async fn clear_logs(
-    State(st): State<AppState>,
-    headers: axum::http::HeaderMap,
-) -> ApiResult<bool> {
+async fn clear_logs(State(st): State<AppState>, headers: axum::http::HeaderMap) -> ApiResult<bool> {
     require_same_origin(&headers)?;
     require_write_header(&headers)?;
     let root = st.root.clone();

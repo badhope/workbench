@@ -6,7 +6,16 @@ import { useShallow } from "zustand/react/shallow";
 import { dataFilePath, isBackend, isTauri } from "../lib/api";
 
 import { APP_VERSION, setLang, useLang, useT, type Lang } from "../lib/i18n";
-import { Badge, Btn, Card, ConfirmDialog, Field, Modal, SectionTitle, inputCls } from "../ui";
+import {
+  Badge,
+  Btn,
+  Card,
+  ConfirmDialog,
+  Field,
+  Modal,
+  SectionTitle,
+  inputCls,
+} from "../ui";
 import { AppearancePanel } from "../components/AppearancePanel";
 import { AutostartCard } from "../components/AutostartCard";
 import { BackupPanel } from "../components/BackupPanel";
@@ -123,9 +132,7 @@ function DataLocationNote({ dataPath }: { dataPath: string | null }) {
     return (
       <p className="mt-2 text-[11px] leading-relaxed text-dim">
         {t("settings.dataLocation")} {t("settings.dataDesktop")}{" "}
-        <span className="font-mono">
-          {dataPath ?? t("settings.dataPathUnknown")}
-        </span>
+        <span className="font-mono">{dataPath ?? t("settings.dataPathUnknown")}</span>
         {t("settings.dataLocalNote")}
       </p>
     );
@@ -471,7 +478,9 @@ export default function Settings() {
                   <Upload size={14} /> {t("settings.importJson")}
                 </Btn>
                 {isTauri() && (
-                  <Btn onClick={() => setConfirmReload(true)}>{reloadCopy(lang).button}</Btn>
+                  <Btn onClick={() => setConfirmReload(true)}>
+                    {reloadCopy(lang).button}
+                  </Btn>
                 )}
                 <input
                   ref={fileRef}

@@ -3,7 +3,8 @@ export const dict = {
   en: {
     "today.title": "Workbench",
     "today.subtitle": "What will you move forward today?",
-    "today.demoNotice": "Demo data only — start the desktop app or connect a backend for real data.",
+    "today.demoNotice":
+      "Demo data only — start the desktop app or connect a backend for real data.",
     "today.quickPlaceholder": "Capture something, press Enter for Inbox…",
     "today.quickProject": "Project (optional)",
     "today.inboxOption": "Inbox",
@@ -27,7 +28,8 @@ export const dict = {
     "today.newTask": "New task",
     "today.openFolder": "Open folder",
     "today.today": "Today",
-    "today.nothingToday": "Nothing scheduled today. Check the Inbox or capture something.",
+    "today.nothingToday":
+      "Nothing scheduled today. Check the Inbox or capture something.",
     "today.upcoming": "Up next",
     "today.markDone": "Mark done",
     "today.noTasks": "No tasks yet",
@@ -51,7 +53,8 @@ export const dict = {
     "today.railCollapse": "Collapse rail",
     "today.railExpand": "Show rail",
     "today.railSettings": "Rail content",
-    "today.railHint": "Choose what the right rail shows. This is remembered on this device.",
+    "today.railHint":
+      "Choose what the right rail shows. This is remembered on this device.",
     "today.railAllHidden": "All rail sections are hidden.",
     "today.railRestore": "Restore defaults",
   },
@@ -113,7 +116,8 @@ export const dict = {
   ja: {
     "today.title": "ワークベンチ",
     "today.subtitle": "今日は何を進めますか？",
-    "today.demoNotice": "現在はデモデータです。デスクトップ版またはバックエンド接続で実データを表示します。",
+    "today.demoNotice":
+      "現在はデモデータです。デスクトップ版またはバックエンド接続で実データを表示します。",
     "today.quickPlaceholder": "思いついたことを記録（Enter で受信箱へ）…",
     "today.quickProject": "プロジェクト（任意）",
     "today.inboxOption": "受信箱",

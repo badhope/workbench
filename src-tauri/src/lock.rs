@@ -153,10 +153,7 @@ pub fn acquire(root: &Path) -> Result<CrossProcessLock, String> {
     acquire_with_timeout(root, DEFAULT_TIMEOUT)
 }
 
-pub fn acquire_with_timeout(
-    root: &Path,
-    timeout: Duration,
-) -> Result<CrossProcessLock, String> {
+pub fn acquire_with_timeout(root: &Path, timeout: Duration) -> Result<CrossProcessLock, String> {
     std::fs::create_dir_all(root)
         .map_err(|e| format!("无法创建数据目录 {}: {e}", root.display()))?;
     let path = lock_path(root);
@@ -185,10 +182,7 @@ pub fn acquire_with_timeout(
 }
 
 /// 在跨进程锁内执行一段可能写盘的逻辑。
-pub fn with_lock<T>(
-    root: &Path,
-    f: impl FnOnce() -> Result<T, String>,
-) -> Result<T, String> {
+pub fn with_lock<T>(root: &Path, f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
     let _guard = acquire(root)?;
     f()
 }

@@ -19,11 +19,7 @@ export function ProgressRing({
   const offset = circumference * (1 - clamped / 100);
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg
-        viewBox="0 0 100 100"
-        className="h-full w-full -rotate-90"
-        aria-hidden="true"
-      >
+      <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90" aria-hidden="true">
         <circle
           cx="50"
           cy="50"
