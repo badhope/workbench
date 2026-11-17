@@ -305,32 +305,75 @@ pub fn builtin_rows() -> Vec<(&'static str, PricePair)> {
     v
 }
 
+/// Anthropic / OpenAI / Gemini 的官方标价，来自 `llm-prices`（每行注明价格页与核对日期）。
+/// 认得带日期后缀、`anthropic/` 前缀和 Bedrock 形式的型号名；表外型号返回 None，
+/// 交给内置快照处理。
+fn listed(model: &str) -> Option<&'static llm_prices::Price> {
+    llm_prices::lookup(model)
+        .filter(|p| matches!(p.provider, "anthropic" | "openai" | "google"))
+        .filter(|p| p.input.is_some() && p.output.is_some())
+}
+
 impl PricingTable {
-    /// 生成 UI 视图：内置型号 + 仅存在于覆盖文件里的型号，按名字排序。
+    /// 生成 UI 视图：内置型号 + 官方标价型号 + 仅存在于覆盖文件里的型号，按名字排序。
     pub fn rows(&self) -> Vec<PricingRow> {
         let builtin = builtin_table();
         let mut names: Vec<String> = builtin.prices.keys().map(|k| k.to_string()).collect();
+        // 把 llm-prices 里当前在售的三家型号也列出来，避免编辑器只看到旧快照、
+        // 实际计费却已经按新标价走。
+        for p in llm_prices::all()
+            .iter()
+            .filter(|p| matches!(p.provider, "anthropic" | "openai" | "google"))
+            .filter(|p| p.status == "listed" && p.input.is_some() && p.output.is_some())
+        {
+            names.push(p.model.to_string());
+        }
         for k in self.overrides.keys() {
-            if !builtin.prices.contains_key(k.as_str()) {
-                names.push(k.clone());
-            }
+            names.push(k.clone());
         }
         names.sort();
         names.dedup();
         names
             .into_iter()
             .map(|model| {
-                let b = builtin.prices.get(model.as_str()).copied();
-                let m = builtin.meta.get(model.as_str());
+                let list = listed(&model);
+                let b = list
+                    .map(|p| (p.input.unwrap_or(0.0), p.output.unwrap_or(0.0)))
+                    .or_else(|| builtin.prices.get(model.as_str()).copied());
+                let m = if list.is_none() {
+                    builtin.meta.get(model.as_str())
+                } else {
+                    None
+                };
                 let o = self.overrides.get(&model).copied();
                 PricingRow {
                     builtin_input: b.map(|p| p.0),
                     builtin_output: b.map(|p| p.1),
-                    builtin_currency: m.map(|x| x.currency.to_string()),
-                    builtin_original_input: m.map(|x| x.original_input),
-                    builtin_original_output: m.map(|x| x.original_output),
-                    builtin_source: m.map(|x| x.source.to_string()),
-                    builtin_as_of: m.map(|x| x.as_of.to_string()),
+                    builtin_currency: if list.is_some() {
+                        Some("USD".to_string())
+                    } else {
+                        m.map(|x| x.currency.to_string())
+                    },
+                    builtin_original_input: if let Some(p) = list {
+                        p.input
+                    } else {
+                        m.map(|x| x.original_input)
+                    },
+                    builtin_original_output: if let Some(p) = list {
+                        p.output
+                    } else {
+                        m.map(|x| x.original_output)
+                    },
+                    builtin_source: if let Some(p) = list {
+                        Some(format!("llm-prices: {}", p.source_url))
+                    } else {
+                        m.map(|x| x.source.to_string())
+                    },
+                    builtin_as_of: if let Some(p) = list {
+                        Some(p.checked.to_string())
+                    } else {
+                        m.map(|x| x.as_of.to_string())
+                    },
                     override_input: o.map(|p| p.0),
                     override_output: o.map(|p| p.1),
                     model,
@@ -378,12 +421,16 @@ impl PricingTable {
         if let Some(p) = self.overrides.get(&key) {
             return *p;
         }
+        // 2) 官方标价（llm-prices）
+        if let Some(p) = listed(&key) {
+            return (p.input.unwrap_or(0.0), p.output.unwrap_or(0.0));
+        }
         let builtin = builtin_table();
-        // 2) 内置精确
+        // 3) 内置精确
         if let Some(p) = builtin.prices.get(key.as_str()) {
             return *p;
         }
-        // 3) 前缀匹配（键已按长度降序预排，最长前缀优先）
+        // 4) 前缀匹配（键已按长度降序预排，最长前缀优先）
         for k in &builtin.prefix_keys {
             if key.starts_with(k) {
                 return builtin.prices[k];
@@ -412,8 +459,16 @@ impl PricingTable {
         let inp_cost = input_tokens as f64 / 1_000_000.0 * inp_price;
         let out_cost = output_tokens as f64 / 1_000_000.0 * out_price;
         let cache_cost = if is_anthropic {
-            cache_read_tokens as f64 / 1_000_000.0 * inp_price * 0.1
-                + cache_creation_tokens as f64 / 1_000_000.0 * inp_price * 1.25
+            // 官方缓存价优先（Opus 5.5 缓存读是 0.05x，Fable 5.1+ 是 0.025x），
+            // 用户覆盖了单价或表外型号时按 0.1x / 1.25x 估算。
+            let listed =
+                listed(model).filter(|_| !self.overrides.contains_key(&model.to_ascii_lowercase()));
+            let read = listed.and_then(|p| p.cache_read).unwrap_or(inp_price * 0.1);
+            let write = listed
+                .and_then(|p| p.cache_write("5m"))
+                .unwrap_or(inp_price * 1.25);
+            cache_read_tokens as f64 / 1_000_000.0 * read
+                + cache_creation_tokens as f64 / 1_000_000.0 * write
         } else {
             0.0
         };
@@ -429,6 +484,9 @@ impl PricingTable {
     pub fn is_priced(&self, model: &str) -> bool {
         let key = model.to_ascii_lowercase();
         if self.overrides.contains_key(&key) {
+            return true;
+        }
+        if listed(&key).is_some() {
             return true;
         }
         let builtin = builtin_table();
@@ -508,6 +566,23 @@ mod tests {
     }
 
     #[test]
+    fn current_models_use_the_official_list_price() {
+        // 以前：claude-opus-4-6 及 5.x 全系没有匹配的键，成本记为 $0；
+        // claude-opus-4-5 按 Opus 4.1 的 $15/$75 计（实际 $5/$25）。
+        let t = PricingTable::default();
+        assert_eq!(t.lookup("claude-opus-4-5"), (5.0, 25.0));
+        assert_eq!(t.lookup("claude-opus-4-6"), (5.0, 25.0));
+        assert_eq!(t.lookup("claude-opus-5-5"), (4.0, 20.0));
+        assert_eq!(t.lookup("claude-sonnet-5-5-20990101"), (2.0, 10.0));
+        assert_eq!(t.lookup("claude-haiku-5-5"), (0.1, 0.5));
+        assert_eq!(t.lookup("gpt-5.5"), (5.0, 30.0));
+        assert!(t.is_priced("claude-opus-4-7"));
+        // Opus 5.5 缓存读 $0.20（0.05x）、5 分钟缓存写 $5
+        let (inp, _, _) = t.calc_cost("claude-opus-5-5", 0, 0, 1_000_000, 1_000_000);
+        assert!((inp - 5.2).abs() < 1e-9, "inp got {}", inp);
+    }
+
+    #[test]
     fn non_anthropic_cache_not_double_counted() {
         // gpt-4o：没有独立 cache 字段，传入的 cache 量不加价（已含在 input 语义外，按 0 处理）
         let t = PricingTable::default();
@@ -565,6 +640,21 @@ mod tests {
         assert_eq!(gpt.builtin_currency.as_deref(), Some("USD"));
         assert_eq!(gpt.builtin_input, Some(2.5));
         assert_eq!(gpt.builtin_original_input, Some(2.5));
+
+        // UI 不能继续展示旧快照的 $15/$75，否则会和实际计费对不上。
+        let opus = rows.iter().find(|r| r.model == "claude-opus-4-5").unwrap();
+        assert_eq!(opus.builtin_input, Some(5.0));
+        assert_eq!(opus.builtin_output, Some(25.0));
+        assert!(opus
+            .builtin_source
+            .as_deref()
+            .unwrap_or_default()
+            .contains("llm-prices"));
+
+        // 新模型也要能在编辑器里看到，而不是只能靠手填覆盖。
+        let opus47 = rows.iter().find(|r| r.model == "claude-opus-4-7").unwrap();
+        assert_eq!(opus47.builtin_input, Some(5.0));
+        assert_eq!(opus47.builtin_output, Some(25.0));
     }
 
     #[test]
