@@ -24,6 +24,8 @@ reqwest = { version = "0.13", features = ["blocking", "json"] }
 log = "0.4"
 fern = "0.7"
 chrono = "0.4"
+# Anthropic / OpenAI / Gemini 官方标价（带来源与核对日期，无依赖）
+llm-prices = "1.3"
 ts-rs = { version = "12.0.1", features = ["serde-compat"] }
 axum = "0.8"
 tower-http = { version = "0.6", features = ["fs", "cors", "trace"] }

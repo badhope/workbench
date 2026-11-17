@@ -151,6 +151,15 @@ pub fn builtin_rows() -> Vec<(&'static str, PricePair)> {
     v
 }
 
+/// Anthropic / OpenAI / Gemini 的官方标价，来自 `llm-prices`（每行注明价格页与核对日期）。
+/// 认得带日期后缀、`anthropic/` 前缀和 Bedrock 形式的型号名；表外型号返回 None，
+/// 交给内置快照处理。
+fn listed(model: &str) -> Option<&'static llm_prices::Price> {
+    llm_prices::lookup(model)
+        .filter(|p| matches!(p.provider, "anthropic" | "openai" | "google"))
+        .filter(|p| p.input.is_some() && p.output.is_some())
+}
+
 impl PricingTable {
     /// 生成 UI 视图：内置型号 + 仅存在于覆盖文件里的型号，按名字排序。
     pub fn rows(&self) -> Vec<PricingRow> {
@@ -218,12 +227,16 @@ impl PricingTable {
         if let Some(p) = self.overrides.get(&key) {
             return *p;
         }
+        // 2) 官方标价（llm-prices）
+        if let Some(p) = listed(&key) {
+            return (p.input.unwrap_or(0.0), p.output.unwrap_or(0.0));
+        }
         let builtin = builtin_table();
-        // 2) 内置精确
+        // 3) 内置精确
         if let Some(p) = builtin.prices.get(key.as_str()) {
             return *p;
         }
-        // 3) 前缀匹配（键已按长度降序预排，最长前缀优先）
+        // 4) 前缀匹配（键已按长度降序预排，最长前缀优先）
         for k in &builtin.prefix_keys {
             if key.starts_with(k) {
                 return builtin.prices[k];
@@ -252,8 +265,16 @@ impl PricingTable {
         let inp_cost = input_tokens as f64 / 1_000_000.0 * inp_price;
         let out_cost = output_tokens as f64 / 1_000_000.0 * out_price;
         let cache_cost = if is_anthropic {
-            cache_read_tokens as f64 / 1_000_000.0 * inp_price * 0.1
-                + cache_creation_tokens as f64 / 1_000_000.0 * inp_price * 1.25
+            // 官方缓存价优先（Opus 5.5 缓存读是 0.05x，Fable 5.1+ 是 0.025x），
+            // 用户覆盖了单价或表外型号时按 0.1x / 1.25x 估算。
+            let listed =
+                listed(model).filter(|_| !self.overrides.contains_key(&model.to_ascii_lowercase()));
+            let read = listed.and_then(|p| p.cache_read).unwrap_or(inp_price * 0.1);
+            let write = listed
+                .and_then(|p| p.cache_write("5m"))
+                .unwrap_or(inp_price * 1.25);
+            cache_read_tokens as f64 / 1_000_000.0 * read
+                + cache_creation_tokens as f64 / 1_000_000.0 * write
         } else {
             0.0
         };
@@ -269,6 +290,9 @@ impl PricingTable {
     pub fn is_priced(&self, model: &str) -> bool {
         let key = model.to_ascii_lowercase();
         if self.overrides.contains_key(&key) {
+            return true;
+        }
+        if listed(&key).is_some() {
             return true;
         }
         let builtin = builtin_table();
@@ -345,6 +369,23 @@ mod tests {
         // out_cost: 0.2 * 15 = 3.0
         assert!((out - 3.0).abs() < 0.01);
         assert!((total - 6.2175).abs() < 0.01, "total got {}", total);
+    }
+
+    #[test]
+    fn current_models_use_the_official_list_price() {
+        // 以前：claude-opus-4-6 及 5.x 全系没有匹配的键，成本记为 $0；
+        // claude-opus-4-5 按 Opus 4.1 的 $15/$75 计（实际 $5/$25）。
+        let t = PricingTable::default();
+        assert_eq!(t.lookup("claude-opus-4-5"), (5.0, 25.0));
+        assert_eq!(t.lookup("claude-opus-4-6"), (5.0, 25.0));
+        assert_eq!(t.lookup("claude-opus-5-5"), (4.0, 20.0));
+        assert_eq!(t.lookup("claude-sonnet-5-5-20990101"), (2.0, 10.0));
+        assert_eq!(t.lookup("claude-haiku-5-5"), (0.1, 0.5));
+        assert_eq!(t.lookup("gpt-5.5"), (5.0, 30.0));
+        assert!(t.is_priced("claude-opus-4-7"));
+        // Opus 5.5 缓存读 $0.20（0.05x）、5 分钟缓存写 $5
+        let (inp, _, _) = t.calc_cost("claude-opus-5-5", 0, 0, 1_000_000, 1_000_000);
+        assert!((inp - 5.2).abs() < 1e-9, "inp got {}", inp);
     }
 
     #[test]
