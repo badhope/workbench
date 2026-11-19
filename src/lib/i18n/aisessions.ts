@@ -22,6 +22,7 @@ export const dict = {
     "ai.scanning": "Scanning…",
     "ai.scanHint":
       "Scanning every session file can take a few seconds on large histories.",
+    "ai.scanProgress": "Scanning {done}/{total} files…",
     "ai.scannedSummary": "Scanned {files} records in {seconds}s",
     "ai.clear": "Clear",
     "ai.clearCostsTitle": "Clear cost data",
@@ -110,6 +111,7 @@ export const dict = {
     "ai.scanCosts": "扫描成本",
     "ai.scanning": "扫描中…",
     "ai.scanHint": "会话记录较多时，全量扫描需要几秒钟。",
+    "ai.scanProgress": "已扫描 {done}/{total} 个文件…",
     "ai.scannedSummary": "已扫描 {files} 条记录，用时 {seconds} 秒",
     "ai.clear": "清空",
     "ai.clearCostsTitle": "清空成本数据",
@@ -198,6 +200,7 @@ export const dict = {
     "ai.scanCosts": "コストをスキャン",
     "ai.scanning": "スキャン中…",
     "ai.scanHint": "履歴が多い場合、全体スキャンには数秒かかります。",
+    "ai.scanProgress": "スキャン中 {done}/{total} ファイル…",
     "ai.scannedSummary": "{files} 件をスキャンしました（{seconds} 秒）",
     "ai.clear": "クリア",
     "ai.clearCostsTitle": "コストデータを消去",

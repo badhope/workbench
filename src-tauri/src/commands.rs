@@ -1,6 +1,6 @@
 //! IPC 命令层：前端 invoke 的唯一入口。阻塞工作全部丢进 spawn_blocking。
 
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::ai::{self, AiProcess, OpencodeSession, SessionDetail, SessionFilePreview};
 use crate::cost_store::{
@@ -666,6 +666,13 @@ fn read_pricing_overrides(app: &AppHandle) -> Result<cost_store::OverrideRead, S
     read_pricing_overrides_at(&cost_store::cost_data_path_overrides(&data_root(app)?))
 }
 
+/// 扫描进度：按文件计数，供重度历史用户在长任务里判断是否卡死。
+#[derive(Clone, Serialize)]
+struct CostScanProgress {
+    done: usize,
+    total: usize,
+}
+
 /// 扫描 session JSONL 文件 → 提取 usage → 计算成本 → 写入 SQLite 成本库
 /// 注意：成本计量必须全量扫描（不受 UI 预览的 10 条上限影响）。
 #[tauri::command(async)]
@@ -703,7 +710,7 @@ pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String
         // 按失败上报（保留旧账），不静默截断成"扫描成功"。
         const SCAN_TOTAL_BYTES: u64 = 256 * 1024 * 1024;
         let mut bytes_budget = session_meter::ScanReadBudget::new(SCAN_TOTAL_BYTES);
-        for entry in &entries {
+        for (idx, entry) in entries.iter().enumerate() {
             match session_meter::scan_complete_sessions_with_budget(
                 std::slice::from_ref(entry),
                 &pricing_table,
@@ -715,6 +722,13 @@ pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String
                 }
                 Err(err) => errors.push(err),
             }
+            let _ = app.emit(
+                "cost-scan-progress",
+                CostScanProgress {
+                    done: idx + 1,
+                    total: entries.len(),
+                },
+            );
         }
         let total_scanned = records.len();
         let outcome = {

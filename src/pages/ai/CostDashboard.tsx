@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Coins,
@@ -14,7 +14,7 @@ import { chartGapColor, seriesColors } from "../../lib/chartTheme";
 import { useStore } from "../../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { useT } from "../../lib/i18n";
-import { getCostExportRows } from "../../lib/api";
+import { getCostExportRows, isTauri, listenCostScanProgress } from "../../lib/api";
 import { buildCostCsv, buildCostJson, costExportFilename } from "../../lib/costExport";
 import { downloadText } from "../../lib/export";
 import {
@@ -30,6 +30,7 @@ import { formatTokens, formatUsd } from "../../lib/util";
 import type { EChartsCoreOption } from "echarts/core";
 import type {
   CostOverview,
+  CostScanProgress,
   CostTrendRow,
   ModelBreakdownRow,
   ProjectBreakdownRow,
@@ -51,6 +52,7 @@ export function CostDashboard() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [exporting, setExporting] = useState(false);
   const pricing = usePricingSummary();
+  const [scanProgress, setScanProgress] = useState<CostScanProgress | null>(null);
 
   const {
     theme,
@@ -81,6 +83,15 @@ export function CostDashboard() {
       setToast: s.setToast,
     }))
   );
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let stop: (() => void) | undefined;
+    void listenCostScanProgress(setScanProgress).then((fn) => {
+      stop = fn;
+    });
+    return () => stop?.();
+  }, []);
 
   const colors = useMemo(() => seriesColors(theme), [theme]);
 
@@ -179,9 +190,13 @@ export function CostDashboard() {
         overview={costOverview}
         totalTokens={totalTokensDisplay}
         loading={costLoading}
+        progress={scanProgress}
         overrideCount={pricing.count}
         exporting={exporting}
-        onScan={() => void scanCosts()}
+        onScan={() => {
+          setScanProgress(null);
+          void scanCosts();
+        }}
         onClear={() => setConfirmClear(true)}
         onExport={(fmt) => void exportLedger(fmt)}
       />
@@ -307,6 +322,7 @@ function CostHeader({
   overview,
   totalTokens,
   loading,
+  progress,
   overrideCount,
   exporting,
   onScan,
@@ -316,6 +332,7 @@ function CostHeader({
   overview: CostOverview | null;
   totalTokens: string;
   loading: boolean;
+  progress: CostScanProgress | null;
   overrideCount: number | null;
   exporting: boolean;
   onScan: () => void;
@@ -334,6 +351,7 @@ function CostHeader({
       </div>
       <CostActions
         loading={loading}
+        progress={progress}
         exporting={exporting}
         overrideCount={overrideCount}
         onScan={onScan}
@@ -394,6 +412,7 @@ function costStats(
 /** 扫描 / 清空 / 导出 / 定价覆盖提示。 */
 function CostActions({
   loading,
+  progress,
   exporting,
   overrideCount,
   onScan,
@@ -401,6 +420,7 @@ function CostActions({
   onExport,
 }: {
   loading: boolean;
+  progress: CostScanProgress | null;
   exporting: boolean;
   overrideCount: number | null;
   onScan: () => void;
@@ -417,7 +437,9 @@ function CostActions({
       {/* 全量扫描是长任务：明确告诉用户可能要等几秒，避免误以为界面卡死 */}
       {loading && (
         <span className="max-w-[180px] text-[11px] leading-snug text-dim">
-          {t("ai.scanHint")}
+          {progress
+            ? t("ai.scanProgress", { done: progress.done, total: progress.total })
+            : t("ai.scanHint")}
         </span>
       )}
       <Btn onClick={() => onExport("csv")} disabled={exporting} title={t("ai.exportCsv")}>

@@ -47,3 +47,9 @@ export type { CostExportRow } from "./generated/CostExportRow";
 
 /** 侧边栏视图 key：由页面注册表派生，新增页面只需改 navigation。 */
 export type { ViewKey } from "./navigation";
+
+/** 成本扫描进度是事件载荷，不跨 IPC 请求边界，因此不走 ts-rs 生成。 */
+export interface CostScanProgress {
+  done: number;
+  total: number;
+}

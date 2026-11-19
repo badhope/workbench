@@ -81,6 +81,7 @@ src/
 | `existing_keys` 假增量扫描接口                                            | 删除；成本扫描明确为全量读，避免 mtime/size 误跳过               |
 | 每 3 秒枚举磁盘挂载点                                                     | `disk_info_blocking` 加 30 秒缓存                                |
 | 原子写只 fsync 文件                                                       | rename 后 Unix 下再 fsync 父目录                                 |
+| 成本扫描无进度                                                            | `cost-scan-progress` 事件按文件上报，成本页显示 done/total       |
 
 新增同类能力时，先查上表；能进已有模块就不开新文件。
 
@@ -127,6 +128,6 @@ npm run dup                        # jscpd 阈值 3%
 - `src/pages/Today.tsx` 1070 行 → 页面壳 383 行 + `today/` 下 7 个内聚组件，最大 `Rails.tsx` 200 行。
 - `src/pages/overview/widgets.tsx` 905 行 → `overview/widgets/` 下 `charts/lists/orbit/WidgetFrame`，最大 380 行。
 - `src/lib/store.runtime.test.ts` 836 行 → `store.runtime.test.ts` 342 行 + `store.cost.test.ts` 349 行 + `store.persistence.test.ts` 93 行；API mock 与重置收敛到 `storeTestHarness.ts`。
-- P2 收口：删除旧 `load_data`/`loadData` 与假增量接口；磁盘枚举 30 秒缓存；Unix 原子写补父目录 fsync；定价搜索/单元格补 `aria-label`。
+- P2 收口：删除旧 `load_data`/`loadData` 与假增量接口；磁盘枚举 30 秒缓存；Unix 原子写补父目录 fsync；成本扫描按文件发 `cost-scan-progress`；定价搜索/单元格补 `aria-label`。
 
 拆分只搬代码与收口状态边界，不改外部行为：拆后全量 **58 文件 / 613 项**仍全绿。新增模块若超过 800 行，先按职责拆，不要靠调高告警阈值。

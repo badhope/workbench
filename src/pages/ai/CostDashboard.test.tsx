@@ -4,8 +4,18 @@ import userEvent from "@testing-library/user-event";
 import { CostDashboard } from "./CostDashboard";
 import { useStore } from "../../lib/store";
 import { setLang } from "../../lib/i18n";
-import { getPricing, savePricing, scanSessionCosts } from "../../lib/api";
-import type { CostOverview, PricingRow, PricingView } from "../../types";
+import {
+  getPricing,
+  listenCostScanProgress,
+  savePricing,
+  scanSessionCosts,
+} from "../../lib/api";
+import type {
+  CostOverview,
+  CostScanProgress,
+  PricingRow,
+  PricingView,
+} from "../../types";
 
 vi.mock("../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/api")>()),
@@ -14,6 +24,7 @@ vi.mock("../../lib/api", async (importOriginal) => ({
   getPricing: vi.fn(),
   savePricing: vi.fn(),
   scanSessionCosts: vi.fn(),
+  listenCostScanProgress: vi.fn().mockResolvedValue(() => {}),
 }));
 
 vi.mock("../../lib/echarts", () => ({ EChart: () => null }));
@@ -79,6 +90,7 @@ async function editAndSavePrice() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(listenCostScanProgress).mockResolvedValue(() => {});
   setLang("zh");
   useStore.setState({
     costOverview: null,
@@ -152,6 +164,19 @@ describe("保存价格后重算账单", () => {
     });
     await waitFor(() => expect(screen.getAllByText("$12.34").length).toBeGreaterThan(0));
     expect(scanSessionCosts).toHaveBeenCalledTimes(2);
+  });
+
+  it("扫描时显示真实文件进度", async () => {
+    useStore.setState({ costOverview: overview(1), costLoading: true });
+    let emit!: (p: CostScanProgress) => void;
+    vi.mocked(listenCostScanProgress).mockImplementation(async (cb) => {
+      emit = cb;
+      return () => {};
+    });
+    render(<CostDashboard />);
+    await waitFor(() => expect(emit).toBeTypeOf("function"));
+    act(() => emit({ done: 2, total: 5 }));
+    expect(await screen.findByText("已扫描 2/5 个文件…")).toBeInTheDocument();
   });
 
   it("保存失败时展示错误且不触发扫描、不刷新角标", async () => {

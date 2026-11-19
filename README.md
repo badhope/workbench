@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/badge/version-0.9.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.md#system-requirements)
-[![Tests](https://img.shields.io/badge/tests-613%20unit%20%2B%20188%20backend%20%2B%2030%20e2e-8b5cf6)](#quality-gates)
+[![Tests](https://img.shields.io/badge/tests-614%20unit%20%2B%20188%20backend%20%2B%2030%20e2e-8b5cf6)](#quality-gates)
 
 ![Workbench](docs/screenshots/12-brand-hero.png)
 
@@ -90,7 +90,7 @@ Every claim in this README is verified by a command. The same steps run locally
 | `npm run version:check`                 | the four version files drifting apart                                   |
 | `npx tsc --noEmit`                      | type errors, including the generated IPC contract                       |
 | `npm run lint` · `npm run format:check` | zero-warning ESLint, Prettier                                           |
-| `npm test`                              | **613** frontend tests with an enforced threshold                       |
+| `npm test`                              | **614** frontend tests with an enforced threshold                       |
 | `cargo test --lib`                      | **188** backend tests, plus the ts-rs binding export                    |
 | `npm run test:e2e`                      | **30** Playwright cases: navigation, WCAG AA contrast, visual baselines |
 | `cargo clippy -- -D warnings`           | Rust lints, zero tolerated                                              |

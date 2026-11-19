@@ -21,6 +21,7 @@ import type {
   PricingView,
   RestoreResult,
   ProcInfo,
+  CostScanProgress,
   ScanCostResult,
   SessionDetail,
   SessionFilePreview,
@@ -124,7 +125,8 @@ export async function opencodeSessionDetail(
   port: number,
   sessionId: string
 ): Promise<SessionDetail> {
-  if (isTauri()) return invoke<SessionDetail>("opencode_session_detail", { port, sessionId });
+  if (isTauri())
+    return invoke<SessionDetail>("opencode_session_detail", { port, sessionId });
   return httpJson<SessionDetail>(
     `/api/sessions/opencode/${encodeURIComponent(sessionId)}?port=${port}`
   );
@@ -277,6 +279,17 @@ export async function clearLogs(): Promise<void> {
 // ── 成本计量 ──────────────────────────────────────────────
 
 /** 扫描 session 文件 → 提取 usage → 计算成本 → 持久化 */
+/** 订阅成本扫描进度；Web 端无事件通道，返回空取消函数。 */
+export async function listenCostScanProgress(
+  onProgress: (p: CostScanProgress) => void
+): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  const { listen } = await import("@tauri-apps/api/event");
+  return listen<CostScanProgress>("cost-scan-progress", (event) =>
+    onProgress(event.payload)
+  );
+}
+
 export async function scanSessionCosts(): Promise<ScanCostResult> {
   if (isTauri()) return invoke<ScanCostResult>("scan_session_costs");
   return httpJson<ScanCostResult>("/api/cost/scan", {
