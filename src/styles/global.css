@@ -419,6 +419,21 @@ input[type="checkbox"] {
   }
 }
 
+/* 端口状态变化：只闪一次背景，不改变布局；关闭动效时直接跳过。 */
+@keyframes port-state-flash {
+  0% {
+    background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent) 55%, var(--color-line));
+  }
+  100% {
+    background: transparent;
+    border-color: var(--color-line);
+  }
+}
+.port-state-change {
+  animation: port-state-flash 1.6s ease-out;
+}
+
 /* ── 实时可视化带：折线扫描、数字追赶、卡片悬浮 ──────────────── */
 .progress-ring-value {
   transition: stroke-dashoffset 0.72s cubic-bezier(0.16, 1, 0.3, 1);
@@ -584,6 +599,7 @@ input[type="checkbox"] {
 [data-motion="off"] .live-card,
 [data-motion="off"] .live-scan,
 [data-motion="off"] .progress-ring-value,
+[data-motion="off"] .port-state-change,
 /* Tailwind 内置的 animate-spin / animate-pulse 也在动效管辖范围内 */
 [data-motion="off"] .animate-pulse,
 [data-motion="off"] .animate-spin {

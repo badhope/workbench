@@ -10,7 +10,12 @@
 import { useCallback, useEffect, useRef } from "react";
 import * as echarts from "echarts/core";
 import { PieChart, BarChart, LineChart } from "echarts/charts";
-import { GridComponent, TooltipComponent, LegendComponent } from "echarts/components";
+import {
+  GridComponent,
+  TooltipComponent,
+  LegendComponent,
+  MarkLineComponent,
+} from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import type { EChartsCoreOption as EChartsOption, EChartsType } from "echarts/core";
 import { DARK, LIGHT, chartTheme, type ChartTheme } from "./chartTheme";
@@ -23,6 +28,7 @@ echarts.use([
   GridComponent,
   TooltipComponent,
   LegendComponent,
+  MarkLineComponent,
   CanvasRenderer,
 ]);
 

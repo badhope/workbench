@@ -74,4 +74,21 @@ describe("costTrendOption", () => {
     ]);
     expect(html).toContain("0.123");
   });
+
+  it("传入预算线时生成两条阈值标记，且不改动原折线数据", () => {
+    const opt = costTrendOption(
+      [row("2026-11-01", 2.5)],
+      ["#123456", "#654321", "#abcdef", "#fedcba", "#ff6b6b"],
+      labels,
+      [
+        { value: 5, label: "Daily budget $5.00", color: "#fedcba" },
+        { value: 4, label: "Alert 80%", color: "#ff6b6b" },
+      ]
+    );
+    const series = (
+      opt.series as { data: number[]; markLine?: { data: { yAxis: number }[] } }[]
+    )[0];
+    expect(series.data).toEqual([2.5]);
+    expect(series.markLine?.data.map((line) => line.yAxis)).toEqual([5, 4]);
+  });
 });

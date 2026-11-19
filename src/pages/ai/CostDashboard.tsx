@@ -36,7 +36,7 @@ import type {
   ProjectBreakdownRow,
 } from "../../types";
 import { isPieWorthRendering } from "../../lib/aggregate";
-import { costTrendOption, modelBreakdownOption } from "./costCharts";
+import { costTrendOption, modelBreakdownOption, type BudgetLine } from "./costCharts";
 import { PricingEditor } from "./PricingEditor";
 import { usePricingSummary } from "./usePricingSummary";
 
@@ -129,15 +129,45 @@ export function CostDashboard() {
     };
   }, [costOverview]);
 
+  const budgetLines = useMemo<BudgetLine[]>(() => {
+    if (!costOverview || costOverview.daily_budget <= 0) return [];
+    const lines: BudgetLine[] = [
+      {
+        value: costOverview.daily_budget,
+        label: t("ai.dailyBudgetLine", {
+          amount: formatUsd(costOverview.daily_budget),
+        }),
+        color: colors[3] ?? colors[0],
+        labelPosition: "insideEndTop",
+      },
+    ];
+    if (costOverview.alert_threshold_pct > 0) {
+      lines.push({
+        value: (costOverview.daily_budget * costOverview.alert_threshold_pct) / 100,
+        label: t("ai.alertThresholdLine", {
+          pct: Math.round(costOverview.alert_threshold_pct),
+        }),
+        color: colors[4] ?? colors[0],
+        labelPosition: "insideStartTop",
+      });
+    }
+    return lines;
+  }, [costOverview, colors, t]);
+
   const costTrendChart = useMemo(
     () =>
       mergedTrend.length
-        ? costTrendOption(mergedTrend, colors, {
-            legend: t("ai.costLegend"),
-            tooltip: (value) => t("ai.costTrendTooltip", { value }),
-          })
+        ? costTrendOption(
+            mergedTrend,
+            colors,
+            {
+              legend: t("ai.costLegend"),
+              tooltip: (value) => t("ai.costTrendTooltip", { value }),
+            },
+            budgetLines
+          )
         : null,
-    [mergedTrend, t, colors]
+    [mergedTrend, t, colors, budgetLines]
   );
 
   /** 台账导出：现取现导，不常驻内存。失败落 toast 而不是静默。 */

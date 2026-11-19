@@ -319,6 +319,22 @@ export const demoPorts: PortEntry[] = [
     state: "LISTENING",
     pid: 2345,
   },
+  {
+    protocol: "TCP",
+    local_addr: "127.0.0.1",
+    local_port: 5173,
+    remote_addr: "127.0.0.1",
+    state: "ESTABLISHED",
+    pid: 1234,
+  },
+  {
+    protocol: "TCP",
+    local_addr: "127.0.0.1",
+    local_port: 8000,
+    remote_addr: "192.168.1.20",
+    state: "ESTABLISHED",
+    pid: 4567,
+  },
 ];
 
 export const demoDevs: DevServer[] = [

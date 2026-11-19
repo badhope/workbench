@@ -61,6 +61,18 @@ export default function Servers() {
     [ports]
   );
 
+  /** TCP 已建立连接：此前只展示 LISTENING，看不到对端地址与活动连接。 */
+  const connections = useMemo<PortEntry[]>(
+    () =>
+      ports
+        .filter((p) => p.protocol === "TCP" && p.state === "ESTABLISHED")
+        .sort(
+          (a, b) =>
+            a.local_port - b.local_port || a.remote_addr.localeCompare(b.remote_addr)
+        ),
+    [ports]
+  );
+
   /**
    * UDP 端口单列一组。
    *
@@ -199,6 +211,19 @@ export default function Servers() {
         onShowProcess={showProcess}
         onOpenTarget={(url) => void openTarget(url)}
       />
+      {connections.length > 0 && (
+        <PortsCard
+          title={t("servers.establishedConnections", { count: connections.length })}
+          empty={t("servers.noEstablishedConnections")}
+          ports={connections}
+          csvName="tcp-connections"
+          procByPid={procByPid}
+          tone="ok"
+          showPeer
+          onShowProcess={showProcess}
+          onOpenTarget={(url) => void openTarget(url)}
+        />
+      )}
       <PortsCard
         title={t("servers.allUdpPorts", { count: udpPorts.length })}
         empty={t("servers.noUdpPorts")}

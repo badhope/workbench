@@ -4,7 +4,7 @@ Workbench ships in small, verifiable increments. Every entry below states what
 is done, what is next, and what is explicitly **not** planned — a roadmap that
 only lists ambitions is a wish list, not a plan.
 
-Current version: **0.9.5** · Status legend: ✅ shipped · 🚧 in progress · ⬜ planned
+Current version: **0.9.6** · Status legend: ✅ shipped · 🚧 in progress · ⬜ planned
 
 ## 0.4.0 — Integrity of the numbers (shipped 2026-11-02)
 
@@ -54,6 +54,14 @@ Current version: **0.9.5** · Status legend: ✅ shipped · 🚧 in progress · 
 | Controlled writes: create/update task, append note | ✅ | `services/ai.rs`; 3 harness tests incl. traversal + symlink escape |
 | Writes off by default, audited, undoable | ✅ | `ai.json` / `ai_actions.json`; Settings AI card; `AiAccessCard.test.tsx` |
 
+## 0.9.6 — Next pass: ports, budgets, a11y (shipped 2026-11-20)
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| Port table: UDP + ESTABLISHED + remote address, state-change highlight | ✅ | `PortGrid.tsx` remote/state rows + `port-state-flash`; `Servers.tsx` connection card |
+| Budget threshold lines on the cost trend | ✅ | `costCharts.ts` `BudgetLine`, `MarkLineComponent` registered in `echartsImpl.tsx` |
+| Accessibility: `aria-sort` on sortable headers, `scope` on cells | ✅ | `ProcessTable.tsx` all `th` have `scope="col"`; sortable headers expose `aria-sort` |
+
 ## 0.9.4–0.9.5 — Visual coverage (shipped 2026-11-20)
 
 | Item | Status | Evidence |
@@ -77,10 +85,7 @@ Current version: **0.9.5** · Status legend: ✅ shipped · 🚧 in progress · 
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Port table: UDP + ESTABLISHED + remote address, state-change highlight | ⬜ | Research: TCPView / PortsMonitor treat state deltas as the actual signal |
 | Column show/hide/reorder, persisted | ⬜ | Docker Desktop and Mission Center both treat this as baseline |
-| Budget threshold lines on the trend chart | ⬜ | Glances' three-level thresholds are more readable than a single alert |
-| Accessibility: `aria-sort` on sortable headers, `scope` on cells | ⬜ | Currently zero `aria-sort` in the process table |
 | `Intl.PluralRules` for English, locale-correct dates and byte units | ⬜ | Dictionary has no plural keys today |
 
 ## Not planned

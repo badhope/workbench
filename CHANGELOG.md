@@ -3,6 +3,19 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.6] - 2026-11-20
+
+### Added — 端口连接与预算线
+
+- **TCP 已建立连接**：端口页从只展示 LISTENING 扩展到单独的 ESTABLISHED
+  分组，显示远端地址与状态；同一本地端口的多条连接不再互相覆盖。CSV
+  增加 remote_address / state 两列。
+- **状态变化高亮**：端口刷新时若同一协议+本地地址+端口的连接状态变化，
+  该磁贴短时高亮；动效关闭时不闪。
+- **预算阈值线**：成本趋势图在设置日预算后显示日预算虚线与告警阈值虚线，
+  标签左右错开避免重叠；补齐 ECharts 的 `MarkLineComponent` 按需注册。
+- **无障碍**：进程表所有表头补 `scope="col"`，可排序表头继续带 `aria-sort`。
+
 ## [0.9.5] - 2026-11-20
 
 ### Added — 全页面可视化覆盖

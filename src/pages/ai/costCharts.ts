@@ -8,10 +8,19 @@ import type { CostTrendRow, ModelBreakdownRow } from "../../types";
  * 的圈复杂度冲到 32（红线 10），也让「tooltip 转义」「扇区缝隙取面板色」
  * 这些安全/视觉细节只能靠人工核对。纯函数可以单测。
  */
+export interface BudgetLine {
+  value: number;
+  label: string;
+  color: string;
+  /** 标签位置；两条线相距很近时错开左右端，避免文字叠在一起。 */
+  labelPosition?: "insideEndTop" | "insideStartTop";
+}
+
 export function costTrendOption(
   rows: CostTrendRow[],
   colors: string[],
-  labels: { legend: string; tooltip: (value: string) => string }
+  labels: { legend: string; tooltip: (value: string) => string },
+  budgetLines: BudgetLine[] = []
 ) {
   // 后端契约：日粒度 YYYY-MM-DD，更早的数据按月聚合成 YYYY-MM。
   //
@@ -82,6 +91,27 @@ export function costTrendOption(
         itemStyle: { color: colors[0] },
         symbol: "circle",
         symbolSize: 5,
+        // 预算与阈值线：只在设置预算后出现；虚线、静默，不改变 tooltip 交互。
+        markLine: budgetLines.length
+          ? {
+              silent: true,
+              symbol: "none",
+              label: {
+                show: true,
+                position: "insideEndTop",
+                fontSize: 9,
+              },
+              data: budgetLines.map((line) => ({
+                yAxis: line.value,
+                label: {
+                  formatter: line.label,
+                  color: line.color,
+                  position: line.labelPosition ?? "insideEndTop",
+                },
+                lineStyle: { color: line.color, type: "dashed", width: 1 },
+              })),
+            }
+          : undefined,
       },
     ],
   };

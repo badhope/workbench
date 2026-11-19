@@ -16,6 +16,7 @@ export function PortsCard({
   csvName,
   procByPid,
   tone,
+  showPeer = false,
   onShowProcess,
   onOpenTarget,
 }: {
@@ -24,18 +25,21 @@ export function PortsCard({
   ports: PortEntry[];
   csvName: string;
   procByPid: Map<number, string>;
-  tone: "accent" | "warn";
+  tone: "accent" | "warn" | "ok";
+  showPeer?: boolean;
   onShowProcess: (pid: number) => void;
   onOpenTarget: (url: string) => void;
 }) {
   const t = useT();
   const exportRows = () => {
     downloadCsv(csvName, [
-      ["protocol", "local_address", "port", "pid", "process"],
+      ["protocol", "local_address", "port", "remote_address", "state", "pid", "process"],
       ...ports.map((p) => [
         p.protocol,
         p.local_addr,
         p.local_port,
+        p.remote_addr,
+        p.state,
         p.pid,
         procByPid.get(p.pid) ?? "",
       ]),
@@ -62,6 +66,7 @@ export function PortsCard({
           ports={ports}
           procByPid={procByPid}
           tone={tone}
+          showPeer={showPeer}
           onShowProcess={onShowProcess}
           onOpenTarget={onOpenTarget}
         />

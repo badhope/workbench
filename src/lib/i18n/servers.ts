@@ -38,6 +38,8 @@ export const dict = {
     "servers.portRange.wellKnown": "Well-known ports 1-1023",
     "servers.portRange.registered": "Registered ports 1024-49151",
     "servers.portRange.dynamic": "Dynamic ports 49152+",
+    "servers.establishedConnections": "{count} TCP connections",
+    "servers.noEstablishedConnections": "No established TCP connections",
   },
   zh: {
     "servers.emptyAction": "立即刷新",
@@ -76,6 +78,8 @@ export const dict = {
     "servers.portRange.wellKnown": "知名端口 1-1023",
     "servers.portRange.registered": "注册端口 1024-49151",
     "servers.portRange.dynamic": "动态端口 49152+",
+    "servers.establishedConnections": "{count} 个已建立连接",
+    "servers.noEstablishedConnections": "没有已建立的 TCP 连接",
   },
   ja: {
     "servers.emptyAction": "今すぐ更新",
@@ -114,5 +118,7 @@ export const dict = {
     "servers.portRange.wellKnown": "ウェルノウンポート 1-1023",
     "servers.portRange.registered": "登録ポート 1024-49151",
     "servers.portRange.dynamic": "動的ポート 49152+",
+    "servers.establishedConnections": "確立済み TCP 接続 {count} 件",
+    "servers.noEstablishedConnections": "確立済み TCP 接続はありません",
   },
 } as const;

@@ -91,6 +91,8 @@ export const dict = {
     "ai.lastLine": "Latest line",
     "ai.copied": "Copied",
     "ai.fileLabel": "File: {path}",
+    "ai.dailyBudgetLine": "Daily budget {amount}",
+    "ai.alertThresholdLine": "Alert {pct}%",
   },
   zh: {
     "ai.costOverviewTitle": "成本总览",
@@ -178,6 +180,8 @@ export const dict = {
     "ai.lastLine": "最近内容",
     "ai.copied": "已复制",
     "ai.fileLabel": "文件: {path}",
+    "ai.dailyBudgetLine": "日预算 {amount}",
+    "ai.alertThresholdLine": "告警阈值 {pct}%",
   },
   ja: {
     "ai.costOverviewTitle": "コスト概要",
@@ -269,5 +273,7 @@ export const dict = {
     "ai.lastLine": "最新の行",
     "ai.copied": "コピーしました",
     "ai.fileLabel": "ファイル: {path}",
+    "ai.dailyBudgetLine": "日予算 {amount}",
+    "ai.alertThresholdLine": "警告しきい値 {pct}%",
   },
 } as const;

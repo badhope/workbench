@@ -125,6 +125,7 @@ export function ProcessTable({
                 return (
                   <th
                     key={i}
+                    scope="col"
                     className="whitespace-nowrap bg-panel px-3 py-2 font-medium"
                   >
                     {h}
