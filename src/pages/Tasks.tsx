@@ -1,9 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import dayjs from "dayjs";
 import { Check, LayoutGrid, List, Plus, Search, Trash2, X } from "lucide-react";
-import { EChart } from "../lib/echarts";
-import { chartGapColor, FIXED_COLORS } from "../lib/chartTheme";
-import { isPieWorthRendering } from "../lib/aggregate";
 import {
   DndContext,
   PointerSensor,
@@ -17,34 +14,23 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
-import {
-  Badge,
-  Btn,
-  Card,
-  ConfirmDialog,
-  Empty,
-  SectionTitle,
-  inputCls,
-  type Tone,
-} from "../ui";
+import { Badge, Btn, Card, ConfirmDialog, Empty, inputCls, type Tone } from "../ui";
 import { dueLabel } from "../lib/util";
 import { priorityLabel } from "../lib/workbench";
 import { isBlocked, taskMatchesScope, type TaskScope } from "../lib/workbench";
 import { useT } from "../lib/i18n";
 import type { Task } from "../types";
+import { TaskPulse } from "./tasks/TaskPulse";
+import { TASK_STATUSES, taskStatusLabel } from "./tasks/taskVisuals";
 
 type TFunc = (key: string, vars?: Record<string, string | number>) => string;
 
-const COLUMNS: { key: string; color: string }[] = [
-  { key: "todo", color: FIXED_COLORS.other },
-  { key: "doing", color: FIXED_COLORS.normal },
-  { key: "done", color: FIXED_COLORS.system },
-];
+const COLUMNS = TASK_STATUSES;
 
-const PRIORITIES: Record<string, { tone: Tone; color: string }> = {
-  low: { tone: "dim", color: FIXED_COLORS.low },
-  normal: { tone: "accent", color: FIXED_COLORS.normal },
-  high: { tone: "danger", color: FIXED_COLORS.high },
+const PRIORITIES: Record<string, { tone: Tone }> = {
+  low: { tone: "dim" },
+  normal: { tone: "accent" },
+  high: { tone: "danger" },
 };
 
 const SCOPES: { key: TaskScope; labelKey: string }[] = [
@@ -56,16 +42,7 @@ const SCOPES: { key: TaskScope; labelKey: string }[] = [
 ];
 
 function columnLabel(key: string, t: TFunc): string {
-  switch (key) {
-    case "todo":
-      return t("tasks.colTodo");
-    case "doing":
-      return t("tasks.colDoing");
-    case "done":
-      return t("tasks.colDone");
-    default:
-      return key;
-  }
+  return taskStatusLabel(key, t);
 }
 
 export default function Tasks() {
@@ -76,7 +53,6 @@ export default function Tasks() {
     addTask,
     moveTask,
     deleteTask,
-    theme,
     taskView,
     setTaskView,
     taskScope,
@@ -90,7 +66,6 @@ export default function Tasks() {
       addTask: s.addTask,
       moveTask: s.moveTask,
       deleteTask: s.deleteTask,
-      theme: s.theme,
       taskView: s.taskView,
       setTaskView: s.setTaskView,
       taskScope: s.taskScope,
@@ -103,7 +78,7 @@ export default function Tasks() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [newTitle, setNewTitle] = useState("");
   const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
-  const [showStats, setShowStats] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   // 任务一旦多起来，「翻列表找一条」是最高频的操作。搜索只在当前范围+项目
   // 筛选之内生效：换范围时保留搜索词，符合「先缩小范围再找」的实际用法。
   const [query, setQuery] = useState("");
@@ -115,7 +90,9 @@ export default function Tasks() {
   const projectName = (id: string | null) =>
     data.projects.find((p) => p.id === id)?.name ?? null;
 
-  const visible = useMemo(() => {
+  // 先算“范围 + 项目 + 搜索”内的全集，再叠加状态筛选。
+  // 脉冲读数始终基于全集，点某个状态时其余数字不会跟着塌掉。
+  const baseVisible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return data.tasks.filter((task) => {
       if (!taskMatchesScope(task, taskScope)) return false;
@@ -132,10 +109,28 @@ export default function Tasks() {
     });
   }, [data.tasks, projectFilter, taskScope, query]);
 
+  const visible = useMemo(
+    () =>
+      statusFilter
+        ? baseVisible.filter((task) => task.status === statusFilter)
+        : baseVisible,
+    [baseVisible, statusFilter]
+  );
+
   /** 新建任务的默认到期日：今天/本周范围补今天，否则无日期（收件箱/全部）。 */
   function defaultDueForScope(scope: TaskScope): string | null {
     return scope === "today" || scope === "week" ? dayjs().format("YYYY-MM-DD") : null;
   }
+
+  const changeScope = (scope: TaskScope) => {
+    setTaskScope(scope);
+    setStatusFilter(null);
+  };
+
+  const changeProject = (projectId: string) => {
+    setTaskProjectFilter(projectId);
+    setStatusFilter(null);
+  };
 
   const addFromList = () => {
     const title = newTitle.trim();
@@ -153,51 +148,9 @@ export default function Tasks() {
       })
     ) {
       setNewTitle("");
+      setStatusFilter(null);
     }
   };
-
-  // ── 图表：优先级分布 ──────────────────────────────────────
-  const priorityDist = useMemo(() => {
-    const m: Record<string, number> = { low: 0, normal: 0, high: 0 };
-    for (const task of visible) m[task.priority] = (m[task.priority] ?? 0) + 1;
-    return (["low", "normal", "high"] as const)
-      .map((key) => ({
-        name: priorityLabel(key, t),
-        value: m[key],
-        color: PRIORITIES[key].color,
-      }))
-      .filter((d) => d.value > 0);
-  }, [visible, t]);
-
-  const priorityPieOption = useMemo(
-    () => ({
-      tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
-      series: [
-        {
-          id: "priority-pie",
-          type: "pie",
-          radius: ["44%", "66%"],
-          label: { show: false },
-          labelLine: { show: false },
-          itemStyle: { borderColor: chartGapColor(theme), borderWidth: 2 },
-          data: priorityDist.map((d) => ({
-            name: d.name,
-            value: d.value,
-            itemStyle: { color: d.color },
-          })),
-        },
-      ],
-    }),
-    [priorityDist, theme]
-  );
-
-  // 完成率统计
-  const completionRate = useMemo(() => {
-    if (!visible.length) return 0;
-    return Math.round(
-      (visible.filter((task) => task.status === "done").length / visible.length) * 100
-    );
-  }, [visible]);
 
   const onDragEnd = (e: DragEndEvent) => {
     const id = String(e.active.id);
@@ -246,7 +199,7 @@ export default function Tasks() {
               key={scope.key}
               type="button"
               aria-pressed={taskScope === scope.key}
-              onClick={() => setTaskScope(scope.key)}
+              onClick={() => changeScope(scope.key)}
               className={`rounded-full px-2.5 py-1 text-[11px] transition-colors ${
                 taskScope === scope.key
                   ? "bg-panel text-text shadow-sm"
@@ -286,7 +239,7 @@ export default function Tasks() {
         <select
           className="ml-auto rounded-[var(--radius-btn)] border border-line bg-panel2 px-2 py-1 text-xs text-text outline-none"
           value={projectFilter}
-          onChange={(e) => setTaskProjectFilter(e.target.value)}
+          onChange={(e) => changeProject(e.target.value)}
           aria-label={t("tasks.filterByProject")}
         >
           <option value="">{t("tasks.allProjects")}</option>
@@ -296,103 +249,13 @@ export default function Tasks() {
             </option>
           ))}
         </select>
-        <Btn onClick={() => setShowStats((v) => !v)} className="!py-1 !text-xs">
-          {showStats ? t("tasks.hideStats") : t("tasks.stats")}
-        </Btn>
       </div>
 
-      {showStats && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <Card>
-            <SectionTitle>{t("tasks.priorityDist")}</SectionTitle>
-            {visible.length > 0 ? (
-              <>
-                {isPieWorthRendering(
-                  priorityDist.map((d) => [d.name, d.value] as [string, number])
-                ) && (
-                  <EChart option={priorityPieOption} style={{ height: 130 }} lazyUpdate />
-                )}
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                  {priorityDist.map((d) => (
-                    <span
-                      key={d.name}
-                      className="flex items-center gap-1 text-[11px] text-dim"
-                    >
-                      <span
-                        className="inline-block h-1.5 w-1.5 rounded-full"
-                        style={{ background: d.color }}
-                      />
-                      {d.name} <span className="font-mono text-text">{d.value}</span>
-                    </span>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <Empty>{t("tasks.emptyTasks")}</Empty>
-            )}
-          </Card>
-
-          {/* 完成率进度 */}
-          <Card className="flex flex-col">
-            <SectionTitle>{t("tasks.completionRate")}</SectionTitle>
-            <div className="flex flex-1 items-center justify-center">
-              <div className="relative flex h-24 w-24 items-center justify-center">
-                <svg className="h-24 w-24 -rotate-90">
-                  <circle
-                    cx="48"
-                    cy="48"
-                    r="38"
-                    fill="none"
-                    stroke="var(--color-panel2)"
-                    strokeWidth="8"
-                  />
-                  <circle
-                    cx="48"
-                    cy="48"
-                    r="38"
-                    fill="none"
-                    stroke="var(--color-ok)"
-                    strokeWidth="8"
-                    strokeLinecap="round"
-                    strokeDasharray={`${(completionRate / 100) * 239} 239`}
-                  />
-                </svg>
-                <span className="num absolute text-[22px] font-semibold text-ok">
-                  {completionRate}%
-                </span>
-              </div>
-            </div>
-            <div className="text-center text-xs text-dim">
-              {visible.filter((task) => task.status === "done").length} / {visible.length}
-            </div>
-          </Card>
-
-          {/* 各列数量 */}
-          <Card>
-            <SectionTitle>{t("tasks.taskDist")}</SectionTitle>
-            <div className="space-y-3">
-              {COLUMNS.map((c) => {
-                const count = visible.filter((task) => task.status === c.key).length;
-                const pct = visible.length > 0 ? (count / visible.length) * 100 : 0;
-                return (
-                  <div key={c.key}>
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-dim">{columnLabel(c.key, t)}</span>
-                      <span className="font-mono text-text">{count}</span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-bg overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{ width: `${pct}%`, background: c.color }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        </div>
-      )}
+      <TaskPulse
+        tasks={baseVisible}
+        statusFilter={statusFilter}
+        onStatusFilter={setStatusFilter}
+      />
 
       {taskView === "board" ? (
         <DndContext
@@ -427,6 +290,7 @@ export default function Tasks() {
                       })
                     ) {
                       setDrafts((d) => ({ ...d, [col.key]: "" }));
+                      setStatusFilter(null);
                       if (taskScope === "blocked") setTaskScope("all");
                     }
                   }}

@@ -3,6 +3,17 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.3] - 2026-11-19
+
+### Changed — 任务页常驻可视化
+
+- **统计不再藏起来**：原先只有点「统计」才出现的三张大卡，改为顶部一条常驻
+  任务脉冲：完成率环、状态分布条、优先级分布条共享同一份当前范围数据。
+- **点图即筛选**：状态分布可点击筛选，再点一次或点「清除筛选」恢复；切换
+  范围/项目、新建任务时自动清空状态筛选，避免新任务“看起来没创建成功”。
+- **去重**：删除重复的优先级饼图配置、完成率 SVG 与旧统计卡，状态颜色和
+  标签收敛到 `pages/tasks/taskVisuals.ts` 一份定义；任务页净减约 170 行。
+
 ## [0.9.2] - 2026-11-19
 
 ### Added — AI 受控写入（M2）
