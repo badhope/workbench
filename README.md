@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/badge/version-0.9.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.md#system-requirements)
-[![Tests](https://img.shields.io/badge/tests-620%20unit%20%2B%20189%20backend%20%2B%2030%20e2e-8b5cf6)](#quality-gates)
+[![Tests](https://img.shields.io/badge/tests-620%20unit%20%2B%20190%20backend%20%2B%2030%20e2e-8b5cf6)](#quality-gates)
 
 ![Workbench](docs/screenshots/12-brand-hero.png)
 
@@ -36,6 +36,26 @@ Data never leaves the device — no account, no cloud, no model to configure.
 
 The header badge always says which one you are looking at — `Live`, `Web · live data`
 or `Demo` — so a number on screen is never ambiguous about being real.
+
+## MCP (read-only)
+
+Workbench exposes its local context to any MCP-capable client over stdio:
+
+```json
+{
+  "mcpServers": {
+    "workbench": {
+      "command": "workbench",
+      "args": ["mcp", "--stdio"]
+    }
+  }
+}
+```
+
+Tools: `workbench_context`, `knowledge_search`, `knowledge_read`,
+`knowledge_status`. All read-only. No model, API key or chat page is bundled;
+the client decides what to do with the context. Use `--data-dir <path>` if the
+client runs under a different profile.
 
 ## Screenshots
 
@@ -93,7 +113,7 @@ Every claim in this README is verified by a command. The same steps run locally
 | `npx tsc --noEmit`                      | type errors, including the generated IPC contract                       |
 | `npm run lint` · `npm run format:check` | zero-warning ESLint, Prettier                                           |
 | `npm test`                              | **620** frontend tests with an enforced threshold                       |
-| `cargo test --lib`                      | **188** backend tests, plus the ts-rs binding export                    |
+| `cargo test --lib`                      | **190** backend tests, plus the ts-rs binding export                    |
 | `npm run test:e2e`                      | **30** Playwright cases: navigation, WCAG AA contrast, visual baselines |
 | `cargo clippy -- -D warnings`           | Rust lints, zero tolerated                                              |
 | `npm audit` · `cargo audit`             | known vulnerabilities in either dependency tree                         |

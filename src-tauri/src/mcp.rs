@@ -125,3 +125,24 @@ pub fn run_stdio(root: DataRoot) -> Result<(), String> {
         Ok(())
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn server_handler_exposes_all_read_tools() {
+        let server = WorkbenchMcp::new(DataRoot::new(std::env::temp_dir()));
+        for name in [
+            "workbench_context",
+            "knowledge_search",
+            "knowledge_read",
+            "knowledge_status",
+        ] {
+            assert!(
+                server.get_tool(name).is_some(),
+                "MCP tool router 没有挂到 ServerHandler：{name}"
+            );
+        }
+    }
+}
