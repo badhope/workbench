@@ -46,10 +46,11 @@ Being specific matters more than claiming a win everywhere.
   signal sending, and 41 theme files. Workbench is an app you open, not a TUI
   you leave running in a terminal pane.
 - **Glances** wins on automation: a documented REST API, an MCP server, a
-  client/server mode and CSV/JSON export. Workbench has no API or remote mode.
+  client/server mode and CSV/JSON export. Workbench has a loopback-only local
+  HTTP API, but no remote or multi-machine mode.
 - **Stats** owns macOS menu-bar monitoring, with 13 menu-bar widgets and a
   privacy section that lists its two external APIs. Workbench's macOS build is
-  CI-only and unsigned.
+  CI-built and unsigned.
 - **ccusage** covers 18 coding agents from a single CLI, with `--instances` per
   project. Workbench reads Claude Code and Codex session files only.
 - **Claude Code Usage Monitor** predicts 5-hour block exhaustion and labels

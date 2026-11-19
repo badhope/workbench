@@ -2,17 +2,20 @@
 
 ## Supported versions
 
-The current project version is `0.4.0`. A security-fix support policy for
-specific versions has not been confirmed.
+Security fixes land on `main` and in the latest release. Older minor versions
+are not maintained separately.
 
 ## Reporting a vulnerability
 
 **Please do not disclose security issues in public issues.**
 
-If private vulnerability reporting is enabled, use the repository's private
-security advisory channel. Availability on GitHub or GitCode has not been
-confirmed. Otherwise, use a maintainer's private contact method if one is
-published; a private contact method has not been confirmed.
+Use GitHub's private security advisory flow on any mirror:
+
+- https://github.com/X33834/workbench/security/advisories/new
+- https://github.com/Morningstar202604/workbench/security/advisories/new
+- https://github.com/badhope/workbench/security/advisories/new
+
+The report stays private until a fix is ready.
 
 ### Please include
 

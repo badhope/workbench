@@ -3,27 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Workbench — Local system dashboard & AI session cost metering</title>
+    <title>Workbench — a local-first developer workbench</title>
     <meta
       name="description"
-      content="Desktop workbench built with Tauri 2 + React 19: live processes / ports / dev servers, AI session token costs and budget alerts. All data stays local. MIT licensed."
+      content="Today's tasks, project progress, listening ports, running processes and AI session spend in one local window. No account, no cloud, no telemetry."
     />
     <meta name="theme-color" content="#0a0f1c" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://x33834.github.io/workbench/" />
     <meta property="og:site_name" content="Workbench" />
-    <meta property="og:title" content="Workbench — Local system dashboard & AI session cost metering" />
+    <meta property="og:title" content="Workbench — a local-first developer workbench" />
     <meta
       property="og:description"
-      content="Desktop-first local workbench. Live processes / ports / dev servers, AI session cost metering. All data stays local."
+      content="Today's tasks, project progress, listening ports, running processes and AI session spend in one local window. No account, no cloud, no telemetry."
     />
     <meta property="og:image" content="https://x33834.github.io/workbench/screenshots/01-overview.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Workbench — Local system dashboard & AI session cost metering" />
+    <meta name="twitter:title" content="Workbench — a local-first developer workbench" />
     <meta
       name="twitter:description"
-      content="Desktop-first local workbench. Live processes / ports / dev servers, AI session cost metering. All data stays local."
+      content="Tasks, projects, ports, processes and AI session spend in one local window. No account, no cloud, no telemetry."
     />
     <meta name="twitter:image" content="https://x33834.github.io/workbench/screenshots/01-overview.png" />
     <style>
@@ -291,18 +291,18 @@
       <!-- ── Hero ─────────────────────────────── -->
       <div class="hero">
         <div class="wrap hero-inner">
-          <div class="pill"><span class="dot"></span> <span data-i18n="hero.pill">v0.9.3 · Windows x64 · MIT licensed</span></div>
+          <div class="pill"><span class="dot"></span> <span data-i18n="hero.pill">v0.9.8 · Windows / Linux / macOS · MIT licensed</span></div>
           <h1>
-            <span data-i18n="hero.h1a">Your machine, at a glance</span><br />
-            <span class="grad" data-i18n="hero.h1b">with AI session cost metering</span>
+            <span data-i18n="hero.h1a">Your machine, your work</span><br />
+            <span class="grad" data-i18n="hero.h1b">in one local window</span>
           </h1>
           <p class="sub" data-i18n-html="hero.sub">
-            Live view of processes, ports and dev servers; token usage and spend for
-            Claude Code / Codex / opencode. <strong>All data stays on your device</strong> — nothing is uploaded.
+            Today's tasks, project progress, listening ports, running processes and
+            AI session spend. <strong>All data stays on your device</strong>; nothing is uploaded.
           </p>
           <div class="cta">
             <a class="btn btn-primary" id="cta-setup" href="#download" data-i18n="hero.cta1">Download installer</a>
-            <a class="btn" id="cta-portable" href="#download" data-i18n="hero.cta2">Portable exe</a>
+            <a class="btn" id="cta-releases" href="#download" data-i18n="hero.cta2">All builds</a>
           </div>
           <p class="meta" data-i18n="hero.meta">Windows 10 / 11 (NSIS) · Linux (.deb) · macOS (.app, CI-built) · no admin rights required</p>
         </div>
@@ -311,7 +311,7 @@
       <!-- ── Features ─────────────────────────── -->
       <section id="features" class="wrap">
         <h2 class="sec-title" data-i18n="feat.title">Features</h2>
-        <p class="sec-sub" data-i18n="feat.sub">Nine modules, a keyboard-first command palette, and three ways to run it — see it, find it, count it.</p>
+        <p class="sec-sub" data-i18n="feat.sub">A keyboard-first command palette and three ways to run it: see it, find it, count it.</p>
         <div class="grid g3">
           <div class="card">
             <div class="ico">🖥</div>
@@ -342,6 +342,11 @@
             <div class="ico">📁</div>
             <h3 data-i18n="f6t">Projects &amp; tasks</h3>
             <p data-i18n="f6p">Local project registry with automatic Git branch detection; kanban task board, drag to change status.</p>
+          </div>
+          <div class="card">
+            <div class="ico">📚</div>
+            <h3 data-i18n="f13t">Local knowledge</h3>
+            <p data-i18n="f13p">Mount Markdown folders in place, search titles, body and tags, and expose the same context over MCP. Writes are off by default and auditable.</p>
           </div>
           <div class="card">
             <div class="ico">📋</div>
@@ -396,8 +401,16 @@
             <figcaption data-i18n="s3">Servers &amp; ports — framework detection and port distribution</figcaption>
           </figure>
           <figure class="shot">
-            <img src="screenshots/04-ai-sessions.png" alt="AI sessions: cost trends and model breakdown" loading="lazy" />
-            <figcaption data-i18n="s4">AI sessions — token cost trends and model breakdown</figcaption>
+            <img src="screenshots/04-ai-sessions.png" alt="AI sessions: local session files and detected agents" loading="lazy" />
+            <figcaption data-i18n="s4">AI sessions — local session files, detected agents and tool mix</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/05-costs.png" alt="Cost ledger: budget progress and model split" loading="lazy" />
+            <figcaption data-i18n="s13">Cost ledger — budgets, model split and 14-day trend</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/06-knowledge.png" alt="Knowledge: local Markdown sources and search" loading="lazy" />
+            <figcaption data-i18n="s14">Knowledge — local Markdown sources and full-text search</figcaption>
           </figure>
           <figure class="shot">
             <img src="screenshots/07-projects.png" alt="Projects: card and table views" loading="lazy" />
@@ -436,19 +449,25 @@
       <!-- ── Download ─────────────────────────── -->
       <section id="download" class="wrap">
         <h2 class="sec-title" data-i18n="dl.title">Download</h2>
-        <p class="sec-sub" data-i18n="dl.sub">Windows x64. The installer is not code-signed; Windows may warn "Unknown publisher" on first run.</p>
+        <p class="sec-sub" data-i18n="dl.sub">Windows x64 installer. Linux .deb and macOS .app builds are on Releases too. The installer is not code-signed; Windows may warn "Unknown publisher" on first run.</p>
         <div class="dl">
           <div class="card">
             <span class="tag rec" data-i18n="dl.tag1">Recommended</span>
             <h3 data-i18n="dl.t1">NSIS installer</h3>
-            <p data-i18n="dl.d1">Double-click to install, with Start-menu entry and uninstaller. ~3 MB.</p>
+            <p data-i18n="dl.d1">Double-click to install, with Start-menu entry and uninstaller.</p>
             <a class="btn btn-primary" id="dl-setup" href="#" data-i18n="dl.b1">Download installer</a>
           </div>
           <div class="card">
-            <span class="tag" data-i18n="dl.tag2">Portable</span>
-            <h3 data-i18n="dl.t2">Standalone exe</h3>
-            <p data-i18n="dl.d2">Single file, runs as-is, no installation — fits on a USB stick.</p>
-            <a class="btn" id="dl-portable" href="#" data-i18n="dl.b2">Download exe</a>
+            <span class="tag" data-i18n="dl.tag2">Linux</span>
+            <h3 data-i18n="dl.t2">.deb package</h3>
+            <p data-i18n="dl.d2">Install with apt or dpkg on Debian or Ubuntu. Built in CI.</p>
+            <a class="btn" id="dl-linux" href="#" data-i18n="dl.b2">Open Releases</a>
+          </div>
+          <div class="card">
+            <span class="tag" data-i18n="dl.tag3">macOS</span>
+            <h3 data-i18n="dl.t3">Unsigned .app</h3>
+            <p data-i18n="dl.d3">Zipped .app built in CI. Right-click Open on first launch.</p>
+            <a class="btn" id="dl-macos" href="#" data-i18n="dl.b3">Open Releases</a>
           </div>
         </div>
 
@@ -458,7 +477,7 @@
             <tbody>
               <tr>
                 <td style="width: 190px" data-i18n="dl.req">Requirements</td>
-                <td data-i18n="dl.reqv">Node.js ≥ 20, Rust ≥ 1.77, WebView2 (preinstalled on Windows 11)</td>
+                <td data-i18n="dl.reqv">Node.js 22.22.2+ (or 24.15+/26+), Rust 1.95+, WebView2 (preinstalled on Windows 11)</td>
               </tr>
               <tr><td data-i18n="dl.deps">Install dependencies</td><td><code>npm install</code></td></tr>
               <tr><td data-i18n="dl.dev">Dev mode</td><td><code>npm run tauri dev</code></td></tr>
@@ -472,7 +491,7 @@
         <ol class="steps">
           <li>
             <strong data-i18n="dl.step1t">Download the installer</strong>
-            <span data-i18n-html="dl.step1d">Click "Download installer" above to get <code>Workbench_0.4.0_x64-setup.exe</code>.</span>
+            <span data-i18n-html="dl.step1d">Click "Download installer" above to get <code>Workbench_0.9.8_x64-setup.exe</code>.</span>
           </li>
           <li>
             <strong data-i18n="dl.step2t">Allow the Windows prompt</strong>
@@ -499,8 +518,7 @@
           <p data-i18n-html="a1">
             The installer is not code-signed (signing certificates cost money), so Windows
             SmartScreen steps in. Choose "More info" → "Run anyway". You can also build from
-            source, or grab the portable exe instead. Verify integrity with the SHA-256 published
-            on the Release page.
+            source. Verify integrity with the SHA-256 published on the Release page.
           </p>
         </details>
         <details>
@@ -544,10 +562,12 @@
         <details>
           <summary data-i18n="q6">Which platforms are supported?</summary>
           <p data-i18n-html="a6">
-            Not verified yet. Development, testing and packaging are Windows-only today: port
-            collection shells out to <code>netstat -ano</code> and only the NSIS installer is
-            produced. The code contains a POSIX branch, but it has never been exercised — so the
-            README does not claim support.
+            Windows is the primary target (NSIS installer). Linux is built and tested in CI,
+            which produces a <code>.deb</code>; macOS is compiled, unit-tested and packaged as an
+            unsigned <code>.app</code> in CI on every commit. Port collection uses
+            <code>netstat -ano</code> on Windows and <code>ss -tulpn</code> (with a netstat fallback)
+            on Linux. macOS builds are not signed or notarized, so Gatekeeper requires right-click
+            → Open.
           </p>
         </details>
       </section>
@@ -586,20 +606,21 @@
             title: "Workbench — Local system dashboard & AI session cost metering",
             "nav.features": "Features", "nav.screenshots": "Screenshots", "nav.download": "Download",
             "nav.faq": "FAQ", "nav.source": "Source",
-            "hero.pill": "v0.9.3 · Windows x64 · MIT licensed",
-            "hero.h1a": "Your machine, at a glance",
-            "hero.h1b": "with AI session cost metering",
-            "hero.sub": 'Live view of processes, ports and dev servers; token usage and spend for Claude Code / Codex / opencode. <strong>All data stays on your device</strong> — nothing is uploaded.',
-            "hero.cta1": "Download installer", "hero.cta2": "Portable exe",
+            "hero.pill": "v0.9.8 · Windows / Linux / macOS · MIT licensed",
+            "hero.h1a": "Your machine, your work",
+            "hero.h1b": "in one local window",
+            "hero.sub": "Today's tasks, project progress, listening ports, running processes and AI session spend. <strong>All data stays on your device</strong>; nothing is uploaded.",
+            "hero.cta1": "Download installer", "hero.cta2": "All builds",
             "hero.meta": "Windows 10 / 11 (NSIS) · Linux (.deb) · macOS (.app, CI-built) · no admin rights required",
             "feat.title": "Features",
-            "feat.sub": 'Nine modules, a keyboard-first command palette, and three ways to run it — see it, find it, count it.',
+            "feat.sub": "A keyboard-first command palette and three ways to run it: see it, find it, count it.",
             "f1t": "Overview", "f1p": "Live CPU / memory trends, disk usage donut, process group stats and system info in one screen.",
             "f2t": "Processes", "f2p": "Flat table or parent/child tree, virtual scrolling for thousands of rows, CSV export, and a kill confirmation that re-verifies the target before acting.",
             "f3t": "Servers & ports", "f3p": "Parses netstat for listening ports and auto-tags 30+ dev frameworks such as Vite / Next / uvicorn.",
             "f4t": "AI sessions", "f4p": "opencode online sessions with details; local Claude Code / Codex session file preview and message stats.",
             "f5t": "Cost metering", "f5p": "Tokens and spend by day / by model, 40+ built-in model prices, Anthropic cache semantics and budget alerts.",
             "f6t": "Projects & tasks", "f6p": "Local project registry with automatic Git branch detection; kanban task board, drag to change status.",
+            "f13t": "Local knowledge", "f13p": "Mount Markdown folders in place, search titles, body and tags, and expose the same context over MCP. Writes are off by default and auditable.",
             "f7t": "Logs", "f7p": "Built-in log viewer with per-launch rotation, tail reading and auto refresh.",
             "f8t": "Settings", "f8p": "Dark / light themes, refresh interval, budget and alert thresholds, JSON import & export.",
             "f10t": "Command palette", "f10p": "Ctrl/Cmd+K searches every page, process, port, project and task; a port links straight to the process that owns it.",
@@ -611,7 +632,9 @@
             s1: "Overview — resource trends, disk usage and process groups",
             s2: "Processes — virtual-scrolled table with sorting and filtering",
             s3: "Servers & ports — framework detection and port distribution",
-            s4: "AI sessions — token cost trends and model breakdown",
+            s4: "AI sessions — local session files, detected agents and tool mix",
+            s13: "Cost ledger — budgets, model split and 14-day trend",
+            s14: "Knowledge — local Markdown sources and full-text search",
             s5: "Projects — card / table views, Git branch detection",
             s6: "Tasks — drag-and-drop kanban (todo / in progress / done)",
             s7: "Settings — theme, refresh interval and budget",
@@ -620,20 +643,23 @@
             s10: "Command palette (Ctrl/Cmd+K) — pages, processes, ports, projects and tasks in one search",
             s11: "30-second tour — recorded from the real UI in browser demo mode",
             "dl.title": "Download",
-            "dl.sub": 'Windows x64. The installer is not code-signed; Windows may warn "Unknown publisher" on first run.',
+            "dl.sub": 'Windows x64 installer. Linux .deb and macOS .app builds are on Releases too. The installer is not code-signed; Windows may warn "Unknown publisher" on first run.',
             "dl.tag1": "Recommended", "dl.t1": "NSIS installer",
-            "dl.d1": "Double-click to install, with Start-menu entry and uninstaller. ~4 MB.",
+            "dl.d1": "Double-click to install, with Start-menu entry and uninstaller.",
             "dl.b1": "Download installer",
-            "dl.tag2": "Portable", "dl.t2": "Standalone exe",
-            "dl.d2": "Single file, runs as-is, no installation — fits on a USB stick.",
-            "dl.b2": "Download exe",
+            "dl.tag2": "Linux", "dl.t2": ".deb package",
+            "dl.d2": "Install with apt or dpkg on Debian or Ubuntu. Built in CI.",
+            "dl.b2": "Open Releases",
+            "dl.tag3": "macOS", "dl.t3": "Unsigned .app",
+            "dl.d3": "Zipped .app built in CI. Right-click Open on first launch.",
+            "dl.b3": "Open Releases",
             "dl.build": "Build from source",
-            "dl.req": "Requirements", "dl.reqv": "Node.js ≥ 20, Rust ≥ 1.77, WebView2 (preinstalled on Windows 11)",
+            "dl.req": "Requirements", "dl.reqv": "Node.js 22.22.2+ (or 24.15+/26+), Rust 1.95+, WebView2 (preinstalled on Windows 11)",
             "dl.deps": "Install dependencies", "dl.dev": "Dev mode", "dl.pkg": "Build installer",
             "dl.uionly": "UI only", "dl.uionlyv": "browser demo mode, no Rust needed",
             "dl.steps": "Fresh install",
             "dl.step1t": "Download the installer",
-            "dl.step1d": 'Click "Download installer" above to get <code>Workbench_0.4.0_x64-setup.exe</code>.',
+            "dl.step1d": 'Click "Download installer" above to get <code>Workbench_0.9.8_x64-setup.exe</code>.',
             "dl.step2t": "Allow the Windows prompt",
             "dl.step2d": 'The installer is unsigned, so SmartScreen may step in: choose "More info" → "Run anyway".',
             "dl.step3t": "Install and launch",
@@ -643,7 +669,7 @@
             "faq.title": "FAQ",
             "faq.sub": "The questions that come up most around install and daily use.",
             q1: 'Windows says "Protected your PC" or "Unknown publisher" — what now?',
-            a1: 'The installer is not code-signed (signing certificates cost money), so Windows SmartScreen steps in. Choose "More info" → "Run anyway". You can also build from source, or grab the portable exe instead. Verify integrity with the SHA-256 published on the Release page.',
+            a1: 'The installer is not code-signed (signing certificates cost money), so Windows SmartScreen steps in. Choose "More info" → "Run anyway". You can also build from source. Verify integrity with the SHA-256 published on the Release page.',
             q2: "Will my data be uploaded to the cloud?",
             a2: 'No. Everything (projects, tasks, the cost ledger, logs) is written to the local app data directory. The app only does two local things: read <code>netstat</code> for ports and read local session files for costs. The only optional network call is probing the local opencode service (default port 4096); on failure it just shows "not detected" and nothing else is affected.',
             q3: "How is the cost metering computed? Is it accurate?",
@@ -663,20 +689,21 @@
             title: "工作台 Workbench — 本机运维仪表盘与 AI 会话成本计量",
             "nav.features": "功能", "nav.screenshots": "截图", "nav.download": "下载",
             "nav.faq": "常见问题", "nav.source": "源码",
-            "hero.pill": "v0.9.3 · Windows x64 · MIT 开源",
-            "hero.h1a": "本机运维仪表盘",
-            "hero.h1b": "与 AI 会话成本计量",
-            "hero.sub": '进程、端口、开发服务器实时可视；统计 Claude Code / Codex / opencode 的 token 消耗与花费。<strong>数据仅存本机</strong>，不上传任何信息。',
-            "hero.cta1": "下载安装包", "hero.cta2": "免安装版 exe",
+            "hero.pill": "v0.9.8 · Windows / Linux / macOS · MIT 开源",
+            "hero.h1a": "这台机器，手头的活",
+            "hero.h1b": "都在一个本地窗口",
+            "hero.sub": "今天要做什么、项目推进到哪、端口被谁占着、进程在跑什么、AI 会话花了多少。<strong>数据只存本机</strong>，不上传任何信息。",
+            "hero.cta1": "下载安装包", "hero.cta2": "所有平台",
             "hero.meta": "Windows 10 / 11（NSIS）· Linux（.deb）· macOS（.app，CI 构建）· 无需管理员权限",
             "feat.title": "功能",
-            "feat.sub": "九个模块 + 键盘优先的命令面板 + 三种运行方式：看得见、找得到、算得清。",
+            "feat.sub": "键盘优先的命令面板与三种运行方式：看得见、找得到、算得清。",
             "f1t": "概览", "f1p": "CPU / 内存实时趋势曲线、磁盘占用环形图、进程分类统计与系统信息一屏总览。",
             "f2t": "进程监控", "f2p": "列表与父子树双视图，虚拟滚动支撑上千行，一键导出 CSV；结束进程前重新校验目标身份。",
             "f3t": "服务与端口", "f3p": "解析 netstat 找出监听端口，自动标注 Vite / Next / uvicorn 等 30+ 开发框架。",
             "f4t": "AI 会话", "f4p": "opencode 在线会话与详情；本地 Claude Code / Codex 会话文件预览与消息统计。",
             "f5t": "成本计量", "f5p": "token 与花费按日 / 按模型统计，内置 40+ 模型价格，支持 Anthropic 缓存折扣语义与预算告警。",
             "f6t": "项目与任务", "f6p": "本地项目登记与 Git 分支自动检测；看板式任务板，拖拽即改状态。",
+            "f13t": "本地知识库", "f13p": "直接挂载 Markdown 文件夹，搜索标题、正文和标签，并通过 MCP 提供同一份上下文。写入默认关闭，且可审计。",
             "f7t": "运行日志", "f7p": "内置日志查看器，按启动滚动归档，支持尾部读取与自动刷新。",
             "f8t": "设置", "f8p": "深浅双主题、刷新间隔调节、预算与告警阈值、数据 JSON 导入导出。",
             "f10t": "命令面板", "f10p": "Ctrl/Cmd+K 一次搜索全部页面、进程、端口、项目与任务；端口可直接跳到占用它的进程。",
@@ -690,7 +717,9 @@
             s1: "概览 — 资源趋势、磁盘占用与进程分类",
             s2: "进程 — 虚拟滚动表格，支持排序与筛选",
             s3: "服务与端口 — 框架识别与端口分布",
-            s4: "AI 会话 — token 成本趋势与模型构成",
+            s4: "AI 会话 — 本地会话文件、已识别代理与工具分布",
+            s13: "成本账本 — 预算、模型拆分与 14 天趋势",
+            s14: "知识库 — 本地 Markdown 来源与全文搜索",
             s5: "项目 — 卡片 / 表格双视图，Git 分支检测",
             s6: "任务 — 拖拽看板（待办 / 进行中 / 已完成）",
             s7: "设置 — 主题、刷新间隔与预算",
@@ -699,20 +728,23 @@
             s10: "命令面板（Ctrl/Cmd+K）— 页面、进程、端口、项目、任务一次搜完",
             s11: "30 秒演示 — 浏览器演示模式的真实界面录制",
             "dl.title": "下载",
-            "dl.sub": "Windows x64。安装包未做代码签名，首次运行 Windows 可能提示「未知发布者」。",
+            "dl.sub": "Windows x64 安装包；Linux .deb 与 macOS .app 也在 Releases 中。安装包未做代码签名，首次运行 Windows 可能提示「未知发布者」。",
             "dl.tag1": "推荐", "dl.t1": "NSIS 安装包",
-            "dl.d1": "双击安装，含开始菜单与卸载项，约 4 MB。",
+            "dl.d1": "双击安装，含开始菜单与卸载项。",
             "dl.b1": "下载安装包",
-            "dl.tag2": "免安装", "dl.t2": "独立 exe",
-            "dl.d2": "单文件直接运行，无需安装，适合放进 U 盘随身携带。",
-            "dl.b2": "下载 exe",
+            "dl.tag2": "Linux", "dl.t2": ".deb 安装包",
+            "dl.d2": "适用于 Debian / Ubuntu，用 apt 或 dpkg 安装，CI 构建。",
+            "dl.b2": "前往 Releases",
+            "dl.tag3": "macOS", "dl.t3": "未签名 .app",
+            "dl.d3": "CI 构建的 .app 压缩包；首次启动右键打开。",
+            "dl.b3": "前往 Releases",
             "dl.build": "从源码构建",
-            "dl.req": "环境要求", "dl.reqv": "Node.js ≥ 20、Rust ≥ 1.77、WebView2（Windows 11 预装）",
+            "dl.req": "环境要求", "dl.reqv": "Node.js 22.22.2+（或 24.15+/26+）、Rust 1.95+、WebView2（Windows 11 预装）",
             "dl.deps": "安装依赖", "dl.dev": "开发模式", "dl.pkg": "产出安装包",
             "dl.uionly": "仅看界面", "dl.uionlyv": "浏览器演示模式，无需 Rust",
             "dl.steps": "全新安装",
             "dl.step1t": "下载安装包",
-            "dl.step1d": "点上方「下载安装包」，得到 <code>Workbench_0.4.0_x64-setup.exe</code>。",
+            "dl.step1d": "点上方「下载安装包」，得到 <code>Workbench_0.9.8_x64-setup.exe</code>。",
             "dl.step2t": "放行 Windows 提示",
             "dl.step2d": "因未做代码签名，SmartScreen 可能拦截：点「更多信息」→「仍要运行」。",
             "dl.step3t": "完成安装并启动",
@@ -722,7 +754,7 @@
             "faq.title": "常见问题",
             "faq.sub": "安装与使用中最常被问到的几点。",
             q1: "Windows 提示「已保护你的电脑」或「未知发布者」，怎么办？",
-            a1: "安装包未做代码签名（签名证书需付费），Windows SmartScreen 因此会有提示。点「更多信息」→「仍要运行」即可。你也可以选择从源码自行构建，或直接下载免安装 exe。校验完整性可用 Release 页面提供的 SHA-256。",
+            a1: "安装包未做代码签名（签名证书需付费），Windows SmartScreen 因此会有提示。点「更多信息」→「仍要运行」即可。你也可以选择从源码自行构建。校验完整性可用 Release 页面提供的 SHA-256。",
             q2: "会不会把我的数据上传到云端？",
             a2: "不会。所有数据（项目、任务、成本账本、日志）都写在本机的 app data 目录。应用只在你本机发起两件事：读 <code>netstat</code> 看端口，读本机 session 文件算成本。唯一的可选外连是探测本地的 opencode 服务（默认 4096 端口），失败也只是显示「未检测到」，不影响其它功能。",
             q3: "「成本计量」是怎么算出来的？准不准？",
@@ -742,20 +774,21 @@
             title: "Workbench — ローカル運用ダッシュボード & AI セッションコスト計測",
             "nav.features": "機能", "nav.screenshots": "スクリーンショット", "nav.download": "ダウンロード",
             "nav.faq": "FAQ", "nav.source": "ソース",
-            "hero.pill": "v0.9.3 · Windows x64 · MIT ライセンス",
-            "hero.h1a": "ローカル運用ダッシュボード",
-            "hero.h1b": "AI セッションコスト計測と一体に",
-            "hero.sub": "プロセス・ポート・開発サーバーをリアルタイム可視化。Claude Code / Codex / opencode のトークン消費と費用を集計。<strong>データは端末内にのみ保存</strong>され、一切アップロードされません。",
-            "hero.cta1": "インストーラーを入手", "hero.cta2": "ポータブル exe",
+            "hero.pill": "v0.9.8 · Windows / Linux / macOS · MIT ライセンス",
+            "hero.h1a": "このマシンと、目の前の仕事を",
+            "hero.h1b": "1 つのローカルウィンドウに",
+            "hero.sub": "今日のタスク、プロジェクトの進捗、待ち受けポート、実行中のプロセス、AI セッションのコスト。<strong>データは端末内にのみ保存</strong>され、アップロードされません。",
+            "hero.cta1": "インストーラーを入手", "hero.cta2": "全プラットフォーム",
             "hero.meta": "Windows 10 / 11（NSIS）· Linux（.deb）· macOS（.app、CI ビルド）· 管理者権限不要",
             "feat.title": "機能",
-            "feat.sub": "9 つのモジュール、キーボード優先のコマンドパレット、3 つの実行形態。見つけて、数える。",
+            "feat.sub": "キーボード優先のコマンドパレットと 3 つの実行形態。見つけて、数える。",
             "f1t": "概要", "f1p": "CPU / メモリのリアルタイム推移、ディスク使用率ドーナツ、プロセス分類とシステム情報を 1 画面で。",
             "f2t": "プロセス", "f2p": "リストと親子ツリーの 2 表示、数千行に耐える仮想スクロール、CSV 書き出し、終了前の再検証。",
             "f3t": "サーバー & ポート", "f3p": "netstat を解析してリッスンポートを検出し、Vite / Next / uvicorn など 30+ の開発フレームワークを自動判定。",
             "f4t": "AI セッション", "f4p": "opencode のオンラインセッションと詳細。ローカルの Claude Code / Codex セッションファイルのプレビューとメッセージ統計。",
             "f5t": "コスト計測", "f5p": "トークンと費用を日別 / モデル別に集計。40+ モデル価格を内蔵し、Anthropic キャッシュの課金と予算アラートに対応。",
             "f6t": "プロジェクト & タスク", "f6p": "ローカルプロジェクト登録と Git ブランチ自動検出。カンバンタスクボードはドラッグで状態変更。",
+            "f13t": "ローカルナレッジ", "f13p": "Markdown フォルダーをそのまま登録し、タイトル・本文・タグを検索。同じ文脈を MCP でも提供します。書き込みは既定でオフ、監査可能。",
             "f7t": "ログ", "f7p": "内蔵ログビューア。起動単位でローテーションし、末尾読み取りと自動更新に対応。",
             "f8t": "設定", "f8p": "ダーク / ライトテーマ、更新間隔、予算とアラートしきい値、JSON インポート & エクスポート。",
             "f10t": "コマンドパレット", "f10p": "Ctrl/Cmd+K でページ・プロセス・ポート・プロジェクト・タスクを横断検索。ポートから所有プロセスへ直接移動できます。",
@@ -769,7 +802,9 @@
             s1: "概要 — リソース推移、ディスク、プロセス分類",
             s2: "プロセス — ソート・フィルタ対応の仮想スクロールテーブル",
             s3: "サーバー & ポート — フレームワーク判定とポート分布",
-            s4: "AI セッション — トークンコストの推移とモデル構成",
+            s4: "AI セッション — ローカルセッション、検出エージェント、ツール分布",
+            s13: "コスト台帳 — 予算、モデル別内訳、14 日間の推移",
+            s14: "ナレッジ — ローカル Markdown と全文検索",
             s5: "プロジェクト — カード / テーブル両ビュー、Git ブランチ検出",
             s6: "タスク — ドラッグ＆ドロップのカンバン（todo / 進行中 / 完了）",
             s7: "設定 — テーマ、更新間隔、予算",
@@ -778,20 +813,23 @@
             s10: "コマンドパレット（Ctrl/Cmd+K）— ページ・プロセス・ポート・プロジェクト・タスクを一括検索",
             s11: "30 秒ツアー — ブラウザのデモモードで実際の UI を録画",
             "dl.title": "ダウンロード",
-            "dl.sub": "Windows x64。インストーラーはコード署名されていないため、初回実行時に「不明な発行元」と表示されることがあります。",
+            "dl.sub": "Windows x64 インストーラー。Linux .deb と macOS .app も Releases にあります。インストーラーはコード署名されていないため、初回実行時に「不明な発行元」と表示されることがあります。",
             "dl.tag1": "推奨", "dl.t1": "NSIS インストーラー",
-            "dl.d1": "ダブルクリックでインストール。スタートメニュー登録とアンインストーラー付き。約 4 MB。",
+            "dl.d1": "ダブルクリックでインストール。スタートメニュー登録とアンインストーラー付き。",
             "dl.b1": "インストーラーを入手",
-            "dl.tag2": "ポータブル", "dl.t2": "単体 exe",
-            "dl.d2": "単一ファイルでそのまま実行。インストール不要、USB メモリに入れて持ち運べます。",
-            "dl.b2": "exe を入手",
+            "dl.tag2": "Linux", "dl.t2": ".deb パッケージ",
+            "dl.d2": "Debian / Ubuntu 向け。apt または dpkg でインストール。CI でビルド。",
+            "dl.b2": "Releases を見る",
+            "dl.tag3": "macOS", "dl.t3": "未署名 .app",
+            "dl.d3": "CI でビルドした .app の zip。初回は右クリックで開く。",
+            "dl.b3": "Releases を見る",
             "dl.build": "ソースからビルド",
-            "dl.req": "必要環境", "dl.reqv": "Node.js ≥ 20、Rust ≥ 1.77、WebView2（Windows 11 は同梱）",
+            "dl.req": "必要環境", "dl.reqv": "Node.js 22.22.2+（または 24.15+/26+）、Rust 1.95+、WebView2（Windows 11 は同梱）",
             "dl.deps": "依存のインストール", "dl.dev": "開発モード", "dl.pkg": "インストーラー生成",
             "dl.uionly": "UI のみ", "dl.uionlyv": "ブラウザデモモード。Rust 不要",
             "dl.steps": "新規インストール",
             "dl.step1t": "インストーラーをダウンロード",
-            "dl.step1d": "上の「インストーラーを入手」から <code>Workbench_0.4.0_x64-setup.exe</code> を入手します。",
+            "dl.step1d": "上の「インストーラーを入手」から <code>Workbench_0.9.8_x64-setup.exe</code> を入手します。",
             "dl.step2t": "Windows の警告を許可",
             "dl.step2d": "未署名のため SmartScreen が出ることがあります:「詳細情報」→「実行」を選択してください。",
             "dl.step3t": "インストールして起動",
@@ -801,7 +839,7 @@
             "faq.title": "FAQ",
             "faq.sub": "インストールと日常利用でよくある質問。",
             q1: "Windows が「PC を保護しました」や「不明な発行元」と表示します",
-            a1: "インストーラーはコード署名されていないため（署名証明書には費用がかかります）、Windows SmartScreen が警告します。「詳細情報」→「実行」で続行できます。ソースからビルドしたり、ポータブル版 exe を使うこともできます。整合性の検証には Release ページの SHA-256 をご利用ください。",
+            a1: "インストーラーはコード署名されていないため（署名証明書には費用がかかります）、Windows SmartScreen が警告します。「詳細情報」→「実行」で続行できます。ソースからビルドすることもできます。整合性の検証には Release ページの SHA-256 をご利用ください。",
             q2: "データをクラウドにアップロードしますか？",
             a2: "いいえ。すべてのデータ（プロジェクト・タスク・コスト台帳・ログ）はローカルの app data ディレクトリに書き込まれます。アプリがローカルで行うのは <code>netstat</code> でポートを確認することと、ローカルのセッションファイルでコストを計算することだけです。唯一の任意の通信はローカル opencode サービス（既定ポート 4096）の探知で、失敗しても「未検出」と表示されるだけで他への影響はありません。",
             q3: "コスト計測はどう計算されますか？正確ですか？",
@@ -891,7 +929,7 @@
         }
         releases = repo + "/releases";
         issues = repo + "/issues";
-        changelog = repo + "/blob/" + (/gitee|gitcode/i.test(repo) ? "master" : "main") + "/CHANGELOG.md";
+        changelog = repo + "/blob/main/CHANGELOG.md";
 
         function set(id, href) {
           var el = document.getElementById(id);
@@ -903,9 +941,10 @@
         set("foot-issues", issues);
         set("foot-changelog", changelog);
         set("cta-setup", releases);
-        set("cta-portable", releases);
+        set("cta-releases", releases);
         set("dl-setup", releases + "/latest");
-        set("dl-portable", releases + "/latest");
+        set("dl-linux", releases);
+        set("dl-macos", releases);
 
         // Platform list: mark the mirror we are currently on
         var plats = [

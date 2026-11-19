@@ -82,10 +82,10 @@ Rules:
 | New feature, new command, new page | MINOR |
 | Bug fix, docs, internal refactor | PATCH |
 
-The version is written in four places that must stay in sync — `package.json`,
-`package-lock.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`.
-`npm run version:check` verifies them; the release workflow refuses to build a
-tag that disagrees.
+The version appears in `package.json`, `package-lock.json` (root and
+`packages[""]`), `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and
+`src-tauri/Cargo.lock`. `npm run version:check` verifies every field; the release
+workflow refuses to build a tag that disagrees.
 
 Every user-visible change gets an entry in [CHANGELOG.md](CHANGELOG.md) under
 `Unreleased`, moved into a dated section when the tag is cut.
@@ -118,6 +118,5 @@ include verification notes for the platforms tested.
 
 ## Reporting issues
 
-- Bugs and feature requests go to
-  [Issues](https://github.com/X33834/workbench/issues) (templates provided)
+- Bugs and feature requests go to [Issues](../../issues) (templates provided)
 - Security issues must **not** be filed publicly — see [SECURITY.md](SECURITY.md)

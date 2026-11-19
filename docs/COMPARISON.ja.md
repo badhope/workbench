@@ -43,9 +43,10 @@ Workbench 列は本リポジトリの現状であり、計画ではありませ�
   41 のテーマファイル。Workbench は「開いて使うアプリ」であり、ターミナルに常駐させる TUI
   ではありません。
 - **Glances** は自動化で優位：文書化された REST API、MCP サーバー、クライアント/サーバー
-  モード、CSV/JSON 書き出し。Workbench に API もリモートモードもありません。
+  モード、CSV/JSON 書き出し。Workbench にはループバック限定のローカル HTTP API は
+  ありますが、リモート / 複数マシン監視はありません。
 - **Stats** は macOS メニューバー監視の代表：13 種のメニューバーウィジェットと、外部 API が
-  2 つだけであることを明記したプライバシー説明。Workbench の macOS ビルドは CI のみで未署名です。
+  2 つだけであることを明記したプライバシー説明。Workbench の macOS ビルドは CI ビルドで未署名です。
 - **ccusage** は 1 コマンドで 18 種のコーディングエージェントを集計し、`--instances` で
   プロジェクト別に集約できます。Workbench は Claude Code と Codex のセッションファイルのみ。
 - **Claude Code Usage Monitor** は 5 時間ブロックの枯渇を予測し、`official` と

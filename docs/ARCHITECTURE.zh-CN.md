@@ -52,8 +52,8 @@
 
 ### 从 Release 安装
 
-请在 [最新 Release](https://github.com/X33834/workbench/releases/latest) 查看可用附件。
-此处未验证附件的可用性和签名状态。
+请在 [最新 Release](../../../releases) 查看可用附件。Windows 与 Linux 产物在 CI
+中构建并测试；macOS 产物由 CI 构建且未签名。所有发布产物都没有代码签名。
 
 ### 从源码构建
 
@@ -212,8 +212,8 @@ Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×�
 <details>
 <summary>Windows 提示「未知发布者」怎么办？</summary>
 
-请在决定是否运行之前检查下载文件的发布者和签名状态。
-此处未验证 Release 附件的可用性和签名状态。
+运行前请确认下载文件的发布者与签名状态。Windows 与 Linux 产物由 CI 构建并测试；
+macOS 产物未签名。
 </details>
 
 ## Roadmap
@@ -223,7 +223,7 @@ Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×�
 - [x] 进程 / 端口 / 开发服务器实时监控
 - [x] AI 会话成本计量与预算告警
 - [x] 项目与任务管理
-- [x] 数据驱动主题（8 套内置 + 自定义编辑器 + 导入导出）、日志查看器
+- [x] 数据驱动主题（16 套内置 + 自定义编辑器 + 导入导出）、日志查看器
 - [x] 三种外壳（侧栏 / 顶部坞 / 专注）与七种概览版面
 - [x] 可拖拽、可隐藏的概览组件
 - [x] 多语言界面（English / 简体中文 / 日本語）
@@ -232,7 +232,7 @@ Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×�
 - [x] 模型价格编辑器（界面内改价 / 新增 / 恢复内置价）
 - [x] 数据备份与恢复（带时间戳快照，一键回滚）
 - [x] 成本账本 SQLite（十万条聚合 246ms，无需分片）
-- [x] 页面级端到端测试（Playwright 10 页 × 8 主题 + 打包版两套 E2E：数据、导入导出）
+- [x] 页面级端到端测试（Playwright 覆盖 16 主题、3 外壳、7 布局，外加打包版 E2E：数据、导入导出）
 - [x] 组件宽度可调（4/6/8/12 栅格）
 - [x] 主题编辑器：状态色 + 实时对比度 + 界面缩放
 - [x] 主题分享链接（主题压进 URL，打开即导入，无需后端）
@@ -246,10 +246,11 @@ Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×�
 
 ## 已知限制
 
-- 端口采集在 Windows 使用 `netstat -ano`，在 Linux 使用 `ss -tulpn`（回退 `netstat`）。CI 定义了 Linux 后端检查与 `.deb` 构建；平台和发布附件仍需单独验证
-- 交互路径由 Playwright（10 页面 × 8 主题的结构/对比度回归）、命令面板/进程树/端口跳转/CSV 导出的结构化用例，以及打包版桌面 E2E（真实 IPC）覆盖
+- 端口采集在 Windows 使用 `netstat -ano`，Linux 使用 `ss -tulpn`（回退 `netstat`），
+  macOS 使用 `netstat -anv`。CI 在三个平台跑后端测试，并构建 `.deb` 与 `.app` 产物。
+- 交互路径由 Playwright（16 主题、3 外壳、7 布局的结构/对比度回归）、命令面板/进程树/端口跳转/CSV 导出的结构化用例，以及打包版桌面 E2E（真实 IPC）覆盖
 - 成本账本使用 SQLite（`cost.db`，rusqlite bundled），按日 / 模型 / 文件建索引；聚合在 SQL 内完成，十万条记录约 250ms，而不是每次查询都重新解析整个 JSON。旧 `cost_data.json` 首次启动自动导入并改名为 `.migrated`（不删除）
-- 此处未验证 Release 安装包的签名状态和可用性
+- 发布产物未做代码签名，也没有公证
 - 托盘菜单文案为中英双语，且不跟随界面语言切换（启动时构建一次）
 - **没有插件 API、没有远程/多机监控**——这是有意的取舍。但本机 HTTP API
   是有的：`workbench serve` 把同一套读取路径暴露给同机浏览器，只绑回环地址，
@@ -287,20 +288,25 @@ Windows 下 `app data dir` 为 `%APPDATA%\com.workbench.desktop`。
 | ![服务与端口](screenshots/03-servers.png) | ![AI 会话](screenshots/04-ai-sessions.png) |
 | netstat 端口识别与开发框架标注 | 会话文件、在线会话、工具分布 |
 
-| 成本账本 | 项目管理 |
-|----------|----------|
-| ![成本账本](screenshots/05-costs.png) | ![项目管理](screenshots/07-projects.png) |
-| 预算进度、趋势、模型分解、价格覆盖编辑器 | 本地项目、Git 分支检测、卡片/表格双视图 |
+| 成本账本 | 知识库 |
+|----------|--------|
+| ![成本账本](screenshots/05-costs.png) | ![知识库](screenshots/06-knowledge.png) |
+| 预算进度、趋势、模型分解、价格覆盖编辑器 | 本地 Markdown 来源、FTS5 搜索、不复制正文 |
 
-| 任务看板 | 设置 |
-|----------|------|
-| ![任务看板](screenshots/08-tasks.png) | ![设置](screenshots/09-settings.png) |
-| 拖拽看板，待办 / 进行中 / 已完成 | 主题编辑器、外壳/版面、组件管理、备份 |
+| 项目 | 任务 |
+|------|------|
+| ![项目](screenshots/07-projects.png) | ![任务](screenshots/08-tasks.png) |
+| 本地项目、Git 分支检测 | 拖拽看板 |
 
-| 运行日志 | 五套风格 |
-|----------|----------|
-| ![运行日志](screenshots/10-logs.png) | ![五套风格](screenshots/00-themes.png) |
-| 内置日志查看器，按需尾部读取 | 共用一套 token，差异在底色、圆角、密度与字体家族 |
+| 设置 | 日志 |
+|------|------|
+| ![设置](screenshots/09-settings.png) | ![日志](screenshots/10-logs.png) |
+| 主题编辑器、外壳/版面、组件管理、备份 | 内置日志查看器，按需尾部读取 |
+
+| 主题 |
+|------|
+| ![主题](screenshots/00-themes.png) |
+| 十六套主题，共用一套 token |
 
 ### 视觉体系
 
@@ -337,7 +343,7 @@ Windows 下 `app data dir` 为 `%APPDATA%\com.workbench.desktop`。
 | ![顶部坞](screenshots/24-shell-dock.png) | ![专注](screenshots/25-shell-zen.png) |
 
 - **外壳**决定导航在哪：左侧栏 / 顶部坞 / 图标条。
-- **版面**重排概览页：便当格 / 账本 / 环仪 / 密排 / 极简。
+- **版面**重排概览页：便当格 / 账本 / 环仪 / 密排 / 极简 / 时间线 / 看板。
 - **组件**可以拖拽排序、逐个隐藏，与外壳和版面相互独立。
 
 完整的能力审计（含「声明了但从未生效」的功能清单）见

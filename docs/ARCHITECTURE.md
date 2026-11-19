@@ -65,8 +65,9 @@
 
 ### Install from Releases
 
-Check the [latest release](https://github.com/X33834/workbench/releases/latest)
-for available assets. Availability and signing status have not been verified here.
+Check the [latest release](../../../releases)
+for available assets. Windows and Linux builds are produced and tested in CI;
+the macOS app is built unsigned. No release is code-signed.
 
 ### Build from source
 
@@ -267,7 +268,7 @@ release is cut — lives in [ROADMAP.md](ROADMAP.md). Summary:
 - [x] Real-time process / port / dev-server monitoring
 - [x] AI session cost metering with budget alerts
 - [x] Projects & task kanban
-- [x] Data-driven themes (8 built-ins + custom editor + import/export), log viewer
+- [x] Data-driven themes (16 built-ins + custom editor + import/export), log viewer
 - [x] Three shells (rail / top dock / zen) and seven overview layouts
 - [x] Draggable, hideable overview widgets
 - [x] Multilingual UI (English / 简体中文 / 日本語)
@@ -276,7 +277,7 @@ release is cut — lives in [ROADMAP.md](ROADMAP.md). Summary:
 - [x] Model pricing editor (edit / add / reset overrides from the UI)
 - [x] Data backup and restore (timestamped snapshots, one-click rollback)
 - [x] SQLite cost ledger (100k records aggregate in 246 ms; sharding not needed)
-- [x] Page-level E2E (Playwright 10 pages × 8 themes plus packaged-app suites:
+- [x] Page-level E2E (Playwright visual baselines across 16 themes, 3 shells and 7 layouts plus packaged-app suites:
       data/backup and import/export)
 - [x] Editable widget widths (4/6/8/12 columns)
 - [x] Theme editor: status colours, live contrast readout, UI scale
@@ -293,15 +294,15 @@ release is cut — lives in [ROADMAP.md](ROADMAP.md). Summary:
 
 ## Known limitations
 
-- Port collection runs `netstat -ano` on Windows and `ss -tulpn` on Linux
-  (falling back to `netstat`). CI defines Linux backend checks and a `deb`
-  build; platform and release-asset verification must be assessed separately.
-- Interaction paths are covered by Playwright (structure and WCAG AA across 10 pages × 8 themes), a structural feature suite for the command palette / process tree / port jump / CSV export, plus a packaged-exe desktop E2E over real IPC
+- Port collection runs `netstat -ano` on Windows, `ss -tulpn` on Linux (falling
+  back to `netstat`), and `netstat -anv` on macOS. CI runs backend tests on all
+  three and builds `.deb` and `.app` artifacts.
+- Interaction paths are covered by Playwright (structure and WCAG AA across 16 themes, 3 shells and 7 layouts), a structural feature suite for the command palette / process tree / port jump / CSV export, plus a packaged-exe desktop E2E over real IPC
 - The cost ledger is a SQLite database (`cost.db`, `rusqlite` bundled) with
   indexes on day / model / file. Aggregation runs inside SQL, so 100k records
   aggregate in ~250 ms instead of re-parsing a whole JSON file per query.
   The old `cost_data.json` is imported once and renamed `.migrated` (never deleted)
-- Signing status and availability of release installers have not been verified here
+- Release builds are unsigned; there is no code-signing or notarization
 - The tray menu text is bilingual Chinese/English and does not follow the UI
   language switch (it is built once at startup)
 - **No plugin API and no remote/multi-machine monitoring** — by design.
@@ -375,20 +376,25 @@ paths and host names are placeholders, no real machine data.
 | ![Servers](screenshots/03-servers.png) | ![AI sessions](screenshots/04-ai-sessions.png) |
 | netstat parsing, dev-framework tags | Session files, live sessions, tool mix |
 
-| Cost ledger | Projects |
-|-------------|----------|
-| ![Costs](screenshots/05-costs.png) | ![Projects](screenshots/07-projects.png) |
-| Budget progress, trend, model split, price editor | Local projects, Git branch detection |
+| Cost ledger | Knowledge |
+|-------------|-----------|
+| ![Costs](screenshots/05-costs.png) | ![Knowledge](screenshots/06-knowledge.png) |
+| Budget progress, trend, model split, price editor | Local Markdown sources, FTS5 search, no copied body |
 
-| Tasks | Settings |
-|-------|----------|
-| ![Tasks](screenshots/08-tasks.png) | ![Settings](screenshots/09-settings.png) |
-| Drag-and-drop kanban | Theme editor, shell/layout, widgets, backup |
+| Projects | Tasks |
+|----------|-------|
+| ![Projects](screenshots/07-projects.png) | ![Tasks](screenshots/08-tasks.png) |
+| Local projects, Git branch detection | Drag-and-drop kanban |
 
-| Logs | Themes |
-|------|--------|
-| ![Logs](screenshots/10-logs.png) | ![Themes](screenshots/00-themes.png) |
-| Built-in log viewer, tail reading | Five styles, one token set |
+| Settings | Logs |
+|----------|------|
+| ![Settings](screenshots/09-settings.png) | ![Logs](screenshots/10-logs.png) |
+| Theme editor, shell/layout, widgets, backup | Built-in log viewer, tail reading |
+
+| Themes |
+|--------|
+| ![Themes](screenshots/00-themes.png) |
+| Sixteen themes, one token set |
 
 ### Visual system
 
@@ -426,10 +432,10 @@ Settings → Appearance, and any built-in theme can be duplicated and edited.
 | ![Dock](screenshots/24-shell-dock.png) | ![Zen shell](screenshots/25-shell-zen.png) |
 
 - **Shell** moves the navigation: left rail, top dock, or a collapsed icon strip.
-- **Layout** re-arranges the overview: bento, ledger, orbit, dense, zen.
+- **Layout** re-arranges the overview: bento, ledger, orbit, dense, zen, timeline, board.
 - **Widgets** can be dragged, reordered and hidden independently of both.
 
-Five styles share one token set (surface, hairline, radius, type scale); they
+Sixteen themes share one token set (surface, hairline, radius, type scale); they
 differ in surface colour, radius, density and type family, not just hue.
 
 See [docs/plan-audit.md](plan-audit.md) for the capability audit and

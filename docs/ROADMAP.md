@@ -117,7 +117,7 @@ Being explicit about refusals is part of the design:
 1. Work lands on `main` through short-lived branches (see
    [CONTRIBUTING.md](../CONTRIBUTING.md)).
 2. `CHANGELOG.md` gains an entry under `Unreleased`.
-3. The version is bumped in all four places; `npm run version:check` proves it.
+3. The version is bumped in every tracked field; `npm run version:check` proves it.
 4. A `vX.Y.Z` tag is pushed. The release workflow refuses to build if the tag
    disagrees with the version, builds Windows / Linux / macOS artifacts, and
    publishes SHA-256 checksums.

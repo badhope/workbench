@@ -28,8 +28,8 @@ jobs:
       - name: Icon contract
         run: python scripts/check_icons.py
 
-      # 版本号写在四个地方；任何一处漏改都会让应用内版本、安装包文件名和
-      # Release 标题各说各话（0.3.0 之前锁文件就停在 0.1.1）。
+      # 版本号出现在 package / lock / Tauri / Cargo 多处；任何一处漏改都会
+      # 让应用内版本、安装包文件名和 Release 标题各说各话。
       - name: Version consistency
         run: npm run version:check
 

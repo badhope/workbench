@@ -42,9 +42,9 @@
 - **btop++** 是更好的「常驻监视器」：体积极小、支持鼠标、可发信号、41 个主题文件。
   Workbench 是打开来用的应用，不是长期挂在终端面板里的 TUI。
 - **Glances** 赢在自动化：有文档化的 REST API、MCP server、客户端/服务端模式和
-  CSV/JSON 导出。Workbench 没有 API，也没有远程模式。
+  CSV/JSON 导出。Workbench 有仅绑定回环地址的本地 HTTP API，但没有远程或多机模式。
 - **Stats** 是 macOS 菜单栏监视的代表：13 种菜单栏组件，并在说明里列出仅有的
-  两个外部 API。Workbench 的 macOS 产物只在 CI 构建，且未签名。
+  两个外部 API。Workbench 的 macOS 产物由 CI 构建，且未签名。
 - **ccusage** 用一条命令覆盖 18 种编码代理，`--instances` 可按项目聚合。
   Workbench 目前只读 Claude Code 与 Codex 的会话文件。
 - **Claude Code Usage Monitor** 会预测 5 小时额度耗尽，并区分 `official` 与
