@@ -3,6 +3,21 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.2] - 2026-11-19
+
+### Added — AI 受控写入（M2）
+
+- **写入默认关闭**：新增 `ai.json` 开关与设置页「AI 接入」切换；关闭时 MCP
+  写工具直接拒绝，服务层也会再次校验，避免只靠传输层拦截。
+- **白名单写工具**：`task_create`、`task_update`、`knowledge_append`。任务写入
+  走 `data::mutate` 的同一把锁；知识追加只允许已配置知识目录内的已有文件，
+  拒绝路径穿越、符号链接逃逸与 2 MB 上限。
+- **审计与撤销**：每次写入记录 `ai_actions.json`（最多 200 条，含写入前后
+  快照/文件长度与指纹），`ai_actions_list` 可查、`ai_action_undo` 可撤销；
+  目标被外部改动时拒绝撤销。审计失败会回滚本次写入。
+- **三端同源**：IPC、HTTP、MCP 共用 `services::ai`，不复制业务规则；知识追加
+  后自动重建 FTS5 索引。
+
 ## [0.9.1] - 2026-11-19
 
 ### Added — 本地知识库与 AI 接入

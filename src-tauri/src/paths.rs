@@ -79,6 +79,14 @@ impl DataRoot {
         self.join("knowledge.db")
     }
 
+    pub fn ai_config(&self) -> PathBuf {
+        self.join("ai.json")
+    }
+
+    pub fn ai_actions(&self) -> PathBuf {
+        self.join("ai_actions.json")
+    }
+
     pub fn log_file(&self) -> PathBuf {
         self.join("workbench.log")
     }

@@ -30,6 +30,8 @@ import type {
   KnowledgeStatus,
   KnowledgeHit,
   KnowledgeDoc,
+  AiConfig,
+  AiAction,
 } from "../types";
 
 /** 是否运行在 Tauri 桌面壳内（有 IPC、托盘、置顶等原生能力）。 */
@@ -324,6 +326,34 @@ export async function pickKnowledgeFolder(): Promise<string | null> {
 export async function knowledgeOpen(path: string): Promise<void> {
   requireDesktop("打开本地笔记仅在桌面应用中可用");
   return invoke("knowledge_open", { path });
+}
+
+export async function aiConfig(): Promise<AiConfig> {
+  if (isTauri()) return invoke<AiConfig>("ai_config");
+  return httpJson<AiConfig>("/api/ai/config");
+}
+
+export async function aiSetWrites(allow: boolean): Promise<AiConfig> {
+  if (isTauri()) return invoke<AiConfig>("ai_set_writes", { allow });
+  return httpJson<AiConfig>("/api/ai/config", {
+    method: "POST",
+    body: { allow },
+    write: true,
+  });
+}
+
+export async function aiActions(limit = 20): Promise<AiAction[]> {
+  if (isTauri()) return invoke<AiAction[]>("ai_actions", { limit });
+  return httpJson<AiAction[]>(`/api/ai/actions?limit=${limit}`);
+}
+
+export async function aiUndo(id: string): Promise<AiAction> {
+  if (isTauri()) return invoke<AiAction>("ai_undo", { id });
+  return httpJson<AiAction>("/api/ai/actions/undo", {
+    method: "POST",
+    body: { id },
+    write: true,
+  });
 }
 
 export async function readLogs(maxLines: number): Promise<string> {

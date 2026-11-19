@@ -4,7 +4,7 @@ Workbench ships in small, verifiable increments. Every entry below states what
 is done, what is next, and what is explicitly **not** planned — a roadmap that
 only lists ambitions is a wish list, not a plan.
 
-Current version: **0.9.1** · Status legend: ✅ shipped · 🚧 in progress · ⬜ planned
+Current version: **0.9.2** · Status legend: ✅ shipped · 🚧 in progress · ⬜ planned
 
 ## 0.4.0 — Integrity of the numbers (shipped 2026-11-02)
 
@@ -44,6 +44,15 @@ Current version: **0.9.1** · Status legend: ✅ shipped · 🚧 in progress · 
 | `workbench cost` CLI (`--json` with schema, `--days`, `--by-project`) | ✅ | `cli.rs` `run_cost`, `cost_text` test |
 | Crash visibility: panic hook → `crash.log`, surfaced in diagnostics | ✅ | `logging_setup::install_panic_hook`, `diagnostics::crash_log_check` |
 | Theme-aware overlay scrim (was 55% black in light themes) | ✅ | `.overlay-scrim` in `global.css` driven by `data-chart-theme` |
+
+## 0.9.x — Local memory + controlled AI writes (shipped 2026-11-19)
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| Local Markdown knowledge base with rebuildable FTS5 index | ✅ | `knowledge.rs`, `Knowledge.test.tsx`; files stay in place |
+| Read-only MCP: context, search, read, status | ✅ | `mcp.rs`, protocol smoke; `#[tool_handler]` regression |
+| Controlled writes: create/update task, append note | ✅ | `services/ai.rs`; 3 harness tests incl. traversal + symlink escape |
+| Writes off by default, audited, undoable | ✅ | `ai.json` / `ai_actions.json`; Settings AI card; `AiAccessCard.test.tsx` |
 
 ## 0.8.0 — Reach (planned)
 

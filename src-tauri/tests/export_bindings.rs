@@ -24,6 +24,7 @@ use workbench_lib::knowledge::{KnowledgeDoc, KnowledgeHit, KnowledgeSource, Know
 use workbench_lib::ports::PortEntry;
 use workbench_lib::pricing::PricingRow;
 use workbench_lib::procs::ProcInfo;
+use workbench_lib::services::ai::{AiAction, AiConfig};
 
 #[test]
 fn export_ts_bindings() {
@@ -38,6 +39,8 @@ fn export_ts_bindings() {
     KnowledgeStatus::export_all(&cfg).unwrap();
     KnowledgeHit::export_all(&cfg).unwrap();
     KnowledgeDoc::export_all(&cfg).unwrap();
+    AiConfig::export_all(&cfg).unwrap();
+    AiAction::export_all(&cfg).unwrap();
     AiProcess::export_all(&cfg).unwrap();
     OpencodeSession::export_all(&cfg).unwrap();
     OpencodeSessionsResult::export_all(&cfg).unwrap();

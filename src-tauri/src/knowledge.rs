@@ -196,7 +196,7 @@ fn tags_of(front: &FrontMatter) -> String {
     front.tags.join(",")
 }
 
-fn is_markdown(path: &Path) -> bool {
+pub(crate) fn is_markdown(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
         .map(|e| {

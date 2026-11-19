@@ -19,6 +19,11 @@ const withSource = {
 
 vi.mock("../lib/api", () => ({
   isTauri: () => false,
+  isBackend: () => true,
+  aiConfig: vi.fn(async () => ({ allow_writes: false })),
+  aiActions: vi.fn(async () => []),
+  aiSetWrites: vi.fn(async (allow: boolean) => ({ allow_writes: allow })),
+  aiUndo: vi.fn(),
   knowledgeStatus: vi.fn(),
   knowledgeSearch: vi.fn(),
   knowledgeAddSource: vi.fn(),

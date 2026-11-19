@@ -265,6 +265,9 @@ pub fn router(state: AppState, opts: &ServeOptions) -> Router {
             post(knowledge_add_source).delete(knowledge_remove_source),
         )
         .route("/knowledge/reindex", post(knowledge_reindex))
+        .route("/ai/config", get(ai_config).post(ai_set_writes))
+        .route("/ai/actions", get(ai_actions))
+        .route("/ai/actions/undo", post(ai_undo))
         // API 自己的 fallback：未知 /api/* 必须在进入静态站点回落之前就变成
         // 404 JSON。否则有 dist 时 ServeDir 会把 /api/nope 当成 SPA 路由，
         // 返回 200 + index.html，脚本消费者拿到 HTML 才报 Unexpected token <。
@@ -738,6 +741,60 @@ async fn knowledge_status(
 ) -> ApiResult<crate::knowledge::KnowledgeStatus> {
     let root = st.root.clone();
     let value = blocking(move || crate::knowledge::status(&root)).await?;
+    ok(value)
+}
+
+async fn ai_config(State(st): State<AppState>) -> ApiResult<crate::services::ai::AiConfig> {
+    let root = st.root.clone();
+    let value = blocking(move || crate::services::ai::config(&root)).await?;
+    ok(value)
+}
+
+#[derive(Deserialize)]
+struct AiWritesBody {
+    allow: bool,
+}
+
+async fn ai_set_writes(
+    State(st): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<AiWritesBody>,
+) -> ApiResult<crate::services::ai::AiConfig> {
+    require_same_origin(&headers)?;
+    require_write_header(&headers)?;
+    let root = st.root.clone();
+    let value = blocking(move || crate::services::ai::set_allow_writes(&root, body.allow)).await?;
+    ok(value)
+}
+
+#[derive(Deserialize)]
+struct AiActionsQuery {
+    limit: Option<usize>,
+}
+
+async fn ai_actions(
+    State(st): State<AppState>,
+    Query(q): Query<AiActionsQuery>,
+) -> ApiResult<Vec<crate::services::ai::AiAction>> {
+    let root = st.root.clone();
+    let value = blocking(move || crate::services::ai::actions(&root, q.limit)).await?;
+    ok(value)
+}
+
+#[derive(Deserialize)]
+struct AiUndoBody {
+    id: String,
+}
+
+async fn ai_undo(
+    State(st): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<AiUndoBody>,
+) -> ApiResult<crate::services::ai::AiAction> {
+    require_same_origin(&headers)?;
+    require_write_header(&headers)?;
+    let root = st.root.clone();
+    let value = blocking(move || crate::services::ai::undo(&root, &body.id)).await?;
     ok(value)
 }
 

@@ -1820,3 +1820,45 @@ pub async fn knowledge_open(app: AppHandle, path: String) -> Result<(), String> 
             .map_err(|e| format!("任务执行失败: {e}"))??;
     tauri_plugin_opener::open_path(resolved, None::<&str>).map_err(|e| format!("打开失败: {e}"))
 }
+
+// ── AI 受控写入 ────────────────────────────────────────────────
+
+#[tauri::command(async)]
+pub async fn ai_config(app: AppHandle) -> Result<crate::services::ai::AiConfig, String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || crate::services::ai::config(&root))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+#[tauri::command(async)]
+pub async fn ai_set_writes(
+    app: AppHandle,
+    allow: bool,
+) -> Result<crate::services::ai::AiConfig, String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::services::ai::set_allow_writes(&root, allow)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+#[tauri::command(async)]
+pub async fn ai_actions(
+    app: AppHandle,
+    limit: Option<usize>,
+) -> Result<Vec<crate::services::ai::AiAction>, String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || crate::services::ai::actions(&root, limit))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+#[tauri::command(async)]
+pub async fn ai_undo(app: AppHandle, id: String) -> Result<crate::services::ai::AiAction, String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || crate::services::ai::undo(&root, &id))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
+}

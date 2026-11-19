@@ -38,6 +38,8 @@ export type { KnowledgeSource } from "./generated/KnowledgeSource";
 export type { KnowledgeStatus } from "./generated/KnowledgeStatus";
 export type { KnowledgeHit } from "./generated/KnowledgeHit";
 export type { KnowledgeDoc } from "./generated/KnowledgeDoc";
+export type { AiConfig } from "./generated/AiConfig";
+export type { AiAction } from "./generated/AiAction";
 
 export type { CostSettings } from "./generated/CostSettings";
 export type { CostOverview } from "./generated/CostOverview";

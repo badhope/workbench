@@ -8,10 +8,7 @@ import {
   Search,
   Sun,
 } from "lucide-react";
-import {
-  isTauri,
-  setAlwaysOnTop as applyAlwaysOnTop,
-} from "../lib/api";
+import { isTauri, setAlwaysOnTop as applyAlwaysOnTop } from "../lib/api";
 import { openMiniWindow } from "../lib/miniWindow";
 
 import { localeFor, useLang, useT } from "../lib/i18n";

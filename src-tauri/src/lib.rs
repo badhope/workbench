@@ -295,6 +295,11 @@ pub fn run() {
             commands::knowledge_search,
             commands::knowledge_read,
             commands::knowledge_open,
+            // ── AI 受控写入 ──
+            commands::ai_config,
+            commands::ai_set_writes,
+            commands::ai_actions,
+            commands::ai_undo,
         ])
         .run(tauri::generate_context!())
         .expect("运行工作台应用失败");
