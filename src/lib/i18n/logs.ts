@@ -21,6 +21,9 @@ export const dict = {
     "logs.info": "Info",
     "logs.debug": "Debug",
     "logs.shown": "{shown} / {total} lines",
+    "logs.pulseTitle": "Log pulse",
+    "logs.pulseSub": "Severity split at a glance",
+    "logs.levelDist": "Severity distribution",
   },
   zh: {
     "logs.title": "应用日志",
@@ -41,6 +44,9 @@ export const dict = {
     "logs.info": "信息",
     "logs.debug": "调试",
     "logs.shown": "{shown} / {total} 行",
+    "logs.pulseTitle": "日志脉搏",
+    "logs.pulseSub": "按级别快速看出异常量",
+    "logs.levelDist": "级别分布",
   },
   ja: {
     "logs.title": "アプリログ",
@@ -62,5 +68,8 @@ export const dict = {
     "logs.info": "情報",
     "logs.debug": "デバッグ",
     "logs.shown": "{shown} / {total} 行",
+    "logs.pulseTitle": "ログパルス",
+    "logs.pulseSub": "重大度の内訳を一目で",
+    "logs.levelDist": "レベル分布",
   },
 } as const;

@@ -2,6 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { classifyOpenTarget } from "./openTarget";
 import { currentTransport, httpJson } from "./transport";
 import { t } from "./i18n";
+import {
+  demoKnowledgeRead,
+  demoKnowledgeSearch,
+  demoKnowledgeStatus,
+} from "./knowledgeDemo";
 import type {
   AiProcess,
   DiagnosticsReport,
@@ -271,11 +276,13 @@ export async function notify(title: string, body: string): Promise<void> {
 
 export async function knowledgeStatus(): Promise<KnowledgeStatus> {
   if (isTauri()) return invoke<KnowledgeStatus>("knowledge_status");
+  if (!isBackend()) return demoKnowledgeStatus();
   return httpJson<KnowledgeStatus>("/api/knowledge/status");
 }
 
 export async function knowledgeAddSource(path: string): Promise<KnowledgeStatus> {
   if (isTauri()) return invoke<KnowledgeStatus>("knowledge_add_source", { path });
+  if (!isBackend()) return demoKnowledgeStatus();
   return httpJson<KnowledgeStatus>("/api/knowledge/sources", {
     method: "POST",
     body: { path },
@@ -285,6 +292,7 @@ export async function knowledgeAddSource(path: string): Promise<KnowledgeStatus>
 
 export async function knowledgeRemoveSource(path: string): Promise<KnowledgeStatus> {
   if (isTauri()) return invoke<KnowledgeStatus>("knowledge_remove_source", { path });
+  if (!isBackend()) return demoKnowledgeStatus();
   return httpJson<KnowledgeStatus>(
     `/api/knowledge/sources?path=${encodeURIComponent(path)}`,
     { method: "DELETE", write: true }
@@ -293,6 +301,7 @@ export async function knowledgeRemoveSource(path: string): Promise<KnowledgeStat
 
 export async function knowledgeReindex(): Promise<KnowledgeStatus> {
   if (isTauri()) return invoke<KnowledgeStatus>("knowledge_reindex");
+  if (!isBackend()) return demoKnowledgeStatus();
   return httpJson<KnowledgeStatus>("/api/knowledge/reindex", {
     method: "POST",
     write: true,
@@ -304,6 +313,7 @@ export async function knowledgeSearch(
   limit = 20
 ): Promise<KnowledgeHit[]> {
   if (isTauri()) return invoke<KnowledgeHit[]>("knowledge_search", { query, limit });
+  if (!isBackend()) return demoKnowledgeSearch(query, limit);
   return httpJson<KnowledgeHit[]>(
     `/api/knowledge/search?q=${encodeURIComponent(query)}&limit=${limit}`
   );
@@ -311,6 +321,7 @@ export async function knowledgeSearch(
 
 export async function knowledgeRead(path: string): Promise<KnowledgeDoc> {
   if (isTauri()) return invoke<KnowledgeDoc>("knowledge_read", { path });
+  if (!isBackend()) return demoKnowledgeRead(path);
   return httpJson<KnowledgeDoc>(`/api/knowledge/doc?path=${encodeURIComponent(path)}`);
 }
 

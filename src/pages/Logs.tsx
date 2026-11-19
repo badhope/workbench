@@ -5,6 +5,7 @@ import { isBackend, readLogs, clearLogs } from "../lib/api";
 import { demoBundle } from "../lib/demo";
 import { Btn, ConfirmDialog } from "../ui";
 import { getLang, t as translate, useT } from "../lib/i18n";
+import { LogPulse } from "./logs/LogPulse";
 
 /**
  * Log viewer — displays the Rust backend logs without needing the DevTools console.
@@ -116,16 +117,13 @@ export default function Logs() {
     });
   }, [lines, level, query]);
 
-  const counts = useMemo(() => {
-    let err = 0;
-    let warn = 0;
-    for (const line of lines) {
-      const lv = levelOf(line);
-      if (lv === "error") err++;
-      else if (lv === "warn") warn++;
-    }
-    return { err, warn };
+  const levelCounts = useMemo(() => {
+    const next = { error: 0, warn: 0, info: 0, debug: 0 };
+    for (const line of lines) next[levelOf(line)]++;
+    return next;
   }, [lines]);
+
+  const counts = { err: levelCounts.error, warn: levelCounts.warn };
 
   const preRef = useRef<HTMLPreElement>(null);
   // 只有「用户本来就在底部」时才跟随滚动。否则每 3 秒一次自动刷新会把
@@ -180,6 +178,10 @@ export default function Logs() {
         onConfirm={() => void doClear()}
       />
 
+      <div className="mt-3">
+        <LogPulse counts={levelCounts} total={lines.length} shown={shown.length} />
+      </div>
+
       {/* 筛选条：关键字 + 级别。过滤只发生在渲染层，不重新读文件。 */}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <input
@@ -218,9 +220,6 @@ export default function Logs() {
             );
           })}
         </div>
-        <span className="num ml-auto text-[10.5px] text-faint">
-          {t("logs.shown", { shown: shown.length, total: lines.length })}
-        </span>
       </div>
 
       {/*

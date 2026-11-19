@@ -25,6 +25,7 @@ import { SourcePanel } from "./knowledge/SourcePanel";
 import { ResultList } from "./knowledge/ResultList";
 import { DocPreview } from "./knowledge/DocPreview";
 import { AiAccessCard } from "./knowledge/AiAccessCard";
+import { KnowledgePulse } from "./knowledge/KnowledgePulse";
 
 /** 知识库：本地 Markdown 的浏览入口，不做编辑器，也不复制正文到数据库。 */
 export default function Knowledge() {
@@ -217,8 +218,12 @@ export default function Knowledge() {
         </span>
       </div>
 
+      <div className="mt-3">
+        <KnowledgePulse status={status} hits={hits} />
+      </div>
+
       {/* 桌面三栏：来源 / 结果 / 预览；窄屏纵向堆叠，不复制第二套布局。 */}
-      <div className="mt-4 grid min-h-0 flex-1 gap-4 overflow-auto lg:grid-cols-[minmax(240px,0.75fr)_minmax(260px,1fr)] xl:grid-cols-[minmax(240px,0.72fr)_minmax(280px,0.9fr)_minmax(0,1.25fr)]">
+      <div className="mt-3 grid min-h-0 flex-1 gap-4 overflow-auto lg:grid-cols-[minmax(240px,0.75fr)_minmax(260px,1fr)] xl:grid-cols-[minmax(240px,0.72fr)_minmax(280px,0.9fr)_minmax(0,1.25fr)]">
         <div className="flex min-h-0 flex-col gap-4">
           <SourcePanel
             status={status}

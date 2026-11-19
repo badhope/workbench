@@ -18,6 +18,7 @@ import { isProjectRunning } from "../lib/aggregate";
 import { nextTaskForProject, projectGoal, projectProgress } from "../lib/workbench";
 import { useT } from "../lib/i18n";
 import type { Project } from "../types";
+import { PortfolioPulse } from "./projects/PortfolioPulse";
 
 const STATUS_MAP: Record<string, { tone: Tone }> = {
   active: { tone: "ok" },
@@ -136,6 +137,14 @@ export default function Projects() {
           <Plus size={14} /> {t("projects.new")}
         </Btn>
       </div>
+
+      {data.projects.length > 0 && (
+        <PortfolioPulse
+          projects={data.projects}
+          tasks={data.tasks}
+          onOpenTasks={openProjectTasks}
+        />
+      )}
 
       {data.projects.length === 0 ? (
         <Card>

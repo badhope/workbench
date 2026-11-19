@@ -51,6 +51,10 @@ export const dict = {
     "projects.overdueCount": "{count} overdue",
     "projects.openTasks": "View tasks",
     "projects.workspaceHint": "Click a project to open its tasks and context.",
+    "projects.portfolioTitle": "Portfolio pulse",
+    "projects.portfolioSub": "Completion and status across all projects",
+    "projects.overallCompletion": "Overall completion",
+    "projects.activeCount": "{count} active",
   },
   zh: {
     "projects.newFirst": "新建第一个项目",
@@ -101,6 +105,10 @@ export const dict = {
     "projects.overdueCount": "{count} 个逾期",
     "projects.openTasks": "查看任务",
     "projects.workspaceHint": "点击项目查看它的任务和上下文。",
+    "projects.portfolioTitle": "项目组合脉搏",
+    "projects.portfolioSub": "全部项目的完成度与状态总览",
+    "projects.overallCompletion": "总体完成率",
+    "projects.activeCount": "{count} 个活跃",
   },
   ja: {
     "projects.newFirst": "最初のプロジェクトを作成",
@@ -155,5 +163,9 @@ export const dict = {
     "projects.openTasks": "タスクを見る",
     "projects.workspaceHint":
       "プロジェクトをクリックすると、タスクとコンテキストを表示します。",
+    "projects.portfolioTitle": "ポートフォリオ脈",
+    "projects.portfolioSub": "全プロジェクトの完了度と状態",
+    "projects.overallCompletion": "全体の完了率",
+    "projects.activeCount": "稼働中 {count} 件",
   },
 } as const;
