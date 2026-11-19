@@ -38,6 +38,7 @@ export function ProgressRing({
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
+          className="progress-ring-value"
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">

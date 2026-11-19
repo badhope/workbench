@@ -18,6 +18,7 @@ import {
 } from "../lib/workbench";
 import { showsProjectsPanel, showsToolsSummary, WORK_MODES } from "../lib/workModes";
 import { TodayHeader } from "./today/TodayHeader";
+import { LivePulse } from "./today/LivePulse";
 import { QuickCapture } from "./today/QuickCapture";
 import { AttentionBar } from "./today/AttentionBar";
 import { CurrentProject } from "./today/CurrentProject";
@@ -193,6 +194,8 @@ export default function Today() {
         total={todayStat.total}
         dataUpdatedAt={lastDataUpdatedAt}
       />
+
+      <LivePulse />
 
       <div
         className={`grid grid-cols-1 gap-6 ${

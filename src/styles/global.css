@@ -419,6 +419,42 @@ input[type="checkbox"] {
   }
 }
 
+/* ── 实时可视化带：折线扫描、数字追赶、卡片悬浮 ──────────────── */
+.progress-ring-value {
+  transition: stroke-dashoffset 0.72s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.live-card {
+  transition:
+    border-color 0.22s ease,
+    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.22s ease;
+}
+.live-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--color-accent) 38%, var(--color-line));
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.14);
+}
+
+/* 一条低透明度的扫描光带：让“正在采样”这件事有持续的运动感，
+   但不覆盖读数，也不抢折线的视觉。 */
+@keyframes live-scan {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateX(620%);
+    opacity: 0;
+  }
+}
+.live-scan {
+  animation: live-scan 3.2s linear infinite;
+}
+
 /* ── 动效区：全部 keyframes 只动 transform 与 opacity（GPU 合成层） ── */
 
 /* 唯一的编排动效：进入页面时内容自下而上就位 */
@@ -545,6 +581,9 @@ input[type="checkbox"] {
 [data-motion="off"] .t-btn,
 [data-motion="off"] .empty-float > svg,
 [data-motion="off"] .hero-orbit-spin,
+[data-motion="off"] .live-card,
+[data-motion="off"] .live-scan,
+[data-motion="off"] .progress-ring-value,
 /* Tailwind 内置的 animate-spin / animate-pulse 也在动效管辖范围内 */
 [data-motion="off"] .animate-pulse,
 [data-motion="off"] .animate-spin {

@@ -71,10 +71,12 @@ export function createRuntimeActions(
       if (!isBackend()) {
         // 纯静态预览（既不是桌面壳、也没有 HTTP 后端）：注入演示数据。
         // 连着 `workbench serve` 的浏览器走下面的真实路径。
-        const seed = [0, 1, 2].map((i) => ({
-          cpu: Math.round(20 + i * 3),
-          memGb: Math.round((12 + i * 0.4) * 100) / 100,
-          t: Date.now() - (3 - i) * 3000,
+        // 20 个连续采样点，让静态预览里的实时折线也有形状可读；
+        // 真实后端仍由 refreshRuntime 每轮追加，不依赖这段演示数据。
+        const seed = Array.from({ length: 20 }, (_, i) => ({
+          cpu: Math.round(24 + Math.sin(i / 2.6) * 9 + (i % 3)),
+          memGb: Math.round((12.4 + Math.sin(i / 3.4) * 0.5 + i * 0.015) * 10) / 10,
+          t: Date.now() - (19 - i) * 3000,
         }));
         // 演示数据跟随界面语言：否则英文界面里会混进中文项目名与日志。
         const demo = demoBundle(getLang());
