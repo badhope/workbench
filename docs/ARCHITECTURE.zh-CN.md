@@ -112,7 +112,7 @@ npm run tauri build
 ```
 workbench/
 ├── src/                    # 前端源码
-│   ├── pages/              # 8 个功能页面（按需 lazy 加载）
+│   ├── pages/              # 11 个功能页面（按需 lazy 加载）
 │   ├── lib/                # store / api / echarts / chartTheme / i18n / util
 │   ├── generated/          # ts-rs 生成的 IPC 契约类型（勿手改）
 │   ├── ui.tsx              # 共享组件库

@@ -44,7 +44,7 @@ async function main() {
   // 这套测试会写入标记项目来验证备份/恢复。跑完必须把原始数据放回去，
   // 否则开发机上的真实项目列表会被测试数据顶掉（曾经就是这样丢过一次）。
   const originalData = await p.evaluate(() =>
-    window.__TAURI_INTERNALS__.invoke("load_data")
+    window.__TAURI_INTERNALS__.invoke("load_data_versioned").then((r) => r.data)
   );
 
   // ── 2. 直接调 IPC：定价表必须来自 Rust 内置表 ──
@@ -153,9 +153,9 @@ async function main() {
         tasks: [],
       },
     });
-    const changed = await invoke("load_data");
+    const changed = (await invoke("load_data_versioned")).data;
     const restored = await invoke("restore_backup", { id: points[0].id });
-    const after = await invoke("load_data");
+    const after = (await invoke("load_data_versioned")).data;
     return {
       backupFiles: made.files,
       pointCount: points.length,
@@ -239,7 +239,7 @@ async function main() {
     originalData
   );
   const restoredData = await p.evaluate(() =>
-    window.__TAURI_INTERNALS__.invoke("load_data")
+    window.__TAURI_INTERNALS__.invoke("load_data_versioned").then((r) => r.data)
   );
   if (restoredData.projects.length !== originalData.projects.length) {
     fail("测试结束后没能还原原始数据");

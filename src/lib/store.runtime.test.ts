@@ -109,7 +109,6 @@ describe("loadAll", () => {
   it("演示模式注入示例数据且不调 IPC", async () => {
     harness.tauriMode = false;
     await useStore.getState().loadAll();
-    expect(api.loadData).not.toHaveBeenCalled();
     expect(useStore.getState().procs.length).toBeGreaterThan(0);
     expect(useStore.getState().lastRefreshAt).toBeGreaterThan(0);
   });

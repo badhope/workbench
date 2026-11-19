@@ -261,7 +261,6 @@ pub fn run() {
             commands::open_mini_window,
             commands::show_main_window,
             commands::close_current_window,
-            commands::load_data,
             commands::load_data_versioned,
             commands::save_data,
             commands::read_logs,

@@ -172,10 +172,6 @@ export async function diskInfo(): Promise<DiskInfo[]> {
   return httpJson<DiskInfo[]>("/api/disks");
 }
 
-export async function loadData(): Promise<WorkbenchData> {
-  return invoke<WorkbenchData>("load_data");
-}
-
 export async function loadDataVersioned(): Promise<{
   data: WorkbenchData;
   generation: string;

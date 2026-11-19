@@ -60,23 +60,27 @@ src/
 
 ## 3. 已合并的重复点（防止回潮）
 
-| 原先重复 | 现在唯一实现 |
-|---|---|
-| `commands.rs` 与 `runtime.rs` 各自维护端口 TTL、PID 索引、dev-server 组装 | `runtime::{cached_ports, pid_index, collect_dev_servers}` |
-| IPC / HTTP 各自写一遍 opencode 端口发现与逐个尝试 | `runtime::probe_opencode` |
-| 7 个成本命令各自“加锁 + 解析 DataRoot + 查询” | `commands::run_cost` |
-| `Settings.tsx parseBackup` 圈复杂度 32 | `lib/importBackup.ts`（结构/版本/项目/任务分层） |
-| `AppearancePanel` 与 `OnboardingOverlay` 各一份动效档位按钮 | `components/MotionSelector.tsx` |
-| TCP / UDP 端口卡片各写一遍 CSV、空态、网格 | `pages/servers/PortsCard.tsx` + `PortGrid.tsx` |
-| `processFilter.ts` 与 `processes/tree.ts` 各一份排序比较器 | `processFilter::compareProcs` |
-| Processes / Servers 各拼一遍导出文件名与时间戳 | `lib/export::{downloadCsv, timestampForFilename}` |
-| `store.ts` 多处“清防抖 + 等队列 + 写 pending” | `drainPendingData()` |
-| `store.ts` 多处快照补空字段 | `mergeSnapshot()` |
-| `Tasks.tsx` 列表/看板各一份“今天/本周补到期日” | `defaultDueForScope()` |
-| 进程终止普通/提权两套身份校验 | `procs::{identity_matches, validate_termination_target}` |
-| 终止进程/提权/清空成本各自判 `isTauri()` 再抛错 | `api::requireDesktop()` |
-| 三个入口分散 `invoke`（AppHeader / useAppRuntime / main） | 全部走 `lib/api.ts`，`ipcContract.test.ts` 强制单文件 |
-| `components/lib/types` 反向 import `pages/registry` | 页面注册表上移到 `src/navigation.tsx` |
+| 原先重复                                                                  | 现在唯一实现                                                     |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `commands.rs` 与 `runtime.rs` 各自维护端口 TTL、PID 索引、dev-server 组装 | `runtime::{cached_ports, pid_index, collect_dev_servers}`        |
+| IPC / HTTP 各自写一遍 opencode 端口发现与逐个尝试                         | `runtime::probe_opencode`                                        |
+| 7 个成本命令各自“加锁 + 解析 DataRoot + 查询”                             | `commands::run_cost`                                             |
+| `Settings.tsx parseBackup` 圈复杂度 32                                    | `lib/importBackup.ts`（结构/版本/项目/任务分层）                 |
+| `AppearancePanel` 与 `OnboardingOverlay` 各一份动效档位按钮               | `components/MotionSelector.tsx`                                  |
+| TCP / UDP 端口卡片各写一遍 CSV、空态、网格                                | `pages/servers/PortsCard.tsx` + `PortGrid.tsx`                   |
+| `processFilter.ts` 与 `processes/tree.ts` 各一份排序比较器                | `processFilter::compareProcs`                                    |
+| Processes / Servers 各拼一遍导出文件名与时间戳                            | `lib/export::{downloadCsv, timestampForFilename}`                |
+| `store.ts` 多处“清防抖 + 等队列 + 写 pending”                             | `drainPendingData()`                                             |
+| `store.ts` 多处快照补空字段                                               | `mergeSnapshot()`                                                |
+| `Tasks.tsx` 列表/看板各一份“今天/本周补到期日”                            | `defaultDueForScope()`                                           |
+| 进程终止普通/提权两套身份校验                                             | `procs::{identity_matches, validate_termination_target}`         |
+| 终止进程/提权/清空成本各自判 `isTauri()` 再抛错                           | `api::requireDesktop()`                                          |
+| 三个入口分散 `invoke`（AppHeader / useAppRuntime / main）                 | 全部走 `lib/api.ts`，`ipcContract.test.ts` 强制单文件            |
+| `components/lib/types` 反向 import `pages/registry`                       | 页面注册表上移到 `src/navigation.tsx`                            |
+| 旧版 `load_data` IPC / `api.loadData`                                     | 删除，只保留带 generation 的 `load_data_versioned`；E2E 同步切换 |
+| `existing_keys` 假增量扫描接口                                            | 删除；成本扫描明确为全量读，避免 mtime/size 误跳过               |
+| 每 3 秒枚举磁盘挂载点                                                     | `disk_info_blocking` 加 30 秒缓存                                |
+| 原子写只 fsync 文件                                                       | rename 后 Unix 下再 fsync 父目录                                 |
 
 新增同类能力时，先查上表；能进已有模块就不开新文件。
 
@@ -121,5 +125,6 @@ npm run dup                        # jscpd 阈值 3%
 - `src/pages/Today.tsx` 1070 行 → 页面壳 383 行 + `today/` 下 7 个内聚组件，最大 `Rails.tsx` 200 行。
 - `src/pages/overview/widgets.tsx` 905 行 → `overview/widgets/` 下 `charts/lists/orbit/WidgetFrame`，最大 380 行。
 - `src/lib/store.runtime.test.ts` 836 行 → `store.runtime.test.ts` 342 行 + `store.cost.test.ts` 349 行 + `store.persistence.test.ts` 93 行；API mock 与重置收敛到 `storeTestHarness.ts`。
+- P2 收口：删除旧 `load_data`/`loadData` 与假增量接口；磁盘枚举 30 秒缓存；Unix 原子写补父目录 fsync；定价搜索/单元格补 `aria-label`。
 
 拆分只搬代码与收口状态边界，不改外部行为：拆后全量 **58 文件 / 613 项**仍全绿。新增模块若超过 800 行，先按职责拆，不要靠调高告警阈值。

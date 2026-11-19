@@ -58,7 +58,8 @@ pub fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), Str
         file.flush()?;
         // 落盘后再 rename：崩溃/断电不会留下「rename 成功但内容为空」的文件
         file.sync_all()?;
-        fs::rename(&tmp, path)
+        fs::rename(&tmp, path)?;
+        sync_parent_dir(path)
     })();
 
     match write_result {
@@ -68,6 +69,20 @@ pub fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), Str
             Err(format!("写入 {} 失败: {e}", path.display()))
         }
     }
+}
+
+/// rename 后同步父目录：只 fsync 文件不足以保证目录项本身落盘（Unix）。
+#[cfg(unix)]
+fn sync_parent_dir(path: &Path) -> io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::File::open(parent)?.sync_all()?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn sync_parent_dir(_path: &Path) -> io::Result<()> {
+    Ok(())
 }
 
 /// 把损坏文件挪成 `.corrupt-<时间戳>`，返回新路径；挪不动（被占用）返回 None。

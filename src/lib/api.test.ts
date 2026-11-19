@@ -67,8 +67,6 @@ describe("命令名与参数", () => {
       ? true
       : false = true;
     expect(requiresGeneration).toBe(true);
-    await api.loadData();
-    expect(invokeMock).toHaveBeenLastCalledWith("load_data");
     const data = { projects: [], tasks: [] };
     await api.loadDataVersioned();
     expect(invokeMock).toHaveBeenLastCalledWith("load_data_versioned");

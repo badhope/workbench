@@ -369,11 +369,7 @@ fn usage_token_u64(v: Option<&serde_json::Value>) -> Option<u64> {
 }
 
 #[cfg(test)]
-fn scan_sessions_to_records(
-    files: &[SessionFileEntry],
-    table: &PricingTable,
-    _existing_keys: &HashMap<(String, u64, u64), ()>,
-) -> Vec<CostRecord> {
+fn scan_sessions_to_records(files: &[SessionFileEntry], table: &PricingTable) -> Vec<CostRecord> {
     scan_complete_sessions(files, table).unwrap_or_default()
 }
 
@@ -767,11 +763,8 @@ mod tests {
             modified: 1,
             size: fs::metadata(&fixture.0).unwrap().len(),
         };
-        let first = scan_sessions_to_records(
-            std::slice::from_ref(&entry),
-            &PricingTable::default(),
-            &HashMap::new(),
-        );
+        let first =
+            scan_sessions_to_records(std::slice::from_ref(&entry), &PricingTable::default());
         assert_eq!(first[0].input_tokens, 1_000_000);
         fs::write(
             &fixture.0,
@@ -779,9 +772,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(fs::metadata(&fixture.0).unwrap().len(), entry.size);
-        let mut existing = HashMap::new();
-        existing.insert((entry.path.clone(), entry.modified, entry.size), ());
-        let records = scan_sessions_to_records(&[entry], &PricingTable::default(), &existing);
+        let records = scan_sessions_to_records(&[entry], &PricingTable::default());
         assert_eq!(
             records.len(),
             1,
@@ -944,7 +935,7 @@ mod tests {
             modified: 1_767_000_000,
             size: 1,
         }];
-        let records = scan_sessions_to_records(&entries, &PricingTable::default(), &HashMap::new());
+        let records = scan_sessions_to_records(&entries, &PricingTable::default());
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].model, "claude-sonnet-4-5");
         assert_eq!(records[0].cost_source, "measured", "真实格式必须能定价");
@@ -1001,7 +992,7 @@ mod tests {
             modified: 1_767_000_000,
             size: 1,
         }];
-        let records = scan_sessions_to_records(&entries, &PricingTable::default(), &HashMap::new());
+        let records = scan_sessions_to_records(&entries, &PricingTable::default());
         assert_eq!(records.len(), 2);
         let opus = records
             .iter()
@@ -1025,8 +1016,7 @@ mod tests {
         fs::remove_file(&tmp).ok();
     }
 
-    /// 读不动的文件不应留下带真实 (path, mtime, size) 的记录，
-    /// 否则 existing_keys 会永久跳过它，文件后来可读了也不再计费。
+    /// 读不动的文件不应留下记录；全量扫描保证它后来可读时仍会计费。
     #[test]
     fn unreadable_file_produces_no_records() {
         let groups = extract_usage("C:/definitely/not/a/real/session.jsonl", "2026-01-01");
@@ -1039,7 +1029,7 @@ mod tests {
             modified: 1_767_000_000,
             size: 10,
         }];
-        let records = scan_sessions_to_records(&entries, &PricingTable::default(), &HashMap::new());
+        let records = scan_sessions_to_records(&entries, &PricingTable::default());
         assert!(records.is_empty(), "不可读文件不应产出记录");
     }
 
@@ -1125,7 +1115,7 @@ mod tests {
             size: meta.len(),
         }];
         let table = PricingTable::default();
-        let records = scan_sessions_to_records(&entries, &table, &HashMap::new());
+        let records = scan_sessions_to_records(&entries, &table);
         assert_eq!(records.len(), 1);
         // input 1000 全额计价，不被 cache 9000 吃掉
         assert_eq!(records[0].input_tokens, 1000);
@@ -1151,7 +1141,7 @@ mod tests {
             modified: 1_767_000_000,
             size: 1,
         }];
-        let records = scan_sessions_to_records(&entries, &PricingTable::default(), &HashMap::new());
+        let records = scan_sessions_to_records(&entries, &PricingTable::default());
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].cost_source, "zero_pricing");
         assert_eq!(records[0].cost_total, 0.0);

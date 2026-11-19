@@ -557,31 +557,6 @@ fn validate_settings(s: CostSettings) -> Result<CostSettings, String> {
 
 // ── 导入 ───────────────────────────────────────────────────
 
-/// 已入库文件的 (path, mtime, size) 快照，供扫描跳过未变化文件。
-pub fn existing_keys(root: &DataRoot) -> Result<HashMap<(String, u64, u64), ()>, String> {
-    let _guard = lock();
-    migrate_legacy_json(root)?;
-    let conn = open(root)?;
-    let mut stmt = conn
-        .prepare("SELECT DISTINCT file_path, file_mtime, file_size FROM records")
-        .map_err(|e| format!("准备查询失败: {e}"))?;
-    let rows = stmt
-        .query_map([], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, i64>(1)? as u64,
-                r.get::<_, i64>(2)? as u64,
-            ))
-        })
-        .map_err(|e| format!("查询已有文件失败: {e}"))?;
-    let mut out = HashMap::new();
-    for row in rows {
-        let k = row.map_err(|e| format!("读取已有文件失败: {e}"))?;
-        out.insert(k, ());
-    }
-    Ok(out)
-}
-
 /// 导入：按 file_path **整组替换**，在单个事务里完成。
 pub fn import_records(root: &DataRoot, new_records: &[CostRecord]) -> Result<usize, String> {
     if new_records.is_empty() {
@@ -1613,26 +1588,6 @@ mod tests {
         // 保留最近的 2 天（05-02、05-03），丢掉最早的 05-01；输出仍是时间正序。
         assert_eq!(limited[0].day, "2026-05-02");
         assert_eq!(limited[1].day, "2026-05-03");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn existing_keys_lists_distinct_file_triples() {
-        let (dir, db) = temp_db("keys");
-        let conn = open_at(&db).unwrap();
-        insert(
-            &conn,
-            &[
-                record("/s/a.jsonl", "2026-10-01", "measured", "m", 0.1),
-                record("/s/a.jsonl", "2026-10-02", "measured", "m", 0.2),
-                record("/s/b.jsonl", "2026-10-02", "measured", "m", 0.3),
-            ],
-        );
-        let mut stmt = conn
-            .prepare("SELECT DISTINCT file_path, file_mtime, file_size FROM records")
-            .unwrap();
-        let n = stmt.query_map([], |_| Ok(())).unwrap().count();
-        assert_eq!(n, 2, "同一文件的多条按日记录只算一个去重键");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

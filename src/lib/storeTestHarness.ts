@@ -8,7 +8,6 @@ import { setLang } from "./i18n";
  * 现在拆成独立文件，只保留这一份 api mock 与 reset，避免测试之间互相污染。
  */
 export const api = {
-  loadData: vi.fn(),
   loadDataVersioned: vi.fn(),
   restoreBackup: vi.fn(),
   saveData: vi.fn(),

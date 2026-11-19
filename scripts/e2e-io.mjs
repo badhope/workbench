@@ -54,7 +54,7 @@ async function main() {
 
   // 记录导入前的项目数
   const before = await p.evaluate(async () => {
-    const d = await window.__TAURI_INTERNALS__.invoke("load_data");
+    const d = (await window.__TAURI_INTERNALS__.invoke("load_data_versioned")).data;
     return d.projects.length;
   });
 
@@ -65,7 +65,7 @@ async function main() {
   const badToast = await p.evaluate(() => document.body.innerText);
   if (!/导入失败|invalid|缺/.test(badToast)) fail("非法结构没有给出失败提示");
   const afterBad = await p.evaluate(async () => {
-    const d = await window.__TAURI_INTERNALS__.invoke("load_data");
+    const d = (await window.__TAURI_INTERNALS__.invoke("load_data_versioned")).data;
     return d.projects.length;
   });
   if (afterBad !== before) fail("非法导入改动了数据");
@@ -103,7 +103,7 @@ async function main() {
   await fileInput.setInputFiles(good);
   await p.waitForTimeout(1200);
   const imported = await p.evaluate(async () => {
-    const d = await window.__TAURI_INTERNALS__.invoke("load_data");
+    const d = (await window.__TAURI_INTERNALS__.invoke("load_data_versioned")).data;
     return { names: d.projects.map((x) => x.name), count: d.projects.length };
   });
   if (!imported.names.includes("E2E IO Project")) fail("合法导入没有写入项目");
@@ -133,11 +133,11 @@ async function main() {
   // 清理探针数据
   const cleaned = await p.evaluate(async () => {
     const invoke = window.__TAURI_INTERNALS__.invoke;
-    const d = await invoke("load_data");
+    const d = (await invoke("load_data_versioned")).data;
     const before = d.projects.length;
     d.projects = d.projects.filter((x) => x.id !== "e2e-io-1");
     await invoke("save_data", { data: d });
-    return before - (await invoke("load_data")).projects.length;
+    return before - (await invoke("load_data_versioned")).data.projects.length;
   });
   ok(`探针项目已清理（${cleaned} 条）`);
 

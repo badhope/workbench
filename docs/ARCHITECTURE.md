@@ -159,7 +159,7 @@ Artifacts land in `src-tauri/target/release/bundle/`.
 ```
 workbench/
 ├── src/                    # frontend
-│   ├── pages/              # 8 feature pages (lazy loaded)
+│   ├── pages/              # 11 feature pages (lazy loaded)
 │   ├── lib/                # store / api / echarts / chartTheme / i18n / util
 │   ├── generated/          # ts-rs generated IPC contract types (do not edit)
 │   ├── ui.tsx              # shared component library

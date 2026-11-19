@@ -426,9 +426,22 @@ pub struct DiskInfo {
 #[tauri::command(async)]
 /// 同步版本：桌面 IPC 与 HTTP 服务共用。
 pub fn disk_info_blocking() -> Vec<DiskInfo> {
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{Duration, Instant};
     use sysinfo::Disks;
-    let disks_list = Disks::new_with_refreshed_list();
 
+    // 磁盘容量变化很慢，前端却每 3 秒轮询一次；30 秒缓存足够及时，
+    // 也避免常驻时反复枚举挂载点。
+    type DiskCache = Mutex<Option<(Instant, Vec<DiskInfo>)>>;
+    static CACHE: OnceLock<DiskCache> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(None));
+    if let Some((at, disks)) = cache.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        if at.elapsed() < Duration::from_secs(30) {
+            return disks.clone();
+        }
+    }
+
+    let disks_list = Disks::new_with_refreshed_list();
     let mut disks = Vec::new();
     for d in disks_list.list() {
         let total = d.total_space();
@@ -456,6 +469,7 @@ pub fn disk_info_blocking() -> Vec<DiskInfo> {
             is_removable: d.is_removable(),
         });
     }
+    *cache.lock().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), disks.clone()));
     disks
 }
 
@@ -464,22 +478,6 @@ pub async fn disk_info() -> Result<Vec<DiskInfo>, String> {
     tauri::async_runtime::spawn_blocking(|| Ok(disk_info_blocking()))
         .await
         .map_err(|e| format!("任务执行失败: {e}"))?
-}
-
-#[tauri::command(async)]
-pub async fn load_data(
-    app: AppHandle,
-    dirs: tauri::State<'_, KnownDirs>,
-) -> Result<WorkbenchData, String> {
-    let data = data::load_from_disk(&data_root(&app)?)?;
-    // data.json 可能被外部编辑过，回灌白名单时同样要过存在性校验。
-    // 校验含 Path::is_dir()：断开的 UNC / 映射盘会阻塞数秒，
-    // 因此必须在 spawn_blocking 里做（这两个命令原先是非 async，跑在主线程）。
-    let paths: Vec<String> = data.projects.iter().map(|p| p.path.clone()).collect();
-    let total = paths.len();
-    let accepted = dirs.record_validated_blocking(paths).await?;
-    log::debug!("从 data.json 登记 {accepted} 个有效项目目录（共 {total} 个）");
-    Ok(data)
 }
 
 #[derive(Serialize)]

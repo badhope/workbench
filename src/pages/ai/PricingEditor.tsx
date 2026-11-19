@@ -211,6 +211,7 @@ export function PricingEditor({ onChanged }: { onChanged?: () => void }) {
       <div className="mb-2 flex flex-wrap items-end gap-2">
         <input
           className={`${inputCls} max-w-[220px]`}
+          aria-label={t("pricing.search")}
           placeholder={t("pricing.search")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -326,6 +327,7 @@ function PriceRow({
   onReset: (model: string) => void;
   onSave: () => void;
 }) {
+  const t = useT();
   const overridden = r.override_input !== null;
   return (
     <tr className="border-b border-line/40">
@@ -338,6 +340,7 @@ function PriceRow({
             : null
         }
         currency={r.builtin_currency}
+        ariaLabel={`${r.model} ${t("pricing.colInput")}`}
         editing={Boolean(draft)}
         onChange={(v) => onPatch(r.model, { input: v })}
       />
@@ -349,6 +352,7 @@ function PriceRow({
             : null
         }
         currency={r.builtin_currency}
+        ariaLabel={`${r.model} ${t("pricing.colOutput")}`}
         editing={Boolean(draft)}
         onChange={(v) => onPatch(r.model, { output: v })}
       />
@@ -379,12 +383,14 @@ function PriceCell({
   value,
   original,
   currency,
+  ariaLabel,
   editing,
   onChange,
 }: {
   value: number | null;
   original?: number | null;
   currency?: string | null;
+  ariaLabel: string;
   editing: boolean;
   onChange: (v: string) => void;
 }) {
@@ -394,6 +400,7 @@ function PriceCell({
         <input
           className="w-20 rounded border border-line bg-panel2 px-1.5 py-0.5 text-right font-mono text-[11px] outline-none focus:border-accent"
           value={Number.isFinite(value) ? String(value) : ""}
+          aria-label={ariaLabel}
           inputMode="decimal"
           onChange={(e) => onChange(e.target.value)}
         />
@@ -404,9 +411,7 @@ function PriceCell({
     <td className="px-2 py-1">
       <span className="num">{value?.toFixed(2) ?? "—"}</span>
       {original !== null && original !== undefined && currency === "CNY" && (
-        <span className="block text-[9.5px] text-faint">
-          {`¥${original.toFixed(2)}`}
-        </span>
+        <span className="block text-[9.5px] text-faint">{`¥${original.toFixed(2)}`}</span>
       )}
     </td>
   );
