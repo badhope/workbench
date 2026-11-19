@@ -9,7 +9,7 @@ use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{Implementation, ServerCapabilities, ServerConfig};
 use rmcp::schemars::JsonSchema;
 use rmcp::transport::stdio;
-use rmcp::{tool, tool_router, ErrorData, ServerHandler, ServiceExt};
+use rmcp::{tool, tool_handler, tool_router, ErrorData, ServerHandler, ServiceExt};
 use serde::Deserialize;
 
 #[derive(Debug, Clone)]
@@ -97,6 +97,7 @@ impl WorkbenchMcp {
     }
 }
 
+#[tool_handler]
 impl ServerHandler for WorkbenchMcp {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
