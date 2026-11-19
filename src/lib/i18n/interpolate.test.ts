@@ -89,3 +89,22 @@ describe("语言状态", () => {
     }
   });
 });
+
+describe("t() 英语复数", () => {
+  it("count=1 用单数，其余用复数", () => {
+    expect(t("today.services", { count: 1 }, "en")).toBe("1 dev service");
+    expect(t("today.services", { count: 2 }, "en")).toBe("2 dev services");
+    expect(t("today.services", { count: 0 }, "en")).toBe("0 dev services");
+  });
+
+  it("中文与日文仍用各自的基础文案，不会被英文复数键串走", () => {
+    expect(t("today.services", { count: 1 }, "zh")).toBe("1 个开发服务");
+    expect(t("today.services", { count: 2 }, "zh")).toBe("2 个开发服务");
+    expect(t("today.services", { count: 1 }, "ja")).toBe("開発サービス 1 件");
+  });
+
+  it("没有复数变体的 key 继续用基础文案", () => {
+    expect(t("today.liveOpenCount", { count: 1 }, "en")).toBe("1 open");
+    expect(t("today.liveOpenCount", { count: 3 }, "en")).toBe("3 open");
+  });
+});

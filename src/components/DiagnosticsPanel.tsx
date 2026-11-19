@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { AlertTriangle, CheckCircle2, CircleHelp, RefreshCw } from "lucide-react";
 import { runDiagnostics } from "../lib/api";
 import { useT } from "../lib/i18n";
+import { formatDateTime } from "../lib/util";
 import { Badge, Btn, Card, SectionTitle, Spinner } from "../ui";
 import {
   clearDiagnostics,
@@ -160,7 +161,7 @@ function FrontendErrors({ entries }: { entries: ReturnType<typeof getDiagnostics
             >
               <div className="flex items-center gap-2 text-[10.5px] text-faint">
                 <code>{e.id}</code>
-                <span>{new Date(e.at).toLocaleString()}</span>
+                <span>{formatDateTime(e.at)}</span>
                 <Badge tone="warn">{e.kind}</Badge>
                 {e.view && <span>@{e.view}</span>}
               </div>

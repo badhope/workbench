@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { seriesColors } from "../../lib/chartTheme";
-import { useLang, useT, localeFor } from "../../lib/i18n";
+import { useT } from "../../lib/i18n";
+import { formatDateTime } from "../../lib/util";
 import { useStore } from "../../lib/store";
 import type { KnowledgeHit, KnowledgeStatus } from "../../types";
 import { DistributionBar, StatStrip } from "../../components/live/StatStrip";
@@ -17,7 +18,6 @@ export function KnowledgePulse({
   hits: KnowledgeHit[];
 }) {
   const t = useT();
-  const lang = useLang();
   const theme = useStore((s) => s.theme);
   const colors = seriesColors(theme);
 
@@ -33,7 +33,7 @@ export function KnowledgePulse({
   }, [hits]);
 
   const lastIndexed = status.last_indexed_at
-    ? new Date(status.last_indexed_at * 1000).toLocaleString(localeFor(lang))
+    ? formatDateTime(status.last_indexed_at * 1000)
     : t("knowledge.never");
 
   return (

@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronDown, ChevronRight, SearchX, XCircle } from "lucide-react";
 import { Badge, Btn, Empty, Td, Tr } from "../../ui";
-import { formatBytes, fromNow, shortPath } from "../../lib/util";
+import { formatBytes, formatDateTime, fromNow, shortPath } from "../../lib/util";
 import { useStore } from "../../lib/store";
-import { localeFor, useLang, useT } from "../../lib/i18n";
+import { useT } from "../../lib/i18n";
 import { statusKeyOf } from "../../lib/processStatus";
 import { DEFAULT_PROC_COLUMNS, type ProcColumnId } from "../../lib/procColumns";
 import type { ProcInfo } from "../../types";
@@ -274,7 +274,6 @@ function ProcessDetail({
   measure: (el: Element | null) => void;
 }) {
   const t = useT();
-  const lang = useLang();
   return (
     <Tr data-index={index} ref={measure}>
       <Td colSpan={colSpan} className="bg-panel/60 px-4 py-3">
@@ -293,9 +292,7 @@ function ProcessDetail({
           </div>
           <div>
             <span className="text-dim">{t("procs.detailStartTime")}</span>
-            <div className="mt-0.5 text-text">
-              {new Date(p.start_time * 1000).toLocaleString(localeFor(lang))}
-            </div>
+            <div className="mt-0.5 text-text">{formatDateTime(p.start_time * 1000)}</div>
           </div>
           <div className="sm:col-span-3">
             <span className="text-dim">{t("procs.detailCmdLine")}</span>

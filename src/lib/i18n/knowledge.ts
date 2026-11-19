@@ -13,6 +13,8 @@ export const dict = {
     "knowledge.reindex": "Reindex",
     "knowledge.reindexing": "Indexing…",
     "knowledge.docCount": "{count} notes",
+    "knowledge.docCount.one": "{count} note",
+    "knowledge.docCount.other": "{count} notes",
     "knowledge.lastIndexed": "Last indexed",
     "knowledge.never": "never",
     "knowledge.sources": "Sources",
@@ -36,6 +38,8 @@ export const dict = {
     "knowledge.removeConfirmBody":
       "The index for this folder will be removed. Your Markdown files are not deleted.",
     "knowledge.indexDone": "Indexed {count} notes",
+    "knowledge.indexDone.one": "Indexed {count} note",
+    "knowledge.indexDone.other": "Indexed {count} notes",
     "knowledge.indexFailed": "Index failed: {err}",
     "knowledge.sourceAdded": "Folder added",
     "knowledge.sourceRemoved": "Folder removed",

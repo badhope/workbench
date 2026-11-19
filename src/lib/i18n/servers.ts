@@ -39,6 +39,8 @@ export const dict = {
     "servers.portRange.registered": "Registered ports 1024-49151",
     "servers.portRange.dynamic": "Dynamic ports 49152+",
     "servers.establishedConnections": "{count} TCP connections",
+    "servers.establishedConnections.one": "{count} TCP connection",
+    "servers.establishedConnections.other": "{count} TCP connections",
     "servers.noEstablishedConnections": "No established TCP connections",
   },
   zh: {

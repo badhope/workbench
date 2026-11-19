@@ -48,6 +48,8 @@ export const dict = {
       "Tree groups processes by parent PID; expand a node to see children.",
     "procs.exportCsv": "Export CSV",
     "procs.exported": "Exported {count} processes",
+    "procs.exported.one": "Exported {count} process",
+    "procs.exported.other": "Exported {count} processes",
     "procs.focusPorts": "Listening ports",
     "procs.noPorts": "No listening ports",
     "procs.status.run": "Running",

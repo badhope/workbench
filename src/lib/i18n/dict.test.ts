@@ -37,6 +37,17 @@ const MODULES = {
 
 const LANGS = ["en", "zh", "ja"] as const;
 
+/**
+ * 复数变体只存在于需要的语种（目前是英语）。
+ * 对齐门禁比较「去掉 .one/.other」后的基础 key 集合，
+ * 否则英文单复数会让中文/日文词典显得缺 key。
+ */
+const PLURAL_SUFFIX = /\.(zero|one|two|few|many|other)$/u;
+const baseKey = (key: string) => key.replace(PLURAL_SUFFIX, "");
+/** 只有「去掉后缀后的基础 key 确实存在」才算复数变体；`overview.cat.other` 是普通 key。 */
+const isPlural = (dict: Record<string, string>, key: string) =>
+  PLURAL_SUFFIX.test(key) && Object.hasOwn(dict, baseKey(key));
+
 function placeholders(template: string): string[] {
   return [...template.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 }
@@ -45,11 +56,22 @@ describe("i18n 三语对齐", () => {
   for (const [name, dict] of Object.entries(MODULES)) {
     it(`${name}: key 集合与占位符三语一致`, () => {
       const enKeys = Object.keys(dict.en).sort();
+      const expected = [
+        ...new Set(enKeys.map((k) => (isPlural(dict.en, k) ? baseKey(k) : k))),
+      ].sort();
       for (const lang of LANGS) {
-        const keys = Object.keys(dict[lang]).sort();
-        expect(keys, `${name}.${lang} key 数量与 en 不一致`).toEqual(enKeys);
+        const keys = [
+          ...new Set(
+            Object.keys(dict[lang]).map((k) =>
+              isPlural(dict[lang] as Record<string, string>, k) ? baseKey(k) : k
+            )
+          ),
+        ].sort();
+        expect(keys, `${name}.${lang} 基础 key 与 en 不一致`).toEqual(expected);
 
-        for (const key of enKeys) {
+        for (const key of enKeys.filter(
+          (k) => !isPlural(dict.en as Record<string, string>, k)
+        )) {
           const enVars = placeholders(dict.en[key as keyof typeof dict.en]);
           const otherVars = placeholders(
             dict[lang][key as keyof (typeof dict)[typeof lang]] as string
@@ -61,6 +83,19 @@ describe("i18n 三语对齐", () => {
       }
     });
   }
+
+  it("英语复数变体必须带 count 占位符", () => {
+    for (const [name, dict] of Object.entries(MODULES)) {
+      for (const key of Object.keys(dict.en)) {
+        if (!isPlural(dict.en as Record<string, string>, key)) continue;
+        expect(
+          placeholders(dict.en[key as keyof typeof dict.en]),
+          `${name}.en「${key}」缺少 {count}`
+        ).toContain("count");
+        expect(baseKey(key), `${name}.en「${key}」没有基础文案`).toBeTruthy();
+      }
+    }
+  });
 
   it("每条文案都非空（空串会让界面出现空白）", () => {
     for (const [name, dict] of Object.entries(MODULES)) {

@@ -75,6 +75,18 @@ const DICTS: Record<Lang, Dict> = {
   },
 };
 
+/** 每种语言一个 PluralRules 实例；t() 在渲染路径上，不能每次 new。 */
+const PLURAL_RULES = new Map<Lang, Intl.PluralRules>();
+
+function pluralCategory(l: Lang, count: number): string {
+  let rules = PLURAL_RULES.get(l);
+  if (!rules) {
+    rules = new Intl.PluralRules(localeFor(l));
+    PLURAL_RULES.set(l, rules);
+  }
+  return rules.select(count);
+}
+
 const STORAGE_KEY = "workbench-lang";
 // 默认中文：产品的主要使用者是中文用户；英文/日文在设置页可切换。
 // 旧版本显式存下的 "en" 仍然优先（用户自己选过就不覆盖）。
@@ -143,7 +155,20 @@ export function t(
   lang?: Lang
 ): string {
   const l = lang ?? current;
-  let s = DICTS[l]?.[key] ?? DICTS.en[key] ?? key;
+  const dict = DICTS[l];
+  let s = dict[key] ?? DICTS.en[key] ?? key;
+
+  // 复数：只查**当前语言**的 `key.one` / `key.other`，缺失时退回该语言的基础
+  // 文案；不能让中文用户因为英文有 `key.one` 就拿到英文句子。
+  const count = vars?.count;
+  if (count !== undefined) {
+    const n = typeof count === "number" ? count : Number(count);
+    if (Number.isFinite(n)) {
+      const variant = dict[`${key}.${pluralCategory(l, n)}`];
+      if (variant) s = variant;
+    }
+  }
+
   if (vars) {
     for (const [k, v] of Object.entries(vars)) {
       const value = String(v);

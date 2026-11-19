@@ -1,7 +1,7 @@
 import { ExternalLink, FileText } from "lucide-react";
 import { Badge, Btn, Empty, Skeleton } from "../../ui";
-import { localeFor, useLang, useT } from "../../lib/i18n";
-import { shortPath } from "../../lib/util";
+import { useT } from "../../lib/i18n";
+import { formatDateTime, shortPath } from "../../lib/util";
 import type { KnowledgeDoc } from "../../types";
 import { MarkdownView } from "./MarkdownView";
 
@@ -21,7 +21,6 @@ export function DocPreview({
   onProject: (id: string) => void;
 }) {
   const t = useT();
-  const lang = useLang();
   if (loading) return <Skeleton lines={8} className="p-4" />;
   if (!doc) return <Empty icon={FileText}>{t("knowledge.selectHint")}</Empty>;
 
@@ -61,8 +60,7 @@ export function DocPreview({
           </div>
         )}
         <p className="mt-2 text-[10.5px] text-faint">
-          {t("knowledge.modified")}:{" "}
-          {new Date(doc.mtime * 1000).toLocaleString(localeFor(lang))}
+          {t("knowledge.modified")}: {formatDateTime(doc.mtime * 1000)}
         </p>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">

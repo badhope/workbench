@@ -1,6 +1,7 @@
 import { FolderOpen, FolderPlus, RefreshCw, X } from "lucide-react";
 import { Btn, Card, Field, SectionTitle, inputCls } from "../../ui";
-import { localeFor, useLang, useT } from "../../lib/i18n";
+import { useT } from "../../lib/i18n";
+import { formatDateTime } from "../../lib/util";
 import type { KnowledgeSource, KnowledgeStatus } from "../../types";
 
 export function SourcePanel({
@@ -25,9 +26,8 @@ export function SourcePanel({
   indexing: boolean;
 }) {
   const t = useT();
-  const lang = useLang();
   const last = status.last_indexed_at
-    ? new Date(status.last_indexed_at * 1000).toLocaleString(localeFor(lang))
+    ? formatDateTime(status.last_indexed_at * 1000)
     : t("knowledge.never");
 
   return (

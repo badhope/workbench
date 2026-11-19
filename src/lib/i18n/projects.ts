@@ -8,6 +8,8 @@ export const dict = {
     "projects.statusArchived": "Archived",
     "projects.statusDistTitle": "Status distribution",
     "projects.totalCount": "{count} projects",
+    "projects.totalCount.one": "{count} project",
+    "projects.totalCount.other": "{count} projects",
     "projects.new": "New project",
     "projects.emptyProjects": "No projects",
     "projects.emptyHint":
@@ -17,6 +19,8 @@ export const dict = {
     "projects.running": "Running",
     "projects.unboundPath": "No path bound",
     "projects.taskCount": "{count} tasks",
+    "projects.taskCount.one": "{count} task",
+    "projects.taskCount.other": "{count} tasks",
     "projects.doingCount": "{count} in progress",
     "projects.openDir": "Open directory",
     "projects.edit": "Edit",

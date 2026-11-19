@@ -246,7 +246,7 @@ export function LivePulse() {
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line/50 pt-1.5 text-[9.5px] text-faint">
           <span>{t("today.services", { count: procs.length })}</span>
           <span>{t("today.ports", { count: ports.length })}</span>
-          <span className="ml-auto text-accent/80">{t("today.liveRealtime")}</span>
+          <span className="ml-auto text-accent">{t("today.liveRealtime")}</span>
         </div>
       </LiveCard>
 
@@ -300,7 +300,7 @@ export function LivePulse() {
         </div>
         <div className="mt-2 flex items-center justify-between border-t border-line/50 pt-1.5 text-[9.5px] text-faint">
           <span>{t("today.liveClickHint")}</span>
-          <span className="text-ok/85">{t("today.liveRealtime")}</span>
+          <span className="text-ok">{t("today.liveRealtime")}</span>
         </div>
       </LiveCard>
 

@@ -46,6 +46,9 @@ export function PortGrid({
     }
     previous.current = next;
     if (toFlash.size === 0) return;
+    // 这是「外部轮询快照 → 短暂高亮」的一次性派生状态：写入后由定时器清空，
+    // 不会回写数据或触发再次比较，因此不存在级联渲染风险。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setChanged(toFlash);
     const timer = window.setTimeout(() => setChanged(new Set()), 1600);
     return () => window.clearTimeout(timer);

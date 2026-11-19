@@ -4,6 +4,7 @@ import {
   dueLabel,
   formatBytes,
   formatCpu,
+  formatDateTime,
   formatDuration,
   formatTokens,
   formatTime,
@@ -28,6 +29,25 @@ describe("formatBytes", () => {
   });
   it("大数不显示小数", () => {
     expect(formatBytes(200 * 1024 ** 3)).toBe("200 GB");
+  });
+  it("数字按界面语言分组（Intl.NumberFormat）", () => {
+    expect(formatBytes(1000 * 1024 ** 4, "en")).toBe("1,000 TB");
+  });
+});
+
+describe("formatDateTime", () => {
+  const at = Date.UTC(2026, 10, 20, 12, 0, 0);
+
+  it("英文、中文、日文各自使用本地日期顺序", () => {
+    expect(formatDateTime(at, "en")).toContain("Nov 20, 2026");
+    expect(formatDateTime(at, "zh")).toContain("2026年11月20日");
+    expect(formatDateTime(at, "ja")).toContain("2026/11/20");
+  });
+
+  it("非法值与空值返回占位", () => {
+    expect(formatDateTime(0)).toBe("-");
+    expect(formatDateTime("not-a-date")).toBe("-");
+    expect(formatDateTime(new Date(Number.NaN))).toBe("-");
   });
 });
 

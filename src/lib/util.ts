@@ -3,7 +3,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/en";
 import "dayjs/locale/zh-cn";
 import "dayjs/locale/ja";
-import { getLang, t, type Lang } from "./i18n";
+import { getLang, localeFor, t, type Lang } from "./i18n";
 
 dayjs.extend(relativeTime);
 
@@ -12,12 +12,58 @@ function dayjsLocale(l: Lang): string {
   return l === "zh" ? "zh-cn" : l;
 }
 
-export function formatBytes(bytes: number): string {
-  if (!bytes) return "0 B";
+const NUMBER_FORMATS = new Map<string, Intl.NumberFormat>();
+const DATE_TIME_FORMATS = new Map<Lang, Intl.DateTimeFormat>();
+const COMPACT_TIME_FORMATS = new Map<Lang, Intl.DateTimeFormat>();
+
+/** 数字格式器按「语言 + 小数位」缓存；表格里每次渲染都 new 会明显变慢。 */
+function numberFormat(lang: Lang, digits: number): Intl.NumberFormat {
+  const key = `${lang}:${digits}`;
+  let fmt = NUMBER_FORMATS.get(key);
+  if (!fmt) {
+    fmt = new Intl.NumberFormat(localeFor(lang), {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+    NUMBER_FORMATS.set(key, fmt);
+  }
+  return fmt;
+}
+
+function dateTimeFormat(lang: Lang): Intl.DateTimeFormat {
+  let fmt = DATE_TIME_FORMATS.get(lang);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat(localeFor(lang), {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+    DATE_TIME_FORMATS.set(lang, fmt);
+  }
+  return fmt;
+}
+
+/**
+ * 字节 → 可读单位。数字走 `Intl.NumberFormat`，小数点/分组符跟随界面语言；
+ * 单位本身保持 B/KB/MB/GB/TB（跨语言通用，翻译反而会让用户对不上系统盘）。
+ */
+export function formatBytes(bytes: number, lang: Lang = getLang()): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
   const v = bytes / Math.pow(1024, i);
-  return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
+  const digits = v >= 100 || i === 0 ? 0 : 1;
+  return `${numberFormat(lang, digits).format(v)} ${units[i]}`;
+}
+
+/** 毫秒时间戳 / ISO 字符串 / Date → 本地化日期时间（如 “2026年11月20日 14:30”）。 */
+export function formatDateTime(
+  value: number | string | Date,
+  lang: Lang = getLang()
+): string {
+  if (value === 0 || value === "") return "-";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return dateTimeFormat(lang).format(date);
 }
 
 export function formatCpu(cpu: number): string {
@@ -30,9 +76,21 @@ export function fromNow(unixSecs: number): string {
   return dayjs.unix(unixSecs).locale(dayjsLocale(getLang())).fromNow();
 }
 
-export function formatTime(ms: number): string {
+export function formatTime(ms: number, lang: Lang = getLang()): string {
   if (!ms) return "-";
-  return dayjs(ms).format("MM-DD HH:mm");
+  // 顶部“数据更新于”保持紧凑：本地化的月日 + 24 小时制时分。
+  let fmt = COMPACT_TIME_FORMATS.get(lang);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat(localeFor(lang), {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    COMPACT_TIME_FORMATS.set(lang, fmt);
+  }
+  return fmt.format(new Date(ms));
 }
 
 /**

@@ -4,7 +4,7 @@ Workbench ships in small, verifiable increments. Every entry below states what
 is done, what is next, and what is explicitly **not** planned — a roadmap that
 only lists ambitions is a wish list, not a plan.
 
-Current version: **0.9.7** · Status legend: ✅ shipped · 🚧 in progress · ⬜ planned
+Current version: **0.9.8** · Status legend: ✅ shipped · 🚧 in progress · ⬜ planned
 
 ## 0.4.0 — Integrity of the numbers (shipped 2026-11-02)
 
@@ -54,6 +54,13 @@ Current version: **0.9.7** · Status legend: ✅ shipped · 🚧 in progress · 
 | Controlled writes: create/update task, append note | ✅ | `services/ai.rs`; 3 harness tests incl. traversal + symlink escape |
 | Writes off by default, audited, undoable | ✅ | `ai.json` / `ai_actions.json`; Settings AI card; `AiAccessCard.test.tsx` |
 
+## 0.9.8 — Locale polish: plurals and dates (shipped 2026-11-20)
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| `Intl.PluralRules` for English | ✅ | `src/lib/i18n/index.ts` selects current-language `.one` / `.other`; 18 English noun keys have variants |
+| Locale-correct dates and byte units | ✅ | `formatDateTime` + `Intl.NumberFormat` in `src/lib/util.ts`; process detail, knowledge, diagnostics use it |
+
 ## 0.9.7 — Process columns, remembered (shipped 2026-11-20)
 
 | Item | Status | Evidence |
@@ -89,9 +96,8 @@ Current version: **0.9.7** · Status legend: ✅ shipped · 🚧 in progress · 
 
 ## Next
 
-| Item | Status | Notes |
-|------|--------|-------|
-| `Intl.PluralRules` for English, locale-correct dates and byte units | ⬜ | Dictionary has no plural keys today |
+All unblocked Next items are shipped. `0.8.0 Reach` remains blocked on the signing
+certificate and macOS build environment; no other planned item is open.
 
 ## Not planned
 

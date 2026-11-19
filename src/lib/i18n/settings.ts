@@ -190,6 +190,10 @@ export const dict = {
     "settings.restoreCancel": "Cancel",
     "settings.restored":
       "Restored {count} file(s). A safety backup was created at {safety}.",
+    "settings.restored.one":
+      "Restored {count} file. A safety backup was created at {safety}.",
+    "settings.restored.other":
+      "Restored {count} files. A safety backup was created at {safety}.",
 
     "settings.importJson": "Import JSON",
     "settings.dataLocation": "Data location",
@@ -218,6 +222,8 @@ export const dict = {
     "diag.copy": "Copy report",
     "diag.noFrontendErrors": "No frontend errors recorded",
     "diag.frontendErrors": "{count} frontend error(s) recorded",
+    "diag.frontendErrors.one": "{count} frontend error recorded",
+    "diag.frontendErrors.other": "{count} frontend errors recorded",
     "diag.clearFrontendErrors": "Clear",
     "settings.about": "About",
     "settings.version": "Version",

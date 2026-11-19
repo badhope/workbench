@@ -3,6 +3,27 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.8] - 2026-11-20
+
+### Added — 英语复数与本地化格式
+
+- **复数选择**：`t()` 在收到 `{ count }` 时用 `Intl.PluralRules` 选择当前语言的
+  `.one` / `.other` 变体；中文/日文没有变体时继续用基础文案，不会串到英文。
+- **英文单复数**：为 18 个带名词的计数文案补单数形式（1 dev service / 1 task /
+  1 note / 1 token / 1 row / 1 TCP connection 等），不再显示 “1 services”。
+- **日期时间**：新增 `formatDateTime`，进程详情、知识库索引时间、组件诊断时间
+  统一走 `Intl.DateTimeFormat`；顶部更新时间使用本地化的紧凑格式。
+- **字节单位**：`formatBytes` 的数值走 `Intl.NumberFormat`，小数点、分组符随
+  界面语言；单位仍保持 B/KB/MB/GB/TB，避免和系统盘数字对不上。
+
+### Verification
+
+- 三语词典门禁升级为「基础 key 对齐 + 复数变体必须带 `{count}`」。
+- 前端 64 个测试文件、638 项通过；`npx tsc --noEmit`、`npm run build`、
+  `npm run lint`、`npm run check:modules` 通过。
+- Playwright 全量 e2e：25 passed / 5 skipped（跳过项仍为需要 Windows
+  打包二进制的 CLI 用例）；同步更新 20 点演示曲线后的 4 张概览基线。
+
 ## [0.9.7] - 2026-11-20
 
 ### Added — 进程表列偏好
