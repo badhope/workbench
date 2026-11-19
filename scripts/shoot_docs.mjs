@@ -157,7 +157,7 @@ async function gotoPage(page, key, keys) {
     logs: "Logs|日志|ログ",
   }[key];
   const item = page
-    .locator(`nav[aria-label="Primary"] .nav-item`, { hasText: new RegExp(label) })
+    .locator(`nav[aria-label="Primary"] .nav-item`, { hasText: new RegExp(label, "i") })
     .first();
   await item.click();
   await sleep(1100); // 等懒加载 chunk 与图表渲染
