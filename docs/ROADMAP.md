@@ -4,7 +4,7 @@ Workbench ships in small, verifiable increments. Every entry below states what
 is done, what is next, and what is explicitly **not** planned — a roadmap that
 only lists ambitions is a wish list, not a plan.
 
-Current version: **0.9.3** · Status legend: ✅ shipped · 🚧 in progress · ⬜ planned
+Current version: **0.9.5** · Status legend: ✅ shipped · 🚧 in progress · ⬜ planned
 
 ## 0.4.0 — Integrity of the numbers (shipped 2026-11-02)
 
@@ -53,6 +53,16 @@ Current version: **0.9.3** · Status legend: ✅ shipped · 🚧 in progress · 
 | Read-only MCP: context, search, read, status | ✅ | `mcp.rs`, protocol smoke; `#[tool_handler]` regression |
 | Controlled writes: create/update task, append note | ✅ | `services/ai.rs`; 3 harness tests incl. traversal + symlink escape |
 | Writes off by default, audited, undoable | ✅ | `ai.json` / `ai_actions.json`; Settings AI card; `AiAccessCard.test.tsx` |
+
+## 0.9.4–0.9.5 — Visual coverage (shipped 2026-11-20)
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| Today live pulse with interactive CPU/memory sparkline | ✅ | `src/pages/today/LivePulse.tsx`, `Today.live.test.tsx` |
+| Project portfolio pulse and Top-project drill-down | ✅ | `src/pages/projects/PortfolioPulse.tsx` |
+| Knowledge pulse + demo index for static preview | ✅ | `src/pages/knowledge/KnowledgePulse.tsx`, `knowledgeDemo.ts` |
+| Log severity pulse with dynamic counts | ✅ | `src/pages/logs/LogPulse.tsx` |
+| Shared stat/distribution primitives | ✅ | `src/components/live/StatStrip.tsx`; 623 frontend tests, build passes |
 
 ## 0.8.0 — Reach (planned)
 

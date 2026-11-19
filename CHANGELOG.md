@@ -3,6 +3,31 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.5] - 2026-11-20
+
+### Added — 全页面可视化覆盖
+
+- **项目页**：新增项目组合脉搏，完成率环、活跃/暂停/归档分布、任务数 Top
+  项目进度条复用同一份 `projectProgress`；点击 Top 项目直接进入其任务。
+- **知识库**：新增知识脉搏，来源、索引量、当前命中、标签数与标签分布；
+  纯静态预览补 6 篇演示笔记，不再显示 `HTTP 404`，真实后端仍只读用户文件。
+- **日志页**：新增日志脉搏，按 error/warn/info/debug 四档统计并画分布条；
+  删除筛选条里重复的 `shown / total` 文案。
+- **去重**：三页共用 `StatStrip` + `DistributionBar` + `AnimatedNumber`，
+  没有新增第二套图表实现；知识正文仍不复制进数据库。
+
+## [0.9.4] - 2026-11-20
+
+### Added — 今日实时脉冲
+
+- **系统脉搏**：CPU/内存实时读数，SVG 折线直接消费 `history`，悬停十字线
+  显示采样点数值；内存曲线可开关；卡片右上角进入系统概览。
+- **任务流**：完成率环、状态分布条、待办/进行中/已完成计数，跳转任务页。
+- **今日成本**：动态金额、日预算条、阈值标记、超预算提示，以及 AI 活跃数
+  与会话文件数；点击可进入成本账本或 AI 会话。
+- **组件化**：`AnimatedNumber`、`LiveSparkline`、`ProgressRing` 过渡统一；
+  动效关闭时折线扫描、卡片悬浮和环进度全部停止。
+
 ## [0.9.3] - 2026-11-19
 
 ### Changed — 任务页常驻可视化
