@@ -3,7 +3,7 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.9.1] - 2026-11-19
 
 ### Added — 本地知识库与 AI 接入
 
