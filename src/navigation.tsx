@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  BookOpen,
   Coins,
   Cpu,
   FileText,
@@ -46,6 +47,12 @@ export const PAGES = [
     load: () => import("./pages/Projects"),
   },
   { key: "tasks", icon: ListChecks, group: "work", load: () => import("./pages/Tasks") },
+  {
+    key: "knowledge",
+    icon: BookOpen,
+    group: "work",
+    load: () => import("./pages/Knowledge"),
+  },
   { key: "review", icon: BarChart3, group: "work", load: () => import("./pages/Review") },
   {
     key: "overview",

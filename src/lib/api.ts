@@ -27,6 +27,9 @@ import type {
   SessionFilePreview,
   SystemInfo,
   WorkbenchData,
+  KnowledgeStatus,
+  KnowledgeHit,
+  KnowledgeDoc,
 } from "../types";
 
 /** 是否运行在 Tauri 桌面壳内（有 IPC、托盘、置顶等原生能力）。 */
@@ -261,6 +264,67 @@ export async function notify(title: string, body: string): Promise<void> {
 }
 
 // ── 日志读取 ──────────────────────────────────────────────
+
+// ── 知识库 ──────────────────────────────────────────────
+
+export async function knowledgeStatus(): Promise<KnowledgeStatus> {
+  if (isTauri()) return invoke<KnowledgeStatus>("knowledge_status");
+  return httpJson<KnowledgeStatus>("/api/knowledge/status");
+}
+
+export async function knowledgeAddSource(path: string): Promise<KnowledgeStatus> {
+  if (isTauri()) return invoke<KnowledgeStatus>("knowledge_add_source", { path });
+  return httpJson<KnowledgeStatus>("/api/knowledge/sources", {
+    method: "POST",
+    body: { path },
+    write: true,
+  });
+}
+
+export async function knowledgeRemoveSource(path: string): Promise<KnowledgeStatus> {
+  if (isTauri()) return invoke<KnowledgeStatus>("knowledge_remove_source", { path });
+  return httpJson<KnowledgeStatus>(
+    `/api/knowledge/sources?path=${encodeURIComponent(path)}`,
+    { method: "DELETE", write: true }
+  );
+}
+
+export async function knowledgeReindex(): Promise<KnowledgeStatus> {
+  if (isTauri()) return invoke<KnowledgeStatus>("knowledge_reindex");
+  return httpJson<KnowledgeStatus>("/api/knowledge/reindex", {
+    method: "POST",
+    write: true,
+  });
+}
+
+export async function knowledgeSearch(
+  query: string,
+  limit = 20
+): Promise<KnowledgeHit[]> {
+  if (isTauri()) return invoke<KnowledgeHit[]>("knowledge_search", { query, limit });
+  return httpJson<KnowledgeHit[]>(
+    `/api/knowledge/search?q=${encodeURIComponent(query)}&limit=${limit}`
+  );
+}
+
+export async function knowledgeRead(path: string): Promise<KnowledgeDoc> {
+  if (isTauri()) return invoke<KnowledgeDoc>("knowledge_read", { path });
+  return httpJson<KnowledgeDoc>(`/api/knowledge/doc?path=${encodeURIComponent(path)}`);
+}
+
+/** 桌面端选择知识目录；Web 模式没有本地文件系统，返回 null 由输入框兜底。 */
+export async function pickKnowledgeFolder(): Promise<string | null> {
+  if (!isTauri()) return null;
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const picked = await open({ directory: true, multiple: false });
+  return typeof picked === "string" ? picked : null;
+}
+
+/** 用系统默认程序打开笔记；Web 模式没有本地文件权限，直接拒绝。 */
+export async function knowledgeOpen(path: string): Promise<void> {
+  requireDesktop("打开本地笔记仅在桌面应用中可用");
+  return invoke("knowledge_open", { path });
+}
 
 export async function readLogs(maxLines: number): Promise<string> {
   if (isTauri()) return invoke<string>("read_logs", { maxLines });

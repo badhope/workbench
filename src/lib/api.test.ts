@@ -79,6 +79,48 @@ describe("命令名与参数", () => {
     expect(invokeMock).toHaveBeenLastCalledWith("git_branch", { dir: "C:\\proj" });
   });
 
+  it("知识库：命令名、参数与只读边界", async () => {
+    const status = {
+      sources: [],
+      doc_count: 0,
+      last_indexed_at: 0,
+      db_path: "/tmp/knowledge.db",
+    };
+    invokeMock.mockResolvedValueOnce(status);
+    await api.knowledgeStatus();
+    expect(invokeMock).toHaveBeenLastCalledWith("knowledge_status");
+
+    invokeMock.mockResolvedValueOnce([]);
+    await api.knowledgeSearch("笔记", 12);
+    expect(invokeMock).toHaveBeenLastCalledWith("knowledge_search", {
+      query: "笔记",
+      limit: 12,
+    });
+
+    invokeMock.mockResolvedValueOnce({
+      path: "/notes/a.md",
+      title: "A",
+      body: "# A",
+      tags: [],
+      mtime: 1,
+    });
+    await api.knowledgeRead("/notes/a.md");
+    expect(invokeMock).toHaveBeenLastCalledWith("knowledge_read", {
+      path: "/notes/a.md",
+    });
+
+    await api.knowledgeAddSource("/notes");
+    expect(invokeMock).toHaveBeenLastCalledWith("knowledge_add_source", {
+      path: "/notes",
+    });
+    await api.knowledgeRemoveSource("/notes");
+    expect(invokeMock).toHaveBeenLastCalledWith("knowledge_remove_source", {
+      path: "/notes",
+    });
+    await api.knowledgeReindex();
+    expect(invokeMock).toHaveBeenLastCalledWith("knowledge_reindex");
+  });
+
   it("成本相关", async () => {
     await api.scanSessionCosts();
     expect(invokeMock).toHaveBeenLastCalledWith("scan_session_costs");

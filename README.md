@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/badge/version-0.9.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.md#system-requirements)
-[![Tests](https://img.shields.io/badge/tests-614%20unit%20%2B%20189%20backend%20%2B%2030%20e2e-8b5cf6)](#quality-gates)
+[![Tests](https://img.shields.io/badge/tests-619%20unit%20%2B%20189%20backend%20%2B%2030%20e2e-8b5cf6)](#quality-gates)
 
 ![Workbench](docs/screenshots/12-brand-hero.png)
 
@@ -67,15 +67,17 @@ or `Demo` — so a number on screen is never ambiguous about being real.
 | **Projects & tasks**  | Projects with goal, status and progress; tasks with status, priority, due date, next step, blocked reason and completion timestamp; list + kanban views; keyboard and pointer workflows |
 | **Monitoring**        | Live processes, listening ports (`netstat` on Windows, `ss -tulpn` on Linux with a netstat fallback) and dev-server detection with framework + confidence                               |
 | **Process tree**      | Flat table or parent/child tree from `parent_pid`; orphan and cycle-safe, virtual scrolling, per-row detail with the process's own listening ports, CSV export                          |
-| **Command palette**   | Ctrl/Cmd+K fuzzy search over pages, processes, ports, projects and tasks; lands filtered on the project or focused on the task detail                                                   |
+| **Command palette**   | Ctrl/Cmd+K fuzzy search over pages, processes, ports, projects, tasks and notes; lands filtered on the project or focused on the task detail                                            |
 | **AI cost metering**  | Token costs of local Claude / Codex sessions in a SQLite ledger — no model, no API key, nothing leaves your machine                                                                     |
+| **Local knowledge**   | Mount existing Markdown folders (Obsidian/Logseq compatible); FTS5 indexes titles, body, tags and project links. Files stay put; body is never copied into the database                  |
+| **MCP access**        | `workbench mcp --stdio` exposes projects, tasks, ports, cost and knowledge over the Model Context Protocol. Read-only; no model or API key bundled                                     |
 | **Review**            | Completion trend (14-day), project progress, status and priority distribution — all computed from real data, with honest disclosure of what lacks history                               |
 | **Pricing editor**    | 40+ built-in model prices; edit / add / reset overrides from the UI                                                                                                                     |
 | **Backup & restore**  | Timestamped snapshots with one-click rollback, integrity checks (`VACUUM INTO` + `PRAGMA integrity_check`) and retention of the newest 30                                               |
 | **Mini window**       | A compact always-on-top companion showing current project, today's tasks and quick capture; syncs with the main window via BroadcastChannel                                             |
 | **Start at login**    | Real OS registration (registry / autostart entry), toggle reads back from the OS                                                                                                        |
 | **Environment check** | Per-item ok / warn / fail report for platform, data directory, cost DB, session folders and port tools, with a copyable summary                                                         |
-| **CLI mode**          | One binary: `ps` / `ports` / `diag` / `cost` / `serve` (all support `--json`); scriptable, no window                                                                                    |
+| **CLI mode**          | One binary: `ps` / `ports` / `diag` / `cost` / `mcp` / `serve` (`mcp` uses stdio; the rest support `--json`); scriptable, no window                                                    |
 | **Visual system**     | 7 overview layouts × 16 themes × 3 shells, draggable & hideable widgets with per-widget widths, theme editor with share links                                                           |
 | **Trilingual UI**     | 简体中文 (default) / English / 日本語                                                                                                                                                   |
 | **Cross-platform**    | CI defines Windows, Linux and macOS jobs, including Linux `.deb` and macOS `.app` builds                                                                                                |
@@ -90,7 +92,7 @@ Every claim in this README is verified by a command. The same steps run locally
 | `npm run version:check`                 | the four version files drifting apart                                   |
 | `npx tsc --noEmit`                      | type errors, including the generated IPC contract                       |
 | `npm run lint` · `npm run format:check` | zero-warning ESLint, Prettier                                           |
-| `npm test`                              | **614** frontend tests with an enforced threshold                       |
+| `npm test`                              | **619** frontend tests with an enforced threshold                       |
 | `cargo test --lib`                      | **188** backend tests, plus the ts-rs binding export                    |
 | `npm run test:e2e`                      | **30** Playwright cases: navigation, WCAG AA contrast, visual baselines |
 | `cargo clippy -- -D warnings`           | Rust lints, zero tolerated                                              |

@@ -17,6 +17,7 @@ import {
   inputCls,
 } from "../ui";
 import { AppearancePanel } from "../components/AppearancePanel";
+import { AiAccessCard } from "./knowledge/AiAccessCard";
 import { AutostartCard } from "../components/AutostartCard";
 import { BackupPanel } from "../components/BackupPanel";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
@@ -542,6 +543,9 @@ export default function Settings() {
           void discardUnsavedAndReload().catch((error) => setToast(String(error)));
         }}
       />
+      {/* ── AI 接入（只暴露 MCP 命令，不内置模型） ── */}
+      <AiAccessCard />
+
       {/* ── 关于 ── */}
       <Card className="">
         <SectionTitle>{t("settings.about")}</SectionTitle>

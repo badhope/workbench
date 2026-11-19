@@ -24,6 +24,7 @@ COMMANDS:
     ports           List listening TCP/UDP ports with the owning PID
     diag            Environment self-check (platform, data dir, session folders, port tools)
     cost            AI session cost summary (--json, --days N, --by-project)
+    mcp             Run the read-only MCP server over stdio
     serve [opts]    Run the headless HTTP server + web UI (see below)
     --version       Print the version
     --help          Print this help
@@ -48,6 +49,25 @@ fn data_dir() -> std::path::PathBuf {
     crate::paths::DataRoot::resolve()
         .map(|r| r.as_path().to_path_buf())
         .unwrap_or_else(|_| std::env::temp_dir().join(crate::paths::APP_IDENTIFIER))
+}
+
+/// `mcp` 只接受 `--data-dir`，避免把 serve 的参数混进 stdio 协议进程。
+fn parse_mcp_args(args: &[String]) -> Result<crate::paths::DataRoot, String> {
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            // stdio 是唯一传输方式；接受该参数只为让文案与命令一致。
+            "--stdio" => i += 1,
+            "--data-dir" => {
+                let value = args
+                    .get(i + 1)
+                    .ok_or_else(|| "--data-dir 缺少取值".to_string())?;
+                return crate::paths::DataRoot::new(value).ensure().cloned();
+            }
+            other => return Err(format!("mcp 不认识的参数: {other}")),
+        }
+    }
+    crate::paths::DataRoot::resolve()?.ensure().cloned()
 }
 
 /// 解析 `serve` 的参数。失败时返回可读错误，由调用方打印并以非 0 退出。
@@ -435,6 +455,23 @@ pub fn try_run() -> Option<i32> {
             }
         },
         "cost" => return Some(run_cost(&args)),
+        // MCP 是长驻 stdio 服务：stdout 只能走协议，任何提示都写 stderr。
+        "mcp" => {
+            let root = match parse_mcp_args(&args) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("{e}");
+                    return Some(2);
+                }
+            };
+            return Some(match crate::mcp::run_stdio(root) {
+                Ok(()) => 0,
+                Err(e) => {
+                    eprintln!("{e}");
+                    1
+                }
+            });
+        }
         "diag" => {
             let report = diagnostics::collect(env!("CARGO_PKG_VERSION"), &data_dir());
             if json_out {
@@ -492,6 +529,7 @@ mod tests {
             "ports",
             "diag",
             "cost",
+            "mcp",
             "serve",
             "--version",
             "--json",

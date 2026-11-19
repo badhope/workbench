@@ -3,6 +3,19 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added — 本地知识库与 AI 接入
+
+- **本地 Markdown 知识库**：挂载已有 Markdown 目录（兼容 Obsidian/Logseq），
+  SQLite FTS5 索引标题、正文、标签与项目关联；正文只留在原文件，数据库只存
+  可重建索引。支持目录选择、重新索引、搜索、只读预览与外部编辑器打开。
+- **只读 MCP 服务**：`workbench mcp --stdio` 暴露 `workbench_context`、
+  `knowledge_search`、`knowledge_read`、`knowledge_status` 四个工具，供外部
+  AI 客户端读取项目、任务、端口、成本与知识库；不内置模型、不内置 API Key。
+- **三端共用服务层**：IPC、HTTP、MCP 调用同一套 `knowledge` / `services`
+  实现；添加/移除知识目录自动重建索引，不再由每个适配层重复编排。
+
 ## [0.9.0] - 2026-11-16
 
 ### Fixed — 安装版实测暴露的启动缺陷（P0）

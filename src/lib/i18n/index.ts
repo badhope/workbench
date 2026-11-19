@@ -18,6 +18,7 @@ import { dict as review } from "./review";
 import { dict as mini } from "./mini";
 import { dict as settings } from "./settings";
 import { dict as logs } from "./logs";
+import { dict as knowledge } from "./knowledge";
 
 export type Lang = "en" | "zh" | "ja";
 
@@ -40,6 +41,7 @@ const DICTS: Record<Lang, Dict> = {
     ...mini.en,
     ...settings.en,
     ...logs.en,
+    ...knowledge.en,
   },
   zh: {
     ...core.zh,
@@ -54,6 +56,7 @@ const DICTS: Record<Lang, Dict> = {
     ...mini.zh,
     ...settings.zh,
     ...logs.zh,
+    ...knowledge.zh,
   },
   ja: {
     ...core.ja,
@@ -68,6 +71,7 @@ const DICTS: Record<Lang, Dict> = {
     ...mini.ja,
     ...settings.ja,
     ...logs.ja,
+    ...knowledge.ja,
   },
 };
 

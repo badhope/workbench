@@ -255,6 +255,16 @@ pub fn router(state: AppState, opts: &ServeOptions) -> Router {
         .route("/cost/settings", get(cost_settings).put(save_cost_settings))
         .route("/cost/pricing", get(pricing_view).put(save_pricing_view))
         .route("/cost/scan", post(cost_scan))
+        // ── 知识库 / AI 上下文 ──
+        .route("/context", get(workbench_context))
+        .route("/knowledge/status", get(knowledge_status))
+        .route("/knowledge/search", get(knowledge_search))
+        .route("/knowledge/doc", get(knowledge_read))
+        .route(
+            "/knowledge/sources",
+            post(knowledge_add_source).delete(knowledge_remove_source),
+        )
+        .route("/knowledge/reindex", post(knowledge_reindex))
         // API 自己的 fallback：未知 /api/* 必须在进入静态站点回落之前就变成
         // 404 JSON。否则有 dist 时 ServeDir 会把 /api/nope 当成 SPA 路由，
         // 返回 200 + index.html，脚本消费者拿到 HTML 才报 Unexpected token <。
@@ -706,6 +716,99 @@ fn require_write_header(headers: &axum::http::HeaderMap) -> Result<(), ApiError>
             "缺少写入标记头 X-Workbench-Write；只接受 Workbench 界面发起的写入",
         )),
     }
+}
+
+#[derive(Deserialize)]
+struct ContextQuery {
+    #[serde(default)]
+    ports: bool,
+}
+
+async fn workbench_context(
+    State(st): State<AppState>,
+    Query(q): Query<ContextQuery>,
+) -> ApiResult<crate::services::context::WorkbenchContext> {
+    let root = st.root.clone();
+    let value = blocking(move || crate::services::context::snapshot(&root, q.ports)).await?;
+    ok(value)
+}
+
+async fn knowledge_status(
+    State(st): State<AppState>,
+) -> ApiResult<crate::knowledge::KnowledgeStatus> {
+    let root = st.root.clone();
+    let value = blocking(move || crate::knowledge::status(&root)).await?;
+    ok(value)
+}
+
+#[derive(Deserialize)]
+struct KnowledgeSearchQuery {
+    #[serde(default)]
+    q: String,
+    limit: Option<usize>,
+}
+
+async fn knowledge_search(
+    State(st): State<AppState>,
+    Query(q): Query<KnowledgeSearchQuery>,
+) -> ApiResult<Vec<crate::knowledge::KnowledgeHit>> {
+    let root = st.root.clone();
+    let value = blocking(move || crate::knowledge::search(&root, &q.q, q.limit)).await?;
+    ok(value)
+}
+
+#[derive(Deserialize)]
+struct KnowledgePathQuery {
+    path: String,
+}
+
+async fn knowledge_read(
+    State(st): State<AppState>,
+    Query(q): Query<KnowledgePathQuery>,
+) -> ApiResult<crate::knowledge::KnowledgeDoc> {
+    let root = st.root.clone();
+    let value = blocking(move || crate::knowledge::read_doc(&root, &q.path)).await?;
+    ok(value)
+}
+
+#[derive(Deserialize)]
+struct KnowledgeSourceBody {
+    path: String,
+}
+
+async fn knowledge_add_source(
+    State(st): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<KnowledgeSourceBody>,
+) -> ApiResult<crate::knowledge::KnowledgeStatus> {
+    require_same_origin(&headers)?;
+    require_write_header(&headers)?;
+    let root = st.root.clone();
+    let value = blocking(move || crate::knowledge::add_source(&root, &body.path)).await?;
+    ok(value)
+}
+
+async fn knowledge_remove_source(
+    State(st): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Query(q): Query<KnowledgePathQuery>,
+) -> ApiResult<crate::knowledge::KnowledgeStatus> {
+    require_same_origin(&headers)?;
+    require_write_header(&headers)?;
+    let root = st.root.clone();
+    let value = blocking(move || crate::knowledge::remove_source(&root, &q.path)).await?;
+    ok(value)
+}
+
+async fn knowledge_reindex(
+    State(st): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> ApiResult<crate::knowledge::KnowledgeStatus> {
+    require_same_origin(&headers)?;
+    require_write_header(&headers)?;
+    let root = st.root.clone();
+    let value = blocking(move || crate::knowledge::reindex(&root)).await?;
+    ok(value)
 }
 
 async fn cost_overview(State(st): State<AppState>) -> ApiResult<cost_store::CostOverview> {

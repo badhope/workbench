@@ -29,6 +29,11 @@ axum = "0.8"
 tower-http = { version = "0.6", features = ["fs", "cors", "trace"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 rust-embed = "8"
+gray_matter = "0.3.2"
+ignore = "0.4.34"
+rmcp = { version = "3.11.0", features = ["server", "transport-io"] }
+schemars = { version = "1.2.3", features = ["derive"] }
+tauri-plugin-dialog = "2.8.4"
 
 [dependencies.tauri]
 version = "2"

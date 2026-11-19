@@ -11,6 +11,8 @@
 | ⚙ **进程** | 全进程快照、CPU / 内存排序、虚拟滚动（只渲染视口内的行）、杀进程二次确认、AI 代理识别 |
 | 🌐 **服务与端口** | netstat 端口监听识别、开发框架标注（Vite/Next/Django…） |
 | 🤖 **AI 会话** | opencode 在线会话、本地 Claude/Codex 会话预览 |
+| 📝 **知识库** | 挂载本地 Markdown 目录、FTS5 全文检索、只读预览、外部编辑器打开、项目/标签元数据 |
+| 🔌 **MCP** | `workbench mcp --stdio` 只读暴露项目、任务、端口、成本与知识库，供外部 AI 客户端接入 |
 | 💰 **成本计量** | token 消耗统计、按日/月趋势、预算告警、Anthropic 缓存折扣计价 |
 | 📁 **项目** | 本地项目管理、Git 分支自动检测 |
 | ✅ **任务** | 看板式任务板（拖拽切换） |
@@ -131,6 +133,9 @@ workbench/
 │   │   ├── pricing.rs      # 模型价格匹配
 │   │   ├── session_meter.rs # JSONL token 成本解析
 │   │   ├── cost_store.rs   # 成本数据持久化
+│   │   ├── knowledge.rs    # Markdown 知识库 + FTS5 索引
+│   │   ├── services/       # IPC / HTTP / MCP 共用的服务层
+│   │   ├── mcp.rs          # 只读 MCP stdio 服务
 │   │   ├── ipc_guard.rs    # IPC 入参白名单
 │   │   └── lib.rs          # Tauri 启动入口
 │   └── tests/              # IPC 契约导出测试
@@ -257,6 +262,8 @@ Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×�
 |------|------|------|
 | `data.json` | 项目与任务 | `app data dir` |
 | `cost.db` | 成本记录 + 定价设置（SQLite） | `app data dir` |
+| `knowledge.json` | 知识目录配置 | `app data dir` |
+| `knowledge.db` | Markdown 全文索引（FTS5，可重建） | `app data dir` |
 | `pricing_overrides.json` | 用户自定义模型价格覆盖（成本页可编辑） | `app data dir` |
 | `workbench.log` | 运行日志 | `app data dir` |
 | `*.corrupt-<时间戳>` | 数据文件解析失败时的原样备份（不会被下次保存覆盖） | `app data dir` |

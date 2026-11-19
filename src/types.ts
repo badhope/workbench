@@ -34,6 +34,11 @@ export type { RestoreResult } from "./generated/RestoreResult";
 export type { DiagnosticCheck } from "./generated/DiagnosticCheck";
 export type { DiagnosticsReport } from "./generated/DiagnosticsReport";
 
+export type { KnowledgeSource } from "./generated/KnowledgeSource";
+export type { KnowledgeStatus } from "./generated/KnowledgeStatus";
+export type { KnowledgeHit } from "./generated/KnowledgeHit";
+export type { KnowledgeDoc } from "./generated/KnowledgeDoc";
+
 export type { CostSettings } from "./generated/CostSettings";
 export type { CostOverview } from "./generated/CostOverview";
 export type { CostTrendRow } from "./generated/CostTrendRow";

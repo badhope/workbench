@@ -7,14 +7,17 @@ pub mod devserver;
 pub mod diagnostics;
 pub mod ipc_guard;
 pub mod json_store;
+pub mod knowledge;
 pub mod lock;
 pub mod logging_setup;
+pub mod mcp;
 pub mod paths;
 pub mod ports;
 pub mod pricing;
 pub mod procs;
 pub mod runtime;
 pub mod server;
+pub mod services;
 pub mod session_meter;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -85,6 +88,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
         // 窗口位置/大小/最大化跨启动保持，但**不持久化可见性**。
@@ -283,6 +287,14 @@ pub fn run() {
             commands::get_pricing,
             commands::save_pricing,
             commands::diagnostics,
+            // ── 知识库 ──
+            commands::knowledge_status,
+            commands::knowledge_add_source,
+            commands::knowledge_remove_source,
+            commands::knowledge_reindex,
+            commands::knowledge_search,
+            commands::knowledge_read,
+            commands::knowledge_open,
         ])
         .run(tauri::generate_context!())
         .expect("运行工作台应用失败");

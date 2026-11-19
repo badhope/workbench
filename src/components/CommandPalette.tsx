@@ -4,6 +4,8 @@ import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { rankCommands, type CommandItem } from "../lib/commandSearch";
 import { useT } from "../lib/i18n";
+import { knowledgeSearch } from "../lib/api";
+import { requestKnowledge } from "../lib/knowledgeBus";
 import { PAGES } from "../navigation";
 import { formatBytes } from "../lib/util";
 import type { ViewKey } from "../navigation";
@@ -37,6 +39,9 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [knowledgeHits, setKnowledgeHits] = useState<
+    Awaited<ReturnType<typeof knowledgeSearch>>
+  >([]);
 
   const {
     setView,
@@ -123,6 +128,21 @@ export function CommandPalette() {
       hint: task.status,
       run: () => setTaskDetailId(task.id),
     }));
+    // 查询 <2 字时不把上一次结果留在面板里：状态本身不清空，避免 effect 同步 setState。
+    const knowledgeActions: PaletteAction[] =
+      query.trim().length >= 2
+        ? knowledgeHits.map((hit) => ({
+            id: `knowledge-${hit.path}`,
+            label: hit.title,
+            keywords: `${hit.path} ${hit.tags.join(" ")} ${hit.project_id ?? ""}`,
+            group: t("palette.knowledge"),
+            hint: hit.project_id,
+            run: () => {
+              requestKnowledge({ query, path: hit.path });
+              setView("knowledge");
+            },
+          }))
+        : [];
     const commandActions: PaletteAction[] = [
       {
         id: "cmd-refresh",
@@ -139,6 +159,7 @@ export function CommandPalette() {
       ...portActions,
       ...projectActions,
       ...taskActions,
+      ...knowledgeActions,
     ];
   }, [
     open,
@@ -146,6 +167,8 @@ export function CommandPalette() {
     procs,
     ports,
     data,
+    knowledgeHits,
+    query,
     setView,
     setProcQuery,
     setFocusPid,
@@ -175,6 +198,27 @@ export function CommandPalette() {
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
+
+  // 知识库结果按输入防抖检索：沿用同一个面板，不另造搜索页。
+  useEffect(() => {
+    if (!open) return;
+    const q = query.trim();
+    if (q.length < 2) return;
+    let alive = true;
+    const timer = setTimeout(() => {
+      void knowledgeSearch(q, 8)
+        .then((hits) => {
+          if (alive) setKnowledgeHits(hits);
+        })
+        .catch(() => {
+          if (alive) setKnowledgeHits([]);
+        });
+    }, 250);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [open, query]);
 
   // 查询变化时把高亮拉回第一项。在 change 处理器里同步归零，
   // 而不是用 effect 派生——effect 里 setState 会触发一次额外渲染。

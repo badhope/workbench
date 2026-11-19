@@ -20,6 +20,7 @@ use workbench_lib::cost_store::{
 use workbench_lib::data::{Project, Task, WorkbenchData};
 use workbench_lib::devserver::DevServer;
 use workbench_lib::diagnostics::{DiagnosticCheck, DiagnosticsReport};
+use workbench_lib::knowledge::{KnowledgeDoc, KnowledgeHit, KnowledgeSource, KnowledgeStatus};
 use workbench_lib::ports::PortEntry;
 use workbench_lib::pricing::PricingRow;
 use workbench_lib::procs::ProcInfo;
@@ -33,6 +34,10 @@ fn export_ts_bindings() {
     ProcInfo::export_all(&cfg).unwrap();
     PortEntry::export_all(&cfg).unwrap();
     DevServer::export_all(&cfg).unwrap();
+    KnowledgeSource::export_all(&cfg).unwrap();
+    KnowledgeStatus::export_all(&cfg).unwrap();
+    KnowledgeHit::export_all(&cfg).unwrap();
+    KnowledgeDoc::export_all(&cfg).unwrap();
     AiProcess::export_all(&cfg).unwrap();
     OpencodeSession::export_all(&cfg).unwrap();
     OpencodeSessionsResult::export_all(&cfg).unwrap();

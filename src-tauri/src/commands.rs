@@ -1745,3 +1745,78 @@ pub async fn diagnostics(app: AppHandle) -> Result<DiagnosticsReport, String> {
         .await
         .map_err(|e| format!("任务执行失败: {e}"))
 }
+
+// ── 知识库 ──────────────────────────────────────────────────
+
+#[tauri::command(async)]
+pub async fn knowledge_status(app: AppHandle) -> Result<crate::knowledge::KnowledgeStatus, String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || crate::knowledge::status(&root))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+#[tauri::command(async)]
+pub async fn knowledge_add_source(
+    app: AppHandle,
+    path: String,
+) -> Result<crate::knowledge::KnowledgeStatus, String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || crate::knowledge::add_source(&root, &path))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+#[tauri::command(async)]
+pub async fn knowledge_remove_source(
+    app: AppHandle,
+    path: String,
+) -> Result<crate::knowledge::KnowledgeStatus, String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || crate::knowledge::remove_source(&root, &path))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+#[tauri::command(async)]
+pub async fn knowledge_reindex(
+    app: AppHandle,
+) -> Result<crate::knowledge::KnowledgeStatus, String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || crate::knowledge::reindex(&root))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+#[tauri::command(async)]
+pub async fn knowledge_search(
+    app: AppHandle,
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<crate::knowledge::KnowledgeHit>, String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || crate::knowledge::search(&root, &query, limit))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+#[tauri::command(async)]
+pub async fn knowledge_read(
+    app: AppHandle,
+    path: String,
+) -> Result<crate::knowledge::KnowledgeDoc, String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || crate::knowledge::read_doc(&root, &path))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+#[tauri::command(async)]
+pub async fn knowledge_open(app: AppHandle, path: String) -> Result<(), String> {
+    let root = data_root(&app)?;
+    let resolved =
+        tauri::async_runtime::spawn_blocking(move || crate::knowledge::resolve_doc(&root, &path))
+            .await
+            .map_err(|e| format!("任务执行失败: {e}"))??;
+    tauri_plugin_opener::open_path(resolved, None::<&str>).map_err(|e| format!("打开失败: {e}"))
+}

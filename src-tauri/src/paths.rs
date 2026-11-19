@@ -71,6 +71,14 @@ impl DataRoot {
         self.join("pricing_overrides.json")
     }
 
+    pub fn knowledge_config(&self) -> PathBuf {
+        self.join("knowledge.json")
+    }
+
+    pub fn knowledge_db(&self) -> PathBuf {
+        self.join("knowledge.db")
+    }
+
     pub fn log_file(&self) -> PathBuf {
         self.join("workbench.log")
     }
