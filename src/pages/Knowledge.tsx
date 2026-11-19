@@ -30,6 +30,10 @@ import { AiAccessCard } from "./knowledge/AiAccessCard";
 export default function Knowledge() {
   const t = useT();
   const setToast = useStore((s) => s.setToast);
+  const projects = useStore((s) => s.data.projects);
+  const setView = useStore((s) => s.setView);
+  const setTaskProjectFilter = useStore((s) => s.setTaskProjectFilter);
+  const setTaskScope = useStore((s) => s.setTaskScope);
   const [status, setStatus] = useState<KnowledgeStatus | null>(null);
   const [error, setError] = useState("");
   const [draft, setDraft] = useState("");
@@ -158,6 +162,17 @@ export default function Knowledge() {
     }
   }
 
+  function openProject(id: string) {
+    const project = projects.find((p) => p.id === id || p.name === id);
+    if (!project) {
+      setToast(t("knowledge.projectMissing", { id }));
+      return;
+    }
+    setTaskProjectFilter(project.id);
+    setTaskScope("all");
+    setView("tasks");
+  }
+
   async function openDoc() {
     if (!doc) return;
     setOpening(true);
@@ -239,6 +254,7 @@ export default function Knowledge() {
             onOpen={() => void openDoc()}
             opening={opening}
             canOpen={isTauri()}
+            onProject={openProject}
           />
         </div>
       </div>

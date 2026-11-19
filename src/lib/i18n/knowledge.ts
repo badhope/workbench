@@ -30,6 +30,7 @@ export const dict = {
     "knowledge.selectHint": "Select a note to preview it here.",
     "knowledge.tags": "Tags",
     "knowledge.project": "Project",
+    "knowledge.projectMissing": "Project not found: {id}",
     "knowledge.modified": "Modified",
     "knowledge.removeConfirmTitle": "Remove this knowledge folder?",
     "knowledge.removeConfirmBody":
@@ -76,6 +77,7 @@ export const dict = {
     "knowledge.selectHint": "选择一篇笔记，在这里预览。",
     "knowledge.tags": "标签",
     "knowledge.project": "项目",
+    "knowledge.projectMissing": "没有找到项目：{id}",
     "knowledge.modified": "修改时间",
     "knowledge.removeConfirmTitle": "移除这个知识目录？",
     "knowledge.removeConfirmBody": "只会移除该目录的索引，不会删除你的 Markdown 文件。",
@@ -122,6 +124,7 @@ export const dict = {
     "knowledge.selectHint": "ノートを選ぶとここにプレビューします。",
     "knowledge.tags": "タグ",
     "knowledge.project": "プロジェクト",
+    "knowledge.projectMissing": "プロジェクトが見つかりません: {id}",
     "knowledge.modified": "更新日時",
     "knowledge.removeConfirmTitle": "このフォルダーを削除しますか？",
     "knowledge.removeConfirmBody":

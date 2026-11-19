@@ -11,12 +11,14 @@ export function DocPreview({
   onOpen,
   opening,
   canOpen,
+  onProject,
 }: {
   doc: KnowledgeDoc | null;
   loading: boolean;
   onOpen: () => void;
   opening: boolean;
   canOpen: boolean;
+  onProject: (id: string) => void;
 }) {
   const t = useT();
   const lang = useLang();
@@ -43,7 +45,16 @@ export function DocPreview({
         </div>
         {(doc.tags.length > 0 || doc.project_id) && (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {doc.project_id && <Badge tone="accent">{doc.project_id}</Badge>}
+            {doc.project_id && (
+              <button
+                type="button"
+                onClick={() => onProject(doc.project_id!)}
+                title={t("knowledge.project")}
+                className="rounded-[4px] focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+              >
+                <Badge tone="accent">{doc.project_id}</Badge>
+              </button>
+            )}
             {doc.tags.map((tag) => (
               <Badge key={tag}>{tag}</Badge>
             ))}

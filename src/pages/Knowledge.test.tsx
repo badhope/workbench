@@ -34,6 +34,7 @@ import * as api from "../lib/api";
 const statusMock = vi.mocked(api.knowledgeStatus);
 const searchMock = vi.mocked(api.knowledgeSearch);
 const addMock = vi.mocked(api.knowledgeAddSource);
+const readMock = vi.mocked(api.knowledgeRead);
 
 beforeEach(() => {
   setLang("zh");
@@ -41,6 +42,14 @@ beforeEach(() => {
   statusMock.mockReset().mockResolvedValue(emptyStatus);
   searchMock.mockReset().mockResolvedValue([]);
   addMock.mockReset().mockResolvedValue(withSource);
+  readMock.mockReset().mockResolvedValue({
+    path: "/notes/demo.md",
+    title: "Demo note",
+    body: "# Demo note\n\nhello",
+    project_id: "p1",
+    tags: ["demo"],
+    mtime: 1,
+  });
 });
 
 describe("Knowledge page", () => {
@@ -49,6 +58,43 @@ describe("Knowledge page", () => {
     await screen.findByText("还没有知识目录");
     expect(statusMock).toHaveBeenCalledTimes(1);
     expect(searchMock).toHaveBeenCalledWith("", 30);
+  });
+
+  it("点击项目标签跳到任务页并按项目筛选", async () => {
+    statusMock.mockResolvedValue(withSource);
+    useStore.setState({
+      data: {
+        projects: [
+          {
+            id: "p1",
+            name: "Demo",
+            path: "",
+            status: "active",
+            tags: [],
+            pinned: false,
+            note: "",
+            created_at: 1,
+          },
+        ],
+        tasks: [],
+      },
+      view: "knowledge",
+    });
+    searchMock.mockResolvedValue([
+      {
+        path: "/notes/demo.md",
+        title: "Demo note",
+        project_id: "p1",
+        tags: ["demo"],
+        snippet: "hello",
+      },
+    ]);
+    render(<Knowledge />);
+    await userEvent.click(await screen.findByText("Demo note"));
+    const badge = await screen.findByTitle("项目");
+    await userEvent.click(badge);
+    expect(useStore.getState().view).toBe("tasks");
+    expect(useStore.getState().taskProjectFilter).toBe("p1");
   });
 
   it("添加目录后写回状态并刷新搜索", async () => {
