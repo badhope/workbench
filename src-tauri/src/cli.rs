@@ -24,7 +24,7 @@ COMMANDS:
     ports           List listening TCP/UDP ports with the owning PID
     diag            Environment self-check (platform, data dir, session folders, port tools)
     cost            AI session cost summary (--json, --days N, --by-project)
-    mcp             Run the read-only MCP server over stdio
+    mcp             Run the MCP server over stdio (writes off by default)
     serve [opts]    Run the headless HTTP server + web UI (see below)
     --version       Print the version
     --help          Print this help
