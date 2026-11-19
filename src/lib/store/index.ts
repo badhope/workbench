@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { DEFAULT_THEME_ID } from "../theme/presets";
 import { DEFAULT_ORDER } from "../layout";
+import { DEFAULT_PROC_COLUMNS } from "../procColumns";
 import { emptyData, migratePersisted } from "./helpers";
 import { activePersistence, createPersistence } from "./persistence";
 import type { Store } from "./types";
@@ -41,6 +42,7 @@ export const useStore = create<Store>()(
         widgetHidden: [],
         widgetSpans: {},
         procView: "flat",
+        procColumns: DEFAULT_PROC_COLUMNS,
         taskView: "list",
         taskScope: "all",
         taskProjectFilter: "",
@@ -105,8 +107,9 @@ export const useStore = create<Store>()(
       // 版本 6：新增粒子强度（默认 65）与自定义背景图（默认 null）。
       // 版本 7：新增工作方式多选与任务页视图/范围/项目筛选。
       // 版本 8：新增首页右栏收起状态与分区可见性。
+      // 版本 9：新增进程表列显示/顺序偏好。
       // 迁移只做「补齐与清洗」，不覆盖用户的显式选择。
-      version: 8,
+      version: 9,
       migrate: (persisted: unknown) => migratePersisted(persisted) as never,
       partialize: (s) => ({
         theme: s.theme,
@@ -125,6 +128,7 @@ export const useStore = create<Store>()(
         widgetHidden: s.widgetHidden,
         widgetSpans: s.widgetSpans,
         procView: s.procView,
+        procColumns: s.procColumns,
         taskView: s.taskView,
         taskScope: s.taskScope,
         taskProjectFilter: s.taskProjectFilter,

@@ -9,6 +9,7 @@ import { formatBytes } from "../lib/util";
 import { cpuHistogram, memoryHistogram } from "../lib/aggregate";
 import { filterProcs, type ProcSortKey } from "./processFilter";
 import { ProcessTable } from "./processes/ProcessTable";
+import { ColumnsMenu } from "./processes/ColumnsMenu";
 import { buildForest, flattenTree, type TreeNode } from "./processes/tree";
 import { useT } from "../lib/i18n";
 import { downloadCsv } from "../lib/export";
@@ -43,6 +44,8 @@ export default function Processes() {
     theme,
     procView,
     setProcView,
+    procColumns,
+    setProcColumns,
     procQuery,
     setProcQuery,
     focusPid,
@@ -59,6 +62,8 @@ export default function Processes() {
       theme: s.theme,
       procView: s.procView,
       setProcView: s.setProcView,
+      procColumns: s.procColumns,
+      setProcColumns: s.setProcColumns,
       procQuery: s.procQuery,
       setProcQuery: s.setProcQuery,
       focusPid: s.focusPid,
@@ -163,7 +168,7 @@ export default function Processes() {
       <Summary procs={procs} />
       <Distribution cpu={cpuChart} mem={memChart} />
 
-      <Card className="flex flex-wrap items-center gap-3">
+      <Card className="relative z-20 flex flex-wrap items-center gap-3">
         <div className="relative min-w-[160px] flex-1 sm:min-w-[220px]">
           <Search
             size={14}
@@ -179,6 +184,7 @@ export default function Processes() {
         </div>
         <ChipFilter chip={chip} onPick={setChip} />
         <SortSelect sort={sort} onPick={setSort} />
+        <ColumnsMenu columns={procColumns} onChange={setProcColumns} />
         <ViewToggle view={procView} onPick={setProcView} />
         <span className="text-xs text-dim">
           {loading ? (
@@ -212,6 +218,7 @@ export default function Processes() {
             setChip("all");
           }}
           focusPid={focusPid}
+          columns={procColumns}
           sort={sort}
           onSortChange={setSort}
           expandedNodes={

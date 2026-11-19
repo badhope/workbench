@@ -6,6 +6,7 @@ import { formatBytes, fromNow, shortPath } from "../../lib/util";
 import { useStore } from "../../lib/store";
 import { localeFor, useLang, useT } from "../../lib/i18n";
 import { statusKeyOf } from "../../lib/processStatus";
+import { DEFAULT_PROC_COLUMNS, type ProcColumnId } from "../../lib/procColumns";
 import type { ProcInfo } from "../../types";
 import type { TreeRow } from "./tree";
 import type { ProcSortKey } from "../processFilter";
@@ -16,6 +17,7 @@ const DETAIL_H = 190;
 const OVERSCAN = 12;
 
 type Unit = { kind: "row"; row: TreeRow } | { kind: "detail"; p: ProcInfo };
+type Header = { id: ProcColumnId | null; label: string };
 
 /**
  * 进程表：虚拟滚动 + 行内展开 + 可选父子层级。
@@ -35,6 +37,7 @@ export function ProcessTable({
   onToggleNode,
   sort,
   onSortChange,
+  columns = DEFAULT_PROC_COLUMNS,
 }: {
   rows: TreeRow[];
   aiPids: Set<number>;
@@ -48,6 +51,8 @@ export function ProcessTable({
   /** 当前排序键；表头点击在 cpu / memory / pid / name 之间切换 */
   sort?: ProcSortKey;
   onSortChange?: (key: ProcSortKey) => void;
+  /** 可见列及顺序；展开箭头列固定在最前 */
+  columns?: ProcColumnId[];
 }) {
   const t = useT();
   const [expandedPid, setExpandedPid] = useState<number | null>(null);
@@ -111,31 +116,32 @@ export function ProcessTable({
   const padBottom = virtualRows.length
     ? virtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end
     : 0;
+  const colSpan = columns.length + 1;
 
   return (
     <div ref={scrollRef} className="max-h-[60vh] overflow-auto">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10">
           <tr className="border-b border-line text-left text-xs text-dim">
-            {headers(t).map((h, i) => {
+            {headers(t, columns).map((h) => {
               // 只有 4 列可排序，其余是展示列。可排序列做成按钮，
               // 与任务管理器 / btop 的「点表头排序」一致——比下拉框少一步。
-              const key = SORTABLE[i];
+              const key = h.id ? SORTABLE[h.id] : undefined;
               if (!key || !onSortChange) {
                 return (
                   <th
-                    key={i}
+                    key={h.id ?? "expand"}
                     scope="col"
                     className="whitespace-nowrap bg-panel px-3 py-2 font-medium"
                   >
-                    {h}
+                    {h.label}
                   </th>
                 );
               }
               const active = sort === key;
               return (
                 <th
-                  key={i}
+                  key={h.id}
                   scope="col"
                   aria-sort={active ? "descending" : "none"}
                   className="whitespace-nowrap bg-panel px-3 py-2 font-medium"
@@ -146,9 +152,9 @@ export function ProcessTable({
                     className={`inline-flex items-center gap-1 transition-colors ${
                       active ? "text-accent" : "text-dim hover:text-text"
                     }`}
-                    title={h}
+                    title={h.label}
                   >
-                    {h}
+                    {h.label}
                     <span aria-hidden="true" className="text-[9px]">
                       {active ? "▼" : "⇅"}
                     </span>
@@ -159,7 +165,7 @@ export function ProcessTable({
           </tr>
         </thead>
         <tbody>
-          {padTop > 0 && <Spacer height={padTop} />}
+          {padTop > 0 && <Spacer height={padTop} colSpan={colSpan} />}
           {virtualRows.map((v) => {
             const unit = units[v.index];
             if (!unit) return null;
@@ -169,6 +175,7 @@ export function ProcessTable({
                   key={`d-${unit.p.pid}`}
                   p={unit.p}
                   index={v.index}
+                  colSpan={colSpan}
                   measure={virtualizer.measureElement}
                 />
               );
@@ -178,6 +185,7 @@ export function ProcessTable({
                 key={unit.row.p.pid}
                 row={unit.row}
                 index={v.index}
+                columns={columns}
                 measure={virtualizer.measureElement}
                 detailOpen={expandedPid === unit.row.p.pid}
                 nodeOpen={
@@ -197,44 +205,58 @@ export function ProcessTable({
               />
             );
           })}
-          {padBottom > 0 && <Spacer height={padBottom} />}
+          {padBottom > 0 && <Spacer height={padBottom} colSpan={colSpan} />}
         </tbody>
       </table>
     </div>
   );
 }
 
-/** 表头。空字符串是第一列（展开箭头）。 */
-function headers(t: (key: string) => string): string[] {
+/** 表头。第一列是展开箭头，其余按用户配置生成。 */
+function headers(t: (key: string) => string, columns: ProcColumnId[]): Header[] {
   return [
-    "",
-    "PID",
-    t("procs.colName"),
-    "CPU",
-    t("procs.colMemory"),
-    t("procs.colStatus"),
-    t("procs.colStarted"),
-    t("procs.colPath"),
-    t("procs.colAction"),
+    { id: null, label: "" },
+    ...columns.map((id) => ({ id, label: columnLabel(t, id) })),
   ];
 }
 
+function columnLabel(t: (key: string) => string, id: ProcColumnId): string {
+  switch (id) {
+    case "pid":
+      return "PID";
+    case "cpu":
+      return "CPU";
+    case "name":
+      return t("procs.colName");
+    case "memory":
+      return t("procs.colMemory");
+    case "status":
+      return t("procs.colStatus");
+    case "started":
+      return t("procs.colStarted");
+    case "path":
+      return t("procs.colPath");
+    case "action":
+      return t("procs.colAction");
+  }
+}
+
 /**
- * 哪几列可排序。索引对应 headers()：1=PID 2=名称 3=CPU 4=内存。
- * 其余列（状态/启动时间/路径/操作）没有对应排序键，点了也不该有反应。
+ * 哪几列可排序。键是列 id，不是下标：列顺序可被用户调整，
+ * 按位置写死会让「点了内存列却按 CPU 排序」。
  */
-const SORTABLE: Record<number, ProcSortKey> = {
-  1: "pid",
-  2: "name",
-  3: "cpu",
-  4: "memory",
+const SORTABLE: Partial<Record<ProcColumnId, ProcSortKey>> = {
+  pid: "pid",
+  name: "name",
+  cpu: "cpu",
+  memory: "memory",
 };
 
 /** 虚拟滚动的上下占位行：保持滚动条总高度与实际内容一致。 */
-function Spacer({ height }: { height: number }) {
+function Spacer({ height, colSpan }: { height: number; colSpan: number }) {
   return (
     <tr aria-hidden="true" style={{ height }}>
-      <td colSpan={9} className="p-0" />
+      <td colSpan={colSpan} className="p-0" />
     </tr>
   );
 }
@@ -243,17 +265,19 @@ function Spacer({ height }: { height: number }) {
 function ProcessDetail({
   p,
   index,
+  colSpan,
   measure,
 }: {
   p: ProcInfo;
   index: number;
+  colSpan: number;
   measure: (el: Element | null) => void;
 }) {
   const t = useT();
   const lang = useLang();
   return (
     <Tr data-index={index} ref={measure}>
-      <Td colSpan={9} className="bg-panel/60 px-4 py-3">
+      <Td colSpan={colSpan} className="bg-panel/60 px-4 py-3">
         <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3">
           <div>
             <span className="text-dim">{t("procs.detailExePath")}</span>
@@ -312,6 +336,7 @@ function PortsOfPid({ pid }: { pid: number }) {
 function ProcessRow({
   row,
   index,
+  columns,
   measure,
   detailOpen,
   nodeOpen,
@@ -323,6 +348,7 @@ function ProcessRow({
 }: {
   row: TreeRow;
   index: number;
+  columns: ProcColumnId[];
   measure: (el: Element | null) => void;
   detailOpen: boolean;
   /** 树形视图下的节点展开态；undefined = 扁平视图，没有子节点概念 */
@@ -336,6 +362,84 @@ function ProcessRow({
   const t = useT();
   const { p, depth } = row;
   const risky = aiPids.has(p.pid) || devPids.has(p.pid) || p.cpu > 50;
+
+  const cell = (id: ProcColumnId) => {
+    switch (id) {
+      case "pid":
+        return (
+          <Td key="pid" mono className="text-dim">
+            {p.pid}
+          </Td>
+        );
+      case "name":
+        return (
+          <Td key="name" className="font-medium max-w-[180px] truncate">
+            <span
+              className="flex items-center gap-1.5"
+              style={depth > 0 ? { paddingLeft: Math.min(depth, 6) * 14 } : undefined}
+            >
+              {depth > 0 && (
+                <span className="text-faint" aria-hidden="true">
+                  └
+                </span>
+              )}
+              <span className="truncate">{p.name}</span>
+              {aiPids.has(p.pid) && <Badge tone="warn">AI</Badge>}
+              {devPids.has(p.pid) && <Badge tone="ok">DEV</Badge>}
+            </span>
+          </Td>
+        );
+      case "cpu":
+        return (
+          <Td key="cpu">
+            <CpuCell cpu={p.cpu} />
+          </Td>
+        );
+      case "memory":
+        return <Td key="memory">{formatBytes(p.memory)}</Td>;
+      case "status":
+        return (
+          <Td key="status" className="text-dim">
+            {t(`procs.status.${statusKeyOf(p.status)}`)}
+          </Td>
+        );
+      case "started":
+        return (
+          <Td key="started" className="text-xs text-dim">
+            {fromNow(p.start_time)}
+          </Td>
+        );
+      case "path":
+        return (
+          <Td key="path" className="max-w-[240px]">
+            <div
+              className="truncate font-mono text-[11px] text-dim"
+              title={p.cmd_line || p.exe_path}
+            >
+              {p.cmd_line ? shortPath(p.cmd_line, 60) : shortPath(p.exe_path, 60)}
+            </div>
+          </Td>
+        );
+      case "action":
+        return (
+          <Td key="action">
+            <Btn
+              variant={risky ? "danger" : "ghost"}
+              className="!px-2 !py-1 !text-xs"
+              title={t("procs.killTitle")}
+              onClick={(e) => {
+                // 结束进程不该同时展开/收起详情行：按钮在可点击行内，
+                // 不阻止冒泡时点「结束」会在弹窗背后把行折叠掉。
+                e.stopPropagation();
+                useStore.getState().setKillTarget(p);
+              }}
+            >
+              <XCircle size={12} />
+            </Btn>
+          </Td>
+        );
+    }
+  };
 
   return (
     <Tr
@@ -373,53 +477,7 @@ function ProcessRow({
           <Chevron expanded={detailOpen} dim={!row.hasChildren} />
         )}
       </Td>
-      <Td mono className="text-dim">
-        {p.pid}
-      </Td>
-      <Td className="font-medium max-w-[180px] truncate">
-        <span
-          className="flex items-center gap-1.5"
-          style={depth > 0 ? { paddingLeft: Math.min(depth, 6) * 14 } : undefined}
-        >
-          {depth > 0 && (
-            <span className="text-faint" aria-hidden="true">
-              └
-            </span>
-          )}
-          <span className="truncate">{p.name}</span>
-          {aiPids.has(p.pid) && <Badge tone="warn">AI</Badge>}
-          {devPids.has(p.pid) && <Badge tone="ok">DEV</Badge>}
-        </span>
-      </Td>
-      <Td>
-        <CpuCell cpu={p.cpu} />
-      </Td>
-      <Td>{formatBytes(p.memory)}</Td>
-      <Td className="text-dim">{t(`procs.status.${statusKeyOf(p.status)}`)}</Td>
-      <Td className="text-xs text-dim">{fromNow(p.start_time)}</Td>
-      <Td className="max-w-[240px]">
-        <div
-          className="truncate font-mono text-[11px] text-dim"
-          title={p.cmd_line || p.exe_path}
-        >
-          {p.cmd_line ? shortPath(p.cmd_line, 60) : shortPath(p.exe_path, 60)}
-        </div>
-      </Td>
-      <Td>
-        <Btn
-          variant={risky ? "danger" : "ghost"}
-          className="!px-2 !py-1 !text-xs"
-          title={t("procs.killTitle")}
-          onClick={(e) => {
-            // 结束进程不该同时展开/收起详情行：按钮在可点击行内，
-            // 不阻止冒泡时点「结束」会在弹窗背后把行折叠掉。
-            e.stopPropagation();
-            useStore.getState().setKillTarget(p);
-          }}
-        >
-          <XCircle size={12} />
-        </Btn>
-      </Td>
+      {columns.map(cell)}
     </Tr>
   );
 }

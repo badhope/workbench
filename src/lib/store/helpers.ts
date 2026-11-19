@@ -1,5 +1,6 @@
 import { allThemes, migrateThemeId, parseTheme } from "../theme/presets";
 import type { ThemeInput } from "../theme/tokens";
+import { sanitizeProcColumns } from "../procColumns";
 import type { MotionLevel } from "../theme/apply";
 import {
   normalizeHidden,
@@ -96,6 +97,7 @@ export function migratePersisted(persisted: unknown): Record<string, unknown> {
     widgetHidden: normalizeHidden(state.widgetHidden),
     widgetSpans: normalizeSpans(state.widgetSpans),
     procView: state.procView === "tree" ? "tree" : "flat",
+    procColumns: sanitizeProcColumns(state.procColumns),
     taskView: state.taskView === "board" ? "board" : "list",
     taskScope:
       state.taskScope === "today" ||

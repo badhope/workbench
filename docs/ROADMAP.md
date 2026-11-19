@@ -4,7 +4,7 @@ Workbench ships in small, verifiable increments. Every entry below states what
 is done, what is next, and what is explicitly **not** planned — a roadmap that
 only lists ambitions is a wish list, not a plan.
 
-Current version: **0.9.6** · Status legend: ✅ shipped · 🚧 in progress · ⬜ planned
+Current version: **0.9.7** · Status legend: ✅ shipped · 🚧 in progress · ⬜ planned
 
 ## 0.4.0 — Integrity of the numbers (shipped 2026-11-02)
 
@@ -54,6 +54,12 @@ Current version: **0.9.6** · Status legend: ✅ shipped · 🚧 in progress · 
 | Controlled writes: create/update task, append note | ✅ | `services/ai.rs`; 3 harness tests incl. traversal + symlink escape |
 | Writes off by default, audited, undoable | ✅ | `ai.json` / `ai_actions.json`; Settings AI card; `AiAccessCard.test.tsx` |
 
+## 0.9.7 — Process columns, remembered (shipped 2026-11-20)
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| Column show/hide/reorder, persisted | ✅ | `src/lib/procColumns.ts`, `ColumnsMenu.tsx`; store v9 migration; 631 frontend tests |
+
 ## 0.9.6 — Next pass: ports, budgets, a11y (shipped 2026-11-20)
 
 | Item | Status | Evidence |
@@ -85,7 +91,6 @@ Current version: **0.9.6** · Status legend: ✅ shipped · 🚧 in progress · 
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Column show/hide/reorder, persisted | ⬜ | Docker Desktop and Mission Center both treat this as baseline |
 | `Intl.PluralRules` for English, locale-correct dates and byte units | ⬜ | Dictionary has no plural keys today |
 
 ## Not planned

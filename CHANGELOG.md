@@ -3,6 +3,26 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.7] - 2026-11-20
+
+### Added — 进程表列偏好
+
+- **列显示/隐藏/排序**：进程表新增「列设置」弹层，可勾选 PID、名称、CPU、
+  内存、状态、启动时间、路径、操作八列，并用上下箭头调整顺序；至少保留一列，
+  避免表格只剩展开箭头。
+- **重启后保留**：`procColumns` 进入 UI 持久化，store 版本从 8 升到 9；
+  旧用户升级后默认显示全部列，未知列、重复列和空配置会被清洗回默认。
+- **排序不再错位**：表头排序键改为按列 id 映射，用户把内存列挪到 CPU 列
+  前面后，点表头仍然按内存排序，不会按旧下标排错。
+- **弹层不被遮挡**：工具栏卡片提升自己的层叠上下文，列设置弹层不会再被
+  下方进程表盖住一半。
+
+### Verification
+
+- `npx tsc --noEmit`、`npm run build` 通过；前端 64 个测试文件、631 项通过。
+- 浏览器实测：隐藏「路径 / 命令行」并把 CPU 上移后刷新，表头顺序与隐藏
+  状态都保持；截图见 `proc-columns-menu.png`、`proc-columns-hidden.png`。
+
 ## [0.9.6] - 2026-11-20
 
 ### Added — 端口连接与预算线

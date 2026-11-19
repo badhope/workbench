@@ -3,6 +3,7 @@ import type { MotionLevel } from "../theme/apply";
 import type { OverviewLayoutId, ShellId, WidgetId } from "../layout";
 import type { WorkMode } from "../workModes";
 import type { TaskScope } from "../workbench";
+import type { ProcColumnId } from "../procColumns";
 import type {
   AiProcess,
   CostOverview,
@@ -77,6 +78,8 @@ export interface UiState {
   widgetSpans: Partial<Record<WidgetId, number>>;
   /** 进程页视图：扁平列表 / 父子树 */
   procView: ProcView;
+  /** 进程表可见列及顺序；expand 箭头列固定在最前，不在这里 */
+  procColumns: ProcColumnId[];
   /** 任务页视图：列表优先，看板是第二视图 */
   taskView: "list" | "board";
   /** 任务页范围：全部 / 今天 / 本周 / 收件箱 */
@@ -180,6 +183,7 @@ export interface Store extends UiState, RuntimeState {
   setWidgetSpan: (id: WidgetId, span: number) => void;
   resetWidgets: () => void;
   setProcView: (v: ProcView) => void;
+  setProcColumns: (columns: ProcColumnId[]) => void;
   setProcQuery: (q: string) => void;
   setFocusPid: (pid: number | null) => void;
   setRefreshMs: (ms: number) => void;

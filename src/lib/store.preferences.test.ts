@@ -425,3 +425,37 @@ describe("persist 迁移 v7→v8", () => {
     });
   });
 });
+
+/** persist v8 → v9：进程表列显示与顺序。 */
+describe("persist 迁移 v8→v9", () => {
+  it("老用户首次升级显示全部列", () => {
+    expect(migratePersisted({}).procColumns).toEqual([
+      "pid",
+      "name",
+      "cpu",
+      "memory",
+      "status",
+      "started",
+      "path",
+      "action",
+    ]);
+  });
+
+  it("用户自己排的顺序与隐藏列会被保留", () => {
+    const migrated = migratePersisted({ procColumns: ["cpu", "pid", "name"] });
+    expect(migrated.procColumns).toEqual(["cpu", "pid", "name"]);
+  });
+
+  it("脏数据不把整张表变成空列", () => {
+    expect(migratePersisted({ procColumns: ["ghost", "ghost"] }).procColumns).toEqual([
+      "pid",
+      "name",
+      "cpu",
+      "memory",
+      "status",
+      "started",
+      "path",
+      "action",
+    ]);
+  });
+});

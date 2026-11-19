@@ -21,6 +21,7 @@ import {
   normalizeIntensity,
 } from "./helpers";
 import type { Store, StoreGet, StoreSet } from "./types";
+import { sanitizeProcColumns } from "../procColumns";
 
 export type UiActions = Pick<
   Store,
@@ -52,6 +53,7 @@ export type UiActions = Pick<
   | "setWidgetSpan"
   | "resetWidgets"
   | "setProcView"
+  | "setProcColumns"
   | "setProcQuery"
   | "setFocusPid"
   | "setRefreshMs"
@@ -172,6 +174,8 @@ export function createUiActions(set: StoreSet, get: StoreGet): UiActions {
     resetWidgets: () =>
       set({ widgetOrder: DEFAULT_ORDER, widgetHidden: [], widgetSpans: {} }),
     setProcView: (procView) => set({ procView }),
+    setProcColumns: (procColumns) =>
+      set({ procColumns: sanitizeProcColumns(procColumns) }),
     setProcQuery: (procQuery) => set({ procQuery }),
     setFocusPid: (focusPid) => set({ focusPid }),
     setRefreshMs: (ms) => set({ refreshMs: ms }),
