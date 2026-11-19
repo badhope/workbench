@@ -38,32 +38,37 @@ export const PAGE_GROUPS: { key: PageGroupKey; label: string }[] = [
 ];
 
 export const PAGES = [
-  { key: "today", icon: Sun, group: "home", load: () => import("./Today") },
+  { key: "today", icon: Sun, group: "home", load: () => import("./pages/Today") },
   {
     key: "projects",
     icon: FolderKanban,
     group: "work",
-    load: () => import("./Projects"),
+    load: () => import("./pages/Projects"),
   },
-  { key: "tasks", icon: ListChecks, group: "work", load: () => import("./Tasks") },
-  { key: "review", icon: BarChart3, group: "work", load: () => import("./Review") },
+  { key: "tasks", icon: ListChecks, group: "work", load: () => import("./pages/Tasks") },
+  { key: "review", icon: BarChart3, group: "work", load: () => import("./pages/Review") },
   {
     key: "overview",
     icon: LayoutDashboard,
     group: "tools",
-    load: () => import("./Overview"),
+    load: () => import("./pages/Overview"),
   },
-  { key: "processes", icon: Cpu, group: "tools", load: () => import("./Processes") },
-  { key: "servers", icon: Server, group: "tools", load: () => import("./Servers") },
-  { key: "ai", icon: Sparkles, group: "tools", load: () => import("./AiSessions") },
-  { key: "costs", icon: Coins, group: "tools", load: () => import("./Costs") },
+  {
+    key: "processes",
+    icon: Cpu,
+    group: "tools",
+    load: () => import("./pages/Processes"),
+  },
+  { key: "servers", icon: Server, group: "tools", load: () => import("./pages/Servers") },
+  { key: "ai", icon: Sparkles, group: "tools", load: () => import("./pages/AiSessions") },
+  { key: "costs", icon: Coins, group: "tools", load: () => import("./pages/Costs") },
   {
     key: "settings",
     icon: SettingsIcon,
     group: "system",
-    load: () => import("./Settings"),
+    load: () => import("./pages/Settings"),
   },
-  { key: "logs", icon: FileText, group: "system", load: () => import("./Logs") },
+  { key: "logs", icon: FileText, group: "system", load: () => import("./pages/Logs") },
 ] as const satisfies readonly PageDef[];
 
 export type ViewKey = (typeof PAGES)[number]["key"];

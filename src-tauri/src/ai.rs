@@ -664,17 +664,17 @@ fn extract_content_text(content: &serde_json::Value) -> String {
 }
 
 fn is_plain_metadata(meta: &fs::Metadata) -> bool {
-    if meta.file_type().is_symlink() {
-        return false;
-    }
+    let plain = !meta.file_type().is_symlink();
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;
-        if meta.file_attributes() & 0x400 != 0 {
-            return false;
-        }
+        // FILE_ATTRIBUTE_REPARSE_POINT：junction / symlink 的另一种形态
+        plain && meta.file_attributes() & 0x400 == 0
     }
-    true
+    #[cfg(not(windows))]
+    {
+        plain
+    }
 }
 
 #[derive(Clone, Copy)]

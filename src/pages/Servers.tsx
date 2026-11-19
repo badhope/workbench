@@ -1,19 +1,18 @@
 import { useMemo } from "react";
-import { BarChart3, ExternalLink, ListTree, Network, Server } from "lucide-react";
+import { BarChart3, Network, Server } from "lucide-react";
 import { EChart } from "../lib/echarts";
 import { chartGapColor, horizontalBarOption, seriesColors } from "../lib/chartTheme";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { useT } from "../lib/i18n";
 import { Btn, Card, Empty, ErrorState, SectionTitle, Skeleton, StatCard } from "../ui";
-import { downloadText, toCsv } from "../lib/export";
-import { urlForPort } from "../lib/openTarget";
 import {
   frameworkDistribution,
   isPieWorthRendering,
   portDistribution,
 } from "../lib/aggregate";
 import { DevServerList } from "./servers/DevServerList";
+import { PortsCard } from "./servers/PortsCard";
 import type { DevServer, PortEntry } from "../types";
 import type { EChartsCoreOption } from "echarts/core";
 
@@ -187,153 +186,29 @@ export default function Servers() {
         onRefresh={refreshRuntime}
       />
 
-      {/* ── 全部监听端口 ── */}
-      <Card className="">
-        <SectionTitle
-          extra={
-            listening.length > 0 ? (
-              <Btn
-                className="!py-1 !text-xs"
-                onClick={() => {
-                  const rows: (string | number)[][] = [
-                    ["protocol", "local_address", "port", "pid", "process", "state"],
-                    ...listening.map((p) => [
-                      p.protocol,
-                      p.local_addr,
-                      p.local_port,
-                      p.pid,
-                      procByPid.get(p.pid) ?? "",
-                      p.state,
-                    ]),
-                  ];
-                  const stamp = new Date()
-                    .toISOString()
-                    .slice(0, 19)
-                    .replace(/[:T]/g, "-");
-                  downloadText(`workbench-ports-${stamp}.csv`, toCsv(rows));
-                }}
-              >
-                {t("servers.exportCsv")}
-              </Btn>
-            ) : undefined
-          }
-        >
-          {t("servers.allTcpPorts", { count: listening.length })}
-        </SectionTitle>
-        {listening.length === 0 ? (
-          <Empty>{t("servers.noTcpPorts")}</Empty>
-        ) : (
-          <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {listening.map((p) => (
-              <div
-                key={`${p.local_addr}-${p.local_port}-${p.pid}`}
-                className="flex items-center gap-2 rounded-[var(--radius-btn)] border border-line/50 bg-panel2 px-3 py-2 text-xs hover:border-accent/40 transition-colors"
-              >
-                <Network size={12} className="text-accent shrink-0" />
-                <span className="font-mono font-semibold text-accent">
-                  :{p.local_port}
-                </span>
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 truncate text-left text-dim hover:text-accent"
-                  onClick={() => showProcess(p.pid)}
-                  title={t("servers.showProcess")}
-                >
-                  {procByPid.get(p.pid) ?? `PID ${p.pid}`}
-                </button>
-                <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                  <button
-                    type="button"
-                    className="text-dim hover:text-accent"
-                    onClick={() => showProcess(p.pid)}
-                    title={t("servers.showProcess")}
-                    aria-label={t("servers.showProcess")}
-                  >
-                    <ListTree size={11} />
-                  </button>
-                  {/* 打开链接要按实际监听地址与协议推断：写死 localhost+
-                      http 在 IPv6、HTTPS、UDP 端口上都会给出错误地址。
-                      非 TCP 端口不提供该按钮——没有可打开的语义。 */}
-                  {(() => {
-                    const target = urlForPort(p.local_port, p.local_addr, p.protocol);
-                    if (!target) return null;
-                    return (
-                      <button
-                        type="button"
-                        className="text-dim hover:text-accent"
-                        onClick={() => openTarget(target.url)}
-                        title={`${t("servers.open")} · ${target.url}`}
-                        aria-label={`${t("servers.open")} ${target.url}`}
-                      >
-                        <ExternalLink size={11} />
-                      </button>
-                    );
-                  })()}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {/* ── UDP 绑定端口 ──
-          UDP 是无连接协议，没有 LISTENING 状态；这些端口（DNS 53、mDNS 5353、
-          QUIC/HTTP3、游戏与语音）以前被 `TCP + LISTENING` 过滤整片丢掉。 */}
-      <Card className="">
-        <SectionTitle
-          extra={
-            udpPorts.length > 0 ? (
-              <Btn
-                className="!py-1 !text-xs"
-                onClick={() => {
-                  const rows: (string | number)[][] = [
-                    ["protocol", "local_address", "port", "pid", "process"],
-                    ...udpPorts.map((p) => [
-                      p.protocol,
-                      p.local_addr,
-                      p.local_port,
-                      p.pid,
-                      procByPid.get(p.pid) ?? "",
-                    ]),
-                  ];
-                  const stamp = new Date()
-                    .toISOString()
-                    .slice(0, 19)
-                    .replace(/[:T]/g, "-");
-                  downloadText(`workbench-udp-${stamp}.csv`, toCsv(rows));
-                }}
-              >
-                {t("servers.exportCsv")}
-              </Btn>
-            ) : undefined
-          }
-        >
-          {t("servers.allUdpPorts", { count: udpPorts.length })}
-        </SectionTitle>
-        {udpPorts.length === 0 ? (
-          <Empty>{t("servers.noUdpPorts")}</Empty>
-        ) : (
-          <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {udpPorts.map((p) => (
-              <div
-                key={`udp-${p.local_addr}-${p.local_port}-${p.pid}`}
-                className="flex items-center gap-2 rounded-[var(--radius-btn)] border border-line/50 bg-panel2 px-3 py-2 text-xs hover:border-accent/40 transition-colors"
-              >
-                <Network size={12} className="text-warn shrink-0" />
-                <span className="font-mono font-semibold text-warn">:{p.local_port}</span>
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 truncate text-left text-dim hover:text-accent"
-                  onClick={() => showProcess(p.pid)}
-                  title={t("servers.showProcess")}
-                >
-                  {procByPid.get(p.pid) ?? `PID ${p.pid}`}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+      {/* ── 全部监听端口 / UDP 绑定端口 ──
+          UDP 是无连接协议，没有 LISTENING 状态；DNS 53、mDNS 5353、
+          QUIC/HTTP3、游戏与语音服务都只出现在 UDP 表里。 */}
+      <PortsCard
+        title={t("servers.allTcpPorts", { count: listening.length })}
+        empty={t("servers.noTcpPorts")}
+        ports={listening}
+        csvName="ports"
+        procByPid={procByPid}
+        tone="accent"
+        onShowProcess={showProcess}
+        onOpenTarget={(url) => void openTarget(url)}
+      />
+      <PortsCard
+        title={t("servers.allUdpPorts", { count: udpPorts.length })}
+        empty={t("servers.noUdpPorts")}
+        ports={udpPorts}
+        csvName="udp"
+        procByPid={procByPid}
+        tone="warn"
+        onShowProcess={showProcess}
+        onOpenTarget={() => {}}
+      />
     </div>
   );
 }

@@ -4,9 +4,9 @@ import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { rankCommands, type CommandItem } from "../lib/commandSearch";
 import { useT } from "../lib/i18n";
-import { PAGES } from "../pages/registry";
+import { PAGES } from "../navigation";
 import { formatBytes } from "../lib/util";
-import type { ViewKey } from "../pages/registry";
+import type { ViewKey } from "../navigation";
 
 interface PaletteAction extends CommandItem {
   group: string;

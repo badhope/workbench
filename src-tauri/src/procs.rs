@@ -239,11 +239,33 @@ const PROTECTED_PIDS: &[u32] = &[0, 4];
 #[cfg(not(windows))]
 const PROTECTED_PIDS: &[u32] = &[0, 1];
 
+/// 终止前的目标身份：名字（小写）+ 启动时间。启动时间用于区分 PID 复用。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessIdentity {
+    pub name: String,
+    pub start_time: u64,
+}
+
+/// 用户确认的身份是否仍是当前进程。`expected_start_time == 0` 表示平台
+/// 拿不到启动时间（少数环境），此时只能按名字比对。
+pub fn identity_matches(
+    current: &ProcessIdentity,
+    expected_name: &str,
+    expected_start_time: u64,
+) -> bool {
+    if current.name != expected_name.to_ascii_lowercase() {
+        return false;
+    }
+    if expected_start_time > 0 && current.start_time != expected_start_time {
+        return false;
+    }
+    true
+}
+
 /// 终止前的身份校验（保护名单 + 存活 + 防自杀），普通结束与提权结束共用。
-/// 目标身份先刷新再校验：拿到的是旧快照时，PID 可能已被系统复用给别的进程，
-/// 直接 kill 等于误杀。刷新后重新确认名字不是关键进程才放行。
-/// 校验通过返回刷新后的进程名（小写），供调用方记录日志。
-pub fn validate_termination_target(pid: u32) -> Result<String, String> {
+/// 目标身份先刷新再校验：拿到的是旧快照时，PID 可能已被系统复用给别的进程。
+/// 返回刷新后的身份，调用方必须再与用户确认时的身份比对。
+pub fn validate_termination_target(pid: u32) -> Result<ProcessIdentity, String> {
     if PROTECTED_PIDS.contains(&pid) {
         return Err(format!("拒绝终止系统关键进程 PID={pid}"));
     }
@@ -260,25 +282,32 @@ pub fn validate_termination_target(pid: u32) -> Result<String, String> {
             if PROTECTED_PROCESSES.contains(&name.as_str()) {
                 return Err(format!("拒绝终止系统关键进程「{name}」"));
             }
-            Ok(name)
+            Ok(ProcessIdentity {
+                name,
+                start_time: p.start_time(),
+            })
         }
         None => Err(format!("找不到进程 {pid}")),
     }
 }
 
-/// 按 PID 取当前进程名（小写）。每次实时刷新，不读快照缓存——
-/// 提权路径的二次身份比对必须看「此刻」的名字，旧快照会掩盖 PID 复用。
-/// 进程不存在（已退出）返回 None。
-pub fn process_name_by_pid(pid: u32) -> Option<String> {
-    let mut sys = System::new_all();
-    sys.refresh_processes(ProcessesToUpdate::All, true);
-    sys.process(Pid::from_u32(pid))
-        .map(|p| p.name().to_string_lossy().to_ascii_lowercase())
-}
-
 /// 结束指定进程（不可逆，前端必须二次确认后才调用）。
-pub fn terminate_process(pid: u32) -> Result<(), String> {
-    validate_termination_target(pid)?;
+///
+/// `expected_name` / `expected_start_time` 来自用户点击确认时看到的那一行。
+/// 只校验保护名单不够：目标退出后 PID 可能被复用给任意普通进程，
+/// 必须确认「现在这个 PID 仍是用户看到的那个进程」才允许 kill。
+pub fn terminate_process(
+    pid: u32,
+    expected_name: &str,
+    expected_start_time: u64,
+) -> Result<(), String> {
+    let current = validate_termination_target(pid)?;
+    if !identity_matches(&current, expected_name, expected_start_time) {
+        return Err(format!(
+            "目标进程已变化（确认时「{expected_name}」，当前「{}」），已取消结束；请刷新后重试",
+            current.name
+        ));
+    }
     // 有意为之的双刷新：validate 与 kill 句柄各需一份目标数据
     // （校验通过后不能拿着校验时的旧 System 直接取句柄，进程可能刚好变化）；
     // 单次人工操作性能不敏感，不为此合并重构。
@@ -287,6 +316,20 @@ pub fn terminate_process(pid: u32) -> Result<(), String> {
     let target = Pid::from_u32(pid);
     match sys.process(target) {
         Some(p) => {
+            let name = p.name().to_string_lossy().to_ascii_lowercase();
+            if PROTECTED_PROCESSES.contains(&name.as_str()) {
+                return Err(format!("拒绝终止系统关键进程「{name}」"));
+            }
+            if !identity_matches(
+                &ProcessIdentity {
+                    name,
+                    start_time: p.start_time(),
+                },
+                expected_name,
+                expected_start_time,
+            ) {
+                return Err("目标进程在结束前发生变化，已取消；请刷新后重试".to_string());
+            }
             if p.kill() {
                 Ok(())
             } else {
@@ -304,13 +347,32 @@ mod tests {
     #[test]
     fn protected_pids_are_rejected() {
         for pid in PROTECTED_PIDS {
-            assert!(terminate_process(*pid).is_err(), "PID {pid} 必须被拒绝");
+            assert!(
+                terminate_process(*pid, "expected", 0).is_err(),
+                "PID {pid} 必须被拒绝"
+            );
         }
     }
 
     #[test]
     fn refusing_to_kill_self() {
-        assert!(terminate_process(std::process::id()).is_err());
+        assert!(terminate_process(std::process::id(), "self", 0).is_err());
+    }
+
+    #[test]
+    fn identity_matches_name_and_start_time() {
+        let current = ProcessIdentity {
+            name: "notepad.exe".into(),
+            start_time: 1000,
+        };
+        assert!(identity_matches(&current, "notepad.exe", 1000));
+        assert!(identity_matches(&current, "NOTEPAD.EXE", 1000));
+        assert!(!identity_matches(&current, "explorer.exe", 1000));
+        assert!(!identity_matches(&current, "notepad.exe", 2000));
+        assert!(
+            identity_matches(&current, "notepad.exe", 0),
+            "平台拿不到启动时间时退化为按名字比对"
+        );
     }
 
     #[test]

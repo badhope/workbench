@@ -144,13 +144,17 @@ export default function Tasks() {
     });
   }, [data.tasks, projectFilter, taskScope, query]);
 
+/** 新建任务的默认到期日：今天/本周范围补今天，否则无日期（收件箱/全部）。 */
+function defaultDueForScope(scope: TaskScope): string | null {
+  return scope === "today" || scope === "week" ? dayjs().format("YYYY-MM-DD") : null;
+}
+
   const addFromList = () => {
     const title = newTitle.trim();
     if (!title) return;
     // 在「今天/本周」范围下新建时补今天到期，否则新任务会立刻被当前筛选隐藏，
     // 用户会以为没有创建成功。收件箱/全部范围保持无日期。
-    const due =
-      taskScope === "today" || taskScope === "week" ? dayjs().format("YYYY-MM-DD") : null;
+    const due = defaultDueForScope(taskScope);
     if (
       addTask({
         title,
@@ -425,10 +429,7 @@ export default function Tasks() {
                     if (!title) return;
                     // 与列表新建同一口径：今天/本周范围补今天到期；
                     // 阻塞范围无法凭空生成阻塞原因，添加后回到全部，避免“假消失”。
-                    const due =
-                      taskScope === "today" || taskScope === "week"
-                        ? dayjs().format("YYYY-MM-DD")
-                        : null;
+                    const due = defaultDueForScope(taskScope);
                     if (
                       addTask({
                         title,

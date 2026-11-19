@@ -18,6 +18,16 @@ export function toCsv(rows: CsvValue[][]): string {
   return rows.map((row) => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }
 
+/** 文件名安全的时间戳：2026-11-19T10-30-00。 */
+export function timestampForFilename(date = new Date()): string {
+  return date.toISOString().slice(0, 19).replace(/[:T]/g, "-");
+}
+
+/** CSV 导出 + 统一文件名时间戳，避免每个页面各拼一遍。 */
+export function downloadCsv(name: string, rows: CsvValue[][], at = new Date()): void {
+  downloadText(`workbench-${name}-${timestampForFilename(at)}.csv`, toCsv(rows));
+}
+
 /** 触发浏览器/WebView 下载。不依赖 Tauri 的文件对话框，离线可用。 */
 export function downloadText(filename: string, text: string, mime = "text/csv"): void {
   const blob = new Blob([`\ufeff${text}`], { type: `${mime};charset=utf-8` });

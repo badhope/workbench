@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { PAGE_GROUPS, pagesByGroup, type ViewKey } from "../pages/registry";
+import { PAGE_GROUPS, pagesByGroup, type ViewKey } from "../navigation";
 import { APP_VERSION, useT } from "../lib/i18n";
 import { useTransportMode } from "../lib/useAppRuntime";
 import { BrandMark } from "./BrandMark";

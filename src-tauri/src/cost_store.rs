@@ -850,27 +850,65 @@ fn trend_sql(
     include_estimated: bool,
 ) -> Result<Vec<CostTrendRow>, String> {
     let today = chrono::Local::now().date_naive();
-    trend_sql_at(conn, days, include_estimated, today)
+    let rows = trend_sql_at(conn, days, include_estimated, today)?;
+    Ok(fill_trend_days(rows, days, today))
+}
+
+/// 补零到完整日历窗口。
+///
+/// 图表要的是「最近 N 天」，不是「有记录的 N 天」。中间断档必须显示为 0，
+/// 否则折线会把相隔数周的两个点直接连起来，视觉上像连续使用。
+fn fill_trend_days(
+    rows: Vec<CostTrendRow>,
+    days: usize,
+    today: chrono::NaiveDate,
+) -> Vec<CostTrendRow> {
+    if days == 0 {
+        return Vec::new();
+    }
+    let mut by_day: std::collections::HashMap<String, CostTrendRow> =
+        rows.into_iter().map(|row| (row.day.clone(), row)).collect();
+    (0..days)
+        .rev()
+        .map(|offset| {
+            let day = (today - chrono::Duration::days(offset as i64))
+                .format("%Y-%m-%d")
+                .to_string();
+            match by_day.remove(&day) {
+                Some(row) => row,
+                None => CostTrendRow {
+                    day,
+                    input_tokens: 0,
+                    output_tokens: 0,
+                    cache_read_tokens: 0,
+                    cache_creation_tokens: 0,
+                    cost: 0.0,
+                    record_count: 0,
+                },
+            }
+        })
+        .collect()
 }
 
 /// 趋势查询本体，`today` 显式传入以便单测固定时间。
 ///
 /// 用日历窗口而不是「有记录的前 N 天」：`LIMIT N` 在中间有大段空档时
 /// 会让图上的 30 个点横跨好几个月，与 UI 标注的「最近 N 天」不符。
-/// 没有记录的日子由调用方补 0（`trend_fill_missing_days`）。
+/// 上界 `day <= today` 同样重要：会话文件可能带未来时间戳（时钟偏差、
+/// 测试数据、导入的旧备份），不能让「未来」混进最近 N 天。
 fn trend_sql_at(
     conn: &Connection,
     days: usize,
     include_estimated: bool,
     today: chrono::NaiveDate,
 ) -> Result<Vec<CostTrendRow>, String> {
-    let cutoff = (today - chrono::Duration::days(days.saturating_sub(1) as i64))
-        .format("%Y-%m-%d")
-        .to_string();
+    let start = today - chrono::Duration::days(days.saturating_sub(1) as i64);
+    let cutoff = start.format("%Y-%m-%d").to_string();
+    let today_str = today.format("%Y-%m-%d").to_string();
     let sql = format!(
         "SELECT day, SUM(input_tokens), SUM(output_tokens), SUM(cache_read_tokens),
                 SUM(cache_creation_tokens), SUM(cost_total), COUNT(*)
-         FROM records WHERE {} AND day >= ?1
+         FROM records WHERE {} AND day >= ?1 AND day <= ?2
          GROUP BY day ORDER BY day ASC",
         counted(include_estimated)
     );
@@ -878,7 +916,7 @@ fn trend_sql_at(
         .prepare(&sql)
         .map_err(|e| format!("准备趋势查询失败: {e}"))?;
     let rows = stmt
-        .query_map(params![cutoff], |r| {
+        .query_map(params![cutoff, today_str], |r| {
             Ok(CostTrendRow {
                 day: r.get(0)?,
                 input_tokens: r.get::<_, i64>(1)? as u64,
@@ -894,7 +932,6 @@ fn trend_sql_at(
     for row in rows {
         out.push(row.map_err(|e| format!("读取趋势失败: {e}"))?);
     }
-    // SQL 已按 day ASC 排序，图表直接用
     Ok(out)
 }
 
@@ -1348,7 +1385,10 @@ mod tests {
         assert!((off.total_cost - 1.0).abs() < 1e-9, "估算行不应计入金额");
         assert_eq!(off.estimated_count, 1, "计数仍应可见，用于提示数据质量");
         assert_eq!(off.record_count, 1);
-        assert_eq!(trend_sql(&conn, 14, false).unwrap()[0].record_count, 1);
+        let trend = trend_sql(&conn, 14, false).unwrap();
+        assert_eq!(trend.len(), 14, "趋势窗口必须补满 14 天");
+        assert_eq!(trend.last().unwrap().record_count, 1);
+        assert!((trend.last().unwrap().cost - 1.0).abs() < 1e-9);
         assert_eq!(breakdown_sql(&conn, false).unwrap().len(), 1);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1593,6 +1633,36 @@ mod tests {
             .unwrap();
         let n = stmt.query_map([], |_| Ok(())).unwrap().count();
         assert_eq!(n, 2, "同一文件的多条按日记录只算一个去重键");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 日历窗口的三个约束：上界排除未来、下界排除窗外、断档补 0。
+    /// 固定 `today` 而不是依赖墙钟，避免测试在月边界/时区上偶发失败。
+    #[test]
+    fn trend_window_excludes_future_and_fills_gaps() {
+        let (dir, db) = temp_db("trend-window");
+        let conn = open_at(&db).unwrap();
+        insert(
+            &conn,
+            &[
+                record("/s/a.jsonl", "2026-11-18", "measured", "m", 1.0),
+                record("/s/a.jsonl", "2026-11-20", "measured", "m", 2.0),
+                record("/s/a.jsonl", "2026-10-31", "measured", "m", 9.0),
+            ],
+        );
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 11, 19).unwrap();
+
+        let raw = trend_sql_at(&conn, 14, true, today).unwrap();
+        assert_eq!(raw.len(), 1, "未来与窗外记录都必须被排除");
+        assert_eq!(raw[0].day, "2026-11-18");
+
+        let filled = fill_trend_days(raw, 14, today);
+        assert_eq!(filled.len(), 14, "必须补满完整日历窗口");
+        assert_eq!(filled[0].day, "2026-11-06");
+        assert_eq!(filled[13].day, "2026-11-19");
+        assert!((filled[12].cost - 1.0).abs() < 1e-9);
+        assert_eq!(filled[13].cost, 0.0, "今天没有记录时应补 0 而不是缺口");
+        assert_eq!(filled[13].record_count, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

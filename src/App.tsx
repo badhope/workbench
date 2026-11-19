@@ -12,7 +12,7 @@ import { ParticleBackdrop } from "./components/ParticleBackdrop";
 import { BackgroundImage } from "./components/BackgroundImage";
 import { Sidebar } from "./components/Nav";
 import { Spinner } from "./ui";
-import { PAGE_COMPONENTS } from "./pages/registry";
+import { PAGE_COMPONENTS } from "./navigation";
 import { useBreakpoint } from "./lib/useBreakpoint";
 import { useAppRuntime, useTransportMode } from "./lib/useAppRuntime";
 import { effectiveMotion } from "./lib/store";
@@ -23,7 +23,7 @@ import { installGlobalDiagnostics, setViewResolver } from "./lib/diagnostics";
 import { subscribeDataChanged } from "./lib/dataSync";
 import type { ViewKey } from "./types";
 
-/** 当前视图的页面组件。注册表由 pages/registry 统一维护。 */
+/** 当前视图的页面组件。注册表由 navigation 统一维护。 */
 function CurrentPage({ view }: { view: keyof typeof PAGE_COMPONENTS }) {
   const Page = PAGE_COMPONENTS[view];
   return <Page />;

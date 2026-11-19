@@ -33,12 +33,16 @@ beforeEach(() => {
 });
 
 describe("命令名与参数", () => {
-  it("进程：list_processes / terminate_process(pid)", async () => {
+  it("进程：list_processes / terminate_process(pid + 身份)", async () => {
     await api.listProcesses();
     expect(invokeMock).toHaveBeenLastCalledWith("list_processes");
 
-    await api.terminateProcess(4321);
-    expect(invokeMock).toHaveBeenLastCalledWith("terminate_process", { pid: 4321 });
+    await api.terminateProcess(4321, "node.exe", 1700000000);
+    expect(invokeMock).toHaveBeenLastCalledWith("terminate_process", {
+      pid: 4321,
+      expectedName: "node.exe",
+      expectedStartTime: 1700000000,
+    });
   });
 
   it("端口与服务：无参数命令", async () => {
@@ -355,8 +359,10 @@ describe("HTTP 传输分支", () => {
 
   it("桌面独占的不可逆操作在 Web 模式明确报错，且不发请求", async () => {
     const before = fetchMock.mock.calls.length;
-    await expect(api.terminateProcess(1234)).rejects.toThrow(/桌面应用/);
-    await expect(api.terminateProcessElevated(1234)).rejects.toThrow(/桌面应用/);
+    await expect(api.terminateProcess(1234, "node.exe", 1)).rejects.toThrow(/桌面应用/);
+    await expect(api.terminateProcessElevated(1234, "node.exe", 1)).rejects.toThrow(
+      /桌面应用/
+    );
     await expect(api.clearCostRecords()).rejects.toThrow(/桌面应用/);
     expect(fetchMock.mock.calls.length).toBe(before);
   });
@@ -376,6 +382,23 @@ describe("HTTP 传输分支", () => {
     expect(url).toBe("/api/logs");
     expect(init.method).toBe("DELETE");
     expect((init.headers as Record<string, string>)["x-workbench-write"]).toBe("1");
+  });
+
+  it("会话详情与 git 分支在 Web 模式走 REST 而不是 invoke", async () => {
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: "s/1", messages: [] }),
+    }));
+    await api.opencodeSessionDetail(4096, "s/1");
+    expect(decodeURIComponent(String(fetchMock.mock.calls.at(-1)?.[0]))).toBe(
+      "/api/sessions/opencode/s/1?port=4096"
+    );
+    await api.gitBranch("C:\\proj");
+    expect(decodeURIComponent(String(fetchMock.mock.calls.at(-1)?.[0]))).toBe(
+      "/api/git/branch?dir=C:\\proj"
+    );
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 
   it("opencode 未运行时把 available:false 归一化成抛错", async () => {

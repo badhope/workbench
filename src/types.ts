@@ -45,5 +45,5 @@ export type { CostExportRow } from "./generated/CostExportRow";
 
 // ── 仅前端使用的类型 ──────────────────────────────────────────
 
-/** 侧边栏视图 key：由页面注册表派生，新增页面只需改 pages/registry。 */
-export type { ViewKey } from "./pages/registry";
+/** 侧边栏视图 key：由页面注册表派生，新增页面只需改 navigation。 */
+export type { ViewKey } from "./navigation";

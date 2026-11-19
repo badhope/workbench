@@ -22,7 +22,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use axum::extract::{DefaultBodyLimit, OriginalUri, Query, State};
+use axum::extract::{DefaultBodyLimit, OriginalUri, Path as AxumPath, Query, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -131,12 +131,18 @@ impl ServeOptions {
 #[derive(Clone)]
 pub struct AppState {
     root: Arc<DataRoot>,
+    /// 会话详情只允许复用列表探测成功的端口（与 IPC 同一份策略）。
+    allowed_ports: Arc<crate::ipc_guard::AllowedPorts>,
+    /// git 探测只允许后端展示过的目录（与 IPC 同一份策略）。
+    known_dirs: Arc<crate::ipc_guard::KnownDirs>,
 }
 
 impl AppState {
     pub fn new(root: DataRoot) -> Self {
         Self {
             root: Arc::new(root),
+            allowed_ports: Arc::new(crate::ipc_guard::AllowedPorts::default()),
+            known_dirs: Arc::new(crate::ipc_guard::KnownDirs::default()),
         }
     }
 }
@@ -210,6 +216,8 @@ pub fn router(state: AppState, opts: &ServeOptions) -> Router {
         .route("/ai-processes", get(list_ai_processes))
         .route("/sessions", get(session_previews))
         .route("/sessions/opencode", get(opencode_sessions))
+        .route("/sessions/opencode/{id}", get(opencode_session_detail))
+        .route("/git/branch", get(git_branch))
         .route("/snapshot", get(snapshot))
         .route("/system", get(system_info))
         .route("/disks", get(disks))
@@ -225,6 +233,10 @@ pub fn router(state: AppState, opts: &ServeOptions) -> Router {
         .route("/cost/settings", get(cost_settings).put(save_cost_settings))
         .route("/cost/pricing", get(pricing_view).put(save_pricing_view))
         .route("/cost/scan", post(cost_scan))
+        // API 自己的 fallback：未知 /api/* 必须在进入静态站点回落之前就变成
+        // 404 JSON。否则有 dist 时 ServeDir 会把 /api/nope 当成 SPA 路由，
+        // 返回 200 + index.html，脚本消费者拿到 HTML 才报 Unexpected token <。
+        .fallback(api_not_found)
         .with_state(state);
 
     // axum 的 Json extractor 默认只收 2MB；项目/任务是整份快照，任务和备注
@@ -280,15 +292,19 @@ pub fn router(state: AppState, opts: &ServeOptions) -> Router {
 }
 
 /// 启动服务并阻塞到进程退出。返回实际绑定地址（`--port 0` 时有用）。
+/// 未知 API 路由的统一响应。
+///
+/// 放在 `nest("/api", api)` 的 fallback 上，而不是只放在嵌入资源处理器里：
+/// 这样无论静态站点来自磁盘 dist 还是编译期嵌入，`/api/*` 的契约都一致。
+async fn api_not_found() -> ApiError {
+    ApiError::not_found("no such API route")
+}
+
 /// 嵌入资源的请求处理：解析路径 → 200 + MIME，未命中回落 index.html。
+///
+/// `/api/*` 的 404 由 API router 自己的 fallback 负责，这里不再重复判断。
 async fn serve_embedded(OriginalUri(uri): OriginalUri) -> Response {
-    // /api/* 未命中必须仍是 404 JSON：脚本消费者靠状态码判断，回落到
-    // index.html 会让他们拿到 200 + HTML（解析出 "Unexpected token <"）。
-    // 这是嵌入回落引入前的既有契约，测试 unknown_api_route_is_404_not_html 锁定。
     let path = uri.path().trim_start_matches('/');
-    if path.starts_with("api/") {
-        return ApiError::not_found("no such API route").into_response();
-    }
     match embedded_file(path) {
         Some((data, mime)) => ([(header::CONTENT_TYPE, mime)], data).into_response(),
         None => (StatusCode::NOT_FOUND, "no such asset").into_response(),
@@ -419,7 +435,9 @@ async fn list_ports() -> ApiResult<Vec<crate::ports::PortEntry>> {
     ok(rows)
 }
 
-async fn list_dev_servers() -> ApiResult<Vec<crate::devserver::DevServer>> {
+async fn list_dev_servers(
+    State(state): State<AppState>,
+) -> ApiResult<Vec<crate::devserver::DevServer>> {
     let rows = tokio::task::spawn_blocking(|| {
         let ports = crate::runtime::cached_ports()?;
         Ok::<_, String>(crate::runtime::collect_dev_servers(&ports))
@@ -427,6 +445,12 @@ async fn list_dev_servers() -> ApiResult<Vec<crate::devserver::DevServer>> {
     .await
     .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
     .map_err(ApiError::internal)?;
+    // 与 IPC 命令保持同一契约：展示过的 project_dir 才允许后续 git 探测。
+    state.known_dirs.record(
+        rows.iter()
+            .filter_map(|s| s.project_dir.as_deref())
+            .filter(|d| !d.is_empty()),
+    );
     ok(rows)
 }
 
@@ -461,34 +485,63 @@ struct OpencodeProbe {
     error: Option<String>,
 }
 
-async fn opencode_sessions() -> ApiResult<OpencodeProbe> {
-    let probe = tokio::task::spawn_blocking(|| {
-        let procs = crate::procs::snapshot_processes();
-        let ports = crate::runtime::collect_opencode_ports(&procs);
-        let mut last_err = String::new();
-        for port in ports {
-            match crate::ai::fetch_opencode_sessions(port) {
-                Ok(sessions) => {
-                    return OpencodeProbe {
-                        port,
-                        available: true,
-                        sessions,
-                        error: None,
-                    }
-                }
-                Err(e) => last_err = e,
-            }
-        }
-        OpencodeProbe {
-            port: 4096,
-            available: false,
-            sessions: Vec::new(),
-            error: Some(last_err),
-        }
+async fn opencode_sessions(State(state): State<AppState>) -> ApiResult<OpencodeProbe> {
+    let probe = tokio::task::spawn_blocking(crate::runtime::probe_opencode)
+        .await
+        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?;
+    if probe.available() {
+        state.allowed_ports.record([probe.port]);
+    }
+    ok(OpencodeProbe {
+        port: probe.port,
+        available: probe.available(),
+        sessions: probe.sessions,
+        error: probe.error,
+    })
+}
+
+#[derive(Deserialize)]
+struct SessionDetailQuery {
+    port: u16,
+}
+
+/// 单个会话详情。端口必须来自上一次列表探测 —— 否则浏览器可以把本应用
+/// 当跳板扫本机任意端口（与 IPC 的 AllowedPorts 同一策略）。
+async fn opencode_session_detail(
+    State(state): State<AppState>,
+    AxumPath(session_id): AxumPath<String>,
+    Query(query): Query<SessionDetailQuery>,
+) -> ApiResult<crate::ai::SessionDetail> {
+    if !state.allowed_ports.contains(query.port) {
+        return Err(ApiError::forbidden("端口不在允许列表内，请刷新会话列表"));
+    }
+    let detail = tokio::task::spawn_blocking(move || {
+        crate::ai::fetch_session_detail(query.port, &session_id)
     })
     .await
     .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?;
-    ok(probe)
+    ok(detail)
+}
+
+#[derive(Deserialize)]
+struct GitBranchQuery {
+    dir: String,
+}
+
+/// 项目 git 分支。只接受后端展示过（白名单内）的目录，避免通过 HTTP 触发
+/// 任意仓库的 fsmonitor / filter 钩子。
+async fn git_branch(
+    State(state): State<AppState>,
+    Query(query): Query<GitBranchQuery>,
+) -> ApiResult<String> {
+    if !state.known_dirs.contains(&query.dir) {
+        return Err(ApiError::forbidden("该目录不在允许列表内"));
+    }
+    let branch = tokio::task::spawn_blocking(move || crate::runtime::git_branch(&query.dir))
+        .await
+        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
+        .map_err(ApiError::internal)?;
+    ok(branch)
 }
 
 #[derive(Serialize)]
@@ -1233,6 +1286,68 @@ mod http_tests {
             .await
             .unwrap();
         assert_eq!(res.status(), StatusCode::NOT_FOUND);
+        std::fs::remove_dir_all(root.as_path()).ok();
+    }
+
+    /// Web 端的会话详情同样只能打「列表探测过」的端口。
+    #[tokio::test]
+    async fn session_detail_rejects_unprobed_port() {
+        let root = temp_root("session-port");
+        let res = app_for(&root)
+            .oneshot(
+                Request::get("/api/sessions/opencode/s-1?port=45999")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        std::fs::remove_dir_all(root.as_path()).ok();
+    }
+
+    /// git 探测与 IPC 共用白名单：未展示过的目录必须 403。
+    #[tokio::test]
+    async fn git_branch_rejects_unknown_dir() {
+        let root = temp_root("git-dir");
+        let res = app_for(&root)
+            .oneshot(
+                Request::get("/api/git/branch?dir=%2Ftmp%2Fnot-a-known-dir")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        std::fs::remove_dir_all(root.as_path()).ok();
+    }
+
+    /// 与上一条同样的契约，但这次挂上真实的磁盘 dist。
+    /// 这正是一直被漏掉的路径：有 dist 时 ServeDir 的 SPA 回落会吞掉 /api/*。
+    #[tokio::test]
+    async fn unknown_api_route_is_404_json_even_with_static_dir() {
+        let root = temp_root("404-static");
+        let dist = root.as_path().join("dist");
+        std::fs::create_dir_all(&dist).expect("create dist");
+        std::fs::write(dist.join("index.html"), "<html>app</html>").expect("write index");
+
+        let mut opts = ServeOptions::new(addr_for_test(), root.clone());
+        opts.static_dir = Some(dist);
+        let res = router(AppState::new(root.clone()), &opts)
+            .oneshot(
+                Request::get("/api/does-not-exist")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            res.headers()
+                .get(header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok()),
+            Some("application/json"),
+            "未知 API 必须是 404 JSON，不能是 dist 的 index.html"
+        );
         std::fs::remove_dir_all(root.as_path()).ok();
     }
 

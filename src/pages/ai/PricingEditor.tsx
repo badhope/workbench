@@ -257,6 +257,10 @@ export function PricingEditor({ onChanged }: { onChanged?: () => void }) {
         </table>
       </div>
 
+      <p className="mt-1.5 text-[10px] leading-relaxed text-faint">
+        {t("pricing.fxHint")}
+      </p>
+
       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-4">
         <Field label={t("pricing.newModel")}>
           <input
@@ -328,11 +332,23 @@ function PriceRow({
       <td className="px-2 py-1 font-mono text-[11px]">{r.model}</td>
       <PriceCell
         value={draft ? Number(draft.input) : (r.override_input ?? r.builtin_input)}
+        original={
+          r.override_input === null && r.builtin_currency === "CNY"
+            ? r.builtin_original_input
+            : null
+        }
+        currency={r.builtin_currency}
         editing={Boolean(draft)}
         onChange={(v) => onPatch(r.model, { input: v })}
       />
       <PriceCell
         value={draft ? Number(draft.output) : (r.override_output ?? r.builtin_output)}
+        original={
+          r.override_output === null && r.builtin_currency === "CNY"
+            ? r.builtin_original_output
+            : null
+        }
+        currency={r.builtin_currency}
         editing={Boolean(draft)}
         onChange={(v) => onPatch(r.model, { output: v })}
       />
@@ -357,13 +373,18 @@ function PriceRow({
   );
 }
 
-/** 单价单元格：编辑态是输入框，否则是保留两位的数字。 */
+/** 单价单元格：编辑态是输入框，否则是保留两位的 USD 数字；
+ *  人民币原价在下方以小字展示，避免「¥5 与 $0.69 看起来矛盾」。 */
 function PriceCell({
   value,
+  original,
+  currency,
   editing,
   onChange,
 }: {
   value: number | null;
+  original?: number | null;
+  currency?: string | null;
   editing: boolean;
   onChange: (v: string) => void;
 }) {
@@ -382,6 +403,11 @@ function PriceCell({
   return (
     <td className="px-2 py-1">
       <span className="num">{value?.toFixed(2) ?? "—"}</span>
+      {original !== null && original !== undefined && currency === "CNY" && (
+        <span className="block text-[9.5px] text-faint">
+          {`¥${original.toFixed(2)}`}
+        </span>
+      )}
     </td>
   );
 }

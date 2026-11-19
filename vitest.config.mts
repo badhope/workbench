@@ -15,6 +15,10 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
   test: {
+    // jsdom 每个测试文件重建一次代价极高：默认 forks 全量约 1281s，
+    // vmThreads 复用同一进程的 vm 上下文、仍保持按文件隔离，实测约 123s。
+    // 这不是关闭隔离换速度，用例之间的全局状态仍然互不可见。
+    pool: "vmThreads",
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],

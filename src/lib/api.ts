@@ -47,6 +47,11 @@ export function isBackend(): boolean {
   return isTauri() || currentTransport() === "http";
 }
 
+/** 不可逆/窗口类能力的统一闸门：浏览器里直接给出可读拒绝，而不是等 invoke 报 TypeError。 */
+function requireDesktop(message: string): void {
+  if (!isTauri()) throw new Error(message);
+}
+
 export async function listProcesses(): Promise<ProcInfo[]> {
   if (isTauri()) return invoke<ProcInfo[]>("list_processes");
   return httpJson<ProcInfo[]>("/api/processes");
@@ -56,19 +61,27 @@ export async function listProcesses(): Promise<ProcInfo[]> {
  * 结束进程。**只有桌面端提供**：浏览器里没有可信的「用户确认」环节，
  * 把不可逆操作暴露成 HTTP 端点等于给任何网页一次免确认的杀进程能力。
  */
-export async function terminateProcess(pid: number): Promise<void> {
-  if (!isTauri()) {
-    throw new Error("结束进程仅在桌面应用中可用（Web 模式不提供该操作）");
-  }
-  return invoke("terminate_process", { pid });
+export async function terminateProcess(
+  pid: number,
+  expectedName: string,
+  expectedStartTime: number
+): Promise<void> {
+  requireDesktop("结束进程仅在桌面应用中可用（Web 模式不提供该操作）");
+  return invoke("terminate_process", { pid, expectedName, expectedStartTime });
 }
 
 /** 以管理员结束进程：Windows 触发 UAC 授权，受保护进程由后端直接拒绝。 */
-export async function terminateProcessElevated(pid: number): Promise<void> {
-  if (!isTauri()) {
-    throw new Error("提权结束进程仅在桌面应用中可用");
-  }
-  return invoke("terminate_process_elevated", { pid });
+export async function terminateProcessElevated(
+  pid: number,
+  expectedName: string,
+  expectedStartTime: number
+): Promise<void> {
+  requireDesktop("提权结束进程仅在桌面应用中可用");
+  return invoke("terminate_process_elevated", {
+    pid,
+    expectedName,
+    expectedStartTime,
+  });
 }
 
 export async function listPorts(): Promise<PortEntry[]> {
@@ -111,16 +124,27 @@ export async function opencodeSessionDetail(
   port: number,
   sessionId: string
 ): Promise<SessionDetail> {
-  return invoke<SessionDetail>("opencode_session_detail", { port, sessionId });
+  if (isTauri()) return invoke<SessionDetail>("opencode_session_detail", { port, sessionId });
+  return httpJson<SessionDetail>(
+    `/api/sessions/opencode/${encodeURIComponent(sessionId)}?port=${port}`
+  );
 }
 
 export async function gitBranch(dir: string): Promise<string> {
-  return invoke<string>("git_branch", { dir });
+  if (isTauri()) return invoke<string>("git_branch", { dir });
+  return httpJson<string>(`/api/git/branch?dir=${encodeURIComponent(dir)}`);
 }
 
 /** 切换主窗口置顶。 */
 export async function setAlwaysOnTop(on: boolean): Promise<void> {
+  if (!isTauri()) return;
   return invoke("set_always_on_top", { on });
+}
+
+/** 退出应用（先由调用方 flushPendingSave）。 */
+export async function quitApp(): Promise<void> {
+  if (!isTauri()) return;
+  return invoke("quit_app");
 }
 
 /** 打开/聚焦工作小窗（桌面端由后端创建独立窗口）。 */
@@ -351,9 +375,7 @@ export async function savePricing(
 }
 
 export async function clearCostRecords(): Promise<void> {
-  if (!isTauri()) {
-    throw new Error("清空成本记录仅在桌面应用中可用");
-  }
+  requireDesktop("清空成本记录仅在桌面应用中可用");
   return invoke("clear_cost_records");
 }
 

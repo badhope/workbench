@@ -1,6 +1,5 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { isBackend, isTauri } from "./api";
+import { isBackend, isTauri, setAlwaysOnTop } from "./api";
 import { currentTransport, subscribeTransport } from "./transport";
 import { useStore } from "./store";
 
@@ -33,7 +32,7 @@ export function useAppRuntime() {
   useEffect(() => {
     if (!isTauri()) return;
     const on = useStore.getState().alwaysOnTop;
-    if (on) void invoke("set_always_on_top", { on: true }).catch(() => {});
+    if (on) void setAlwaysOnTop(true).catch(() => {});
   }, []);
 
   // 轮询：窗口隐藏时暂停（看不见界面时继续采样纯属浪费电）。

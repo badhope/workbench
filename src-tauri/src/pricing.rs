@@ -1,6 +1,7 @@
 //! 模型定价与成本计算
 //!
-//! 价格单位：USD / 1M tokens。内置主流厂商公开价格快照，可被用户自定义覆盖。
+//! 内部统一用 **USD / 1M tokens** 计算，避免混币。内置价格快照保留原始币种
+//! 与来源：人民币官方价按固定汇率换算成 USD，并在 UI 上标注原价、汇率与日期。
 //! 匹配逻辑：先精确匹配 → 再前缀匹配（如 `claude-sonnet-4-5` 匹配 `claude-sonnet-4`）。
 
 use serde::{Deserialize, Serialize};
@@ -9,88 +10,214 @@ use std::collections::HashMap;
 /// (input_price, output_price)  USD per 1M tokens
 pub type PricePair = (f64, f64);
 
-/// 内置价格快照。键为模型名（小写），值为 (input, output) 单价。
-/// 参考 TokenLens 的价格表架构，但用更精简的 Rust HashMap 实现。
-fn builtin_pricing() -> HashMap<&'static str, PricePair> {
+/// 内置快照统一换算汇率。人民币官方价按此汇率折算成 USD 后参与计费。
+///
+/// 这是一个**快照**而不是实时汇率：成本账本要可复现，同一份会话在任何时候
+/// 重算都应得到同一个数字。调整汇率必须同时更新 `PRICE_AS_OF` 并重跑测试。
+pub const CNY_PER_USD: f64 = 7.20;
+pub const PRICE_AS_OF: &str = "2026-11-19";
+
+const SRC_OPENAI: &str = "OpenAI 官方 API 定价（USD）";
+const SRC_ANTHROPIC: &str = "Anthropic 官方 API 定价（USD）";
+const SRC_DEEPSEEK: &str = "DeepSeek 官方 API 定价（USD）";
+const SRC_QWEN: &str = "阿里云百炼国际站（USD）";
+const SRC_DOUBAO: &str = "火山方舟（CNY）";
+const SRC_GLM: &str = "智谱开放平台（CNY）";
+const SRC_KIMI: &str = "Kimi 开放平台（CNY）";
+const SRC_OPENROUTER: &str = "OpenRouter 公开价（USD）";
+const SRC_GOOGLE: &str = "Google AI 官方定价（USD）";
+const SRC_XAI: &str = "xAI 官方定价（USD）";
+const SRC_ERNIE: &str = "百度千帆公开价（CNY）";
+
+/// 一条内置价格：原始币种 + 来源 + 快照日期。
+#[derive(Clone, Copy, Debug)]
+struct BuiltinEntry {
+    input: f64,
+    output: f64,
+    currency: &'static str,
+    source: &'static str,
+    as_of: &'static str,
+}
+
+impl BuiltinEntry {
+    fn usd(input: f64, output: f64, source: &'static str) -> Self {
+        Self {
+            input,
+            output,
+            currency: "USD",
+            source,
+            as_of: PRICE_AS_OF,
+        }
+    }
+
+    fn cny(input: f64, output: f64, source: &'static str) -> Self {
+        Self {
+            input,
+            output,
+            currency: "CNY",
+            source,
+            as_of: PRICE_AS_OF,
+        }
+    }
+
+    /// 统一折算成 USD。保留 6 位小数：既避免浮点噪声进测试，
+    /// 也远高于 1M token 计费所需的精度。
+    fn usd_pair(&self) -> PricePair {
+        if self.currency == "CNY" {
+            (
+                round6(self.input / CNY_PER_USD),
+                round6(self.output / CNY_PER_USD),
+            )
+        } else {
+            (self.input, self.output)
+        }
+    }
+}
+
+fn round6(value: f64) -> f64 {
+    (value * 1_000_000.0).round() / 1_000_000.0
+}
+
+/// 内置价格元数据（给 UI 展示原价/币种/来源/日期）。
+#[derive(Clone, Debug)]
+struct PriceMeta {
+    currency: &'static str,
+    source: &'static str,
+    as_of: &'static str,
+    original_input: f64,
+    original_output: f64,
+}
+
+/// 内置价格快照。键为模型名（小写），值为原始币种 + 来源 + 单价。
+///
+/// 中国厂商的官方刊例价多为人民币，不能直接塞进 USD 表：
+/// 豆包 pro-32k 官方 0.8/2.0 元/百万 tokens，若当 USD 用会高估约 7.2 倍。
+/// 这里逐项标注币种，构建时统一换算，UI 同时展示原价与折算价。
+fn builtin_pricing() -> HashMap<&'static str, BuiltinEntry> {
     let mut m = HashMap::new();
 
     // OpenAI
-    m.insert("gpt-5", (1.25, 10.0));
-    m.insert("gpt-5-mini", (0.25, 2.0));
-    m.insert("gpt-5-nano", (0.05, 0.4));
-    m.insert("gpt-4.1", (2.0, 8.0));
-    m.insert("gpt-4.1-mini", (0.4, 1.6));
-    m.insert("gpt-4.1-nano", (0.1, 0.4));
-    m.insert("gpt-4o-mini", (0.15, 0.6));
-    m.insert("gpt-4o", (2.5, 10.0));
-    m.insert("gpt-4-turbo", (10.0, 30.0));
-    m.insert("o4-mini", (1.1, 4.4));
-    m.insert("o3-mini", (1.1, 4.4));
-    m.insert("o3", (2.0, 8.0));
-    m.insert("o1-mini", (1.1, 4.4));
-    m.insert("o1", (15.0, 60.0));
-    m.insert("text-embedding-3-small", (0.02, 0.0));
-    m.insert("text-embedding-3-large", (0.13, 0.0));
+    m.insert("gpt-5", BuiltinEntry::usd(1.25, 10.0, SRC_OPENAI));
+    m.insert("gpt-5-mini", BuiltinEntry::usd(0.25, 2.0, SRC_OPENAI));
+    m.insert("gpt-5-nano", BuiltinEntry::usd(0.05, 0.4, SRC_OPENAI));
+    m.insert("gpt-4.1", BuiltinEntry::usd(2.0, 8.0, SRC_OPENAI));
+    m.insert("gpt-4.1-mini", BuiltinEntry::usd(0.4, 1.6, SRC_OPENAI));
+    m.insert("gpt-4.1-nano", BuiltinEntry::usd(0.1, 0.4, SRC_OPENAI));
+    m.insert("gpt-4o-mini", BuiltinEntry::usd(0.15, 0.6, SRC_OPENAI));
+    m.insert("gpt-4o", BuiltinEntry::usd(2.5, 10.0, SRC_OPENAI));
+    m.insert("gpt-4-turbo", BuiltinEntry::usd(10.0, 30.0, SRC_OPENAI));
+    m.insert("o4-mini", BuiltinEntry::usd(1.1, 4.4, SRC_OPENAI));
+    m.insert("o3-mini", BuiltinEntry::usd(1.1, 4.4, SRC_OPENAI));
+    m.insert("o3", BuiltinEntry::usd(2.0, 8.0, SRC_OPENAI));
+    m.insert("o1-mini", BuiltinEntry::usd(1.1, 4.4, SRC_OPENAI));
+    m.insert("o1", BuiltinEntry::usd(15.0, 60.0, SRC_OPENAI));
+    m.insert(
+        "text-embedding-3-small",
+        BuiltinEntry::usd(0.02, 0.0, SRC_OPENAI),
+    );
+    m.insert(
+        "text-embedding-3-large",
+        BuiltinEntry::usd(0.13, 0.0, SRC_OPENAI),
+    );
 
     // Anthropic
-    m.insert("claude-opus-4-1", (15.0, 75.0));
-    m.insert("claude-opus-4-5", (15.0, 75.0));
-    m.insert("claude-sonnet-4-5", (3.0, 15.0));
-    m.insert("claude-sonnet-4-20250514", (3.0, 15.0));
-    m.insert("claude-haiku-4-5", (1.0, 5.0));
-    m.insert("claude-3-5-sonnet", (3.0, 15.0));
-    m.insert("claude-3-7-sonnet", (3.0, 15.0));
-    m.insert("claude-3-5-haiku", (0.8, 4.0));
-    m.insert("claude-3-opus", (15.0, 75.0));
-    m.insert("claude-3-sonnet", (3.0, 15.0));
-    m.insert("claude-3-haiku", (0.25, 1.25));
+    m.insert(
+        "claude-opus-4-1",
+        BuiltinEntry::usd(15.0, 75.0, SRC_ANTHROPIC),
+    );
+    m.insert(
+        "claude-opus-4-5",
+        BuiltinEntry::usd(15.0, 75.0, SRC_ANTHROPIC),
+    );
+    m.insert(
+        "claude-sonnet-4-5",
+        BuiltinEntry::usd(3.0, 15.0, SRC_ANTHROPIC),
+    );
+    m.insert(
+        "claude-sonnet-4-20250514",
+        BuiltinEntry::usd(3.0, 15.0, SRC_ANTHROPIC),
+    );
+    m.insert(
+        "claude-haiku-4-5",
+        BuiltinEntry::usd(1.0, 5.0, SRC_ANTHROPIC),
+    );
+    m.insert(
+        "claude-3-5-sonnet",
+        BuiltinEntry::usd(3.0, 15.0, SRC_ANTHROPIC),
+    );
+    m.insert(
+        "claude-3-7-sonnet",
+        BuiltinEntry::usd(3.0, 15.0, SRC_ANTHROPIC),
+    );
+    m.insert(
+        "claude-3-5-haiku",
+        BuiltinEntry::usd(0.8, 4.0, SRC_ANTHROPIC),
+    );
+    m.insert(
+        "claude-3-opus",
+        BuiltinEntry::usd(15.0, 75.0, SRC_ANTHROPIC),
+    );
+    m.insert(
+        "claude-3-sonnet",
+        BuiltinEntry::usd(3.0, 15.0, SRC_ANTHROPIC),
+    );
+    m.insert(
+        "claude-3-haiku",
+        BuiltinEntry::usd(0.25, 1.25, SRC_ANTHROPIC),
+    );
 
-    // DeepSeek
-    m.insert("deepseek-reasoner", (0.55, 2.19));
-    m.insert("deepseek-chat", (0.27, 1.10));
-    m.insert("deepseek-r1", (0.55, 2.19));
-    m.insert("deepseek-v3", (0.27, 1.10));
+    // DeepSeek（官方美元价）
+    m.insert(
+        "deepseek-reasoner",
+        BuiltinEntry::usd(0.55, 2.19, SRC_DEEPSEEK),
+    );
+    m.insert("deepseek-chat", BuiltinEntry::usd(0.27, 1.10, SRC_DEEPSEEK));
+    m.insert("deepseek-r1", BuiltinEntry::usd(0.55, 2.19, SRC_DEEPSEEK));
+    m.insert("deepseek-v3", BuiltinEntry::usd(0.27, 1.10, SRC_DEEPSEEK));
 
-    // 阿里通义千问
-    m.insert("qwen-plus", (0.4, 1.2));
-    m.insert("qwen-turbo", (0.1, 0.3));
-    m.insert("qwen-max", (0.8, 2.4));
-    m.insert("qwen-long", (0.1, 0.3));
+    // 阿里通义千问（国际站美元价；国内站人民币价 0.8/2.0 已折算为同一量级）
+    m.insert("qwen-plus", BuiltinEntry::usd(0.4, 1.2, SRC_QWEN));
+    m.insert("qwen-turbo", BuiltinEntry::usd(0.1, 0.3, SRC_QWEN));
+    m.insert("qwen-max", BuiltinEntry::usd(0.8, 2.4, SRC_QWEN));
+    m.insert("qwen-long", BuiltinEntry::usd(0.1, 0.3, SRC_QWEN));
 
-    // 字节豆包
-    m.insert("doubao-pro-32k", (0.8, 2.0));
-    m.insert("doubao-pro-128k", (0.8, 2.0));
-    m.insert("doubao-lite-32k", (0.1, 0.3));
+    // 字节豆包（官方人民币价）
+    m.insert("doubao-pro-32k", BuiltinEntry::cny(0.8, 2.0, SRC_DOUBAO));
+    m.insert("doubao-pro-128k", BuiltinEntry::cny(0.8, 2.0, SRC_DOUBAO));
+    m.insert("doubao-lite-32k", BuiltinEntry::cny(0.3, 0.6, SRC_DOUBAO));
 
-    // 智谱 GLM
-    m.insert("glm-4-plus", (0.1, 0.1));
-    m.insert("glm-4", (0.1, 0.1));
-    m.insert("glm-4-air", (0.01, 0.01));
-    m.insert("glm-4-flash", (0.0, 0.0));
+    // 智谱 GLM（官方人民币价）
+    m.insert("glm-4-plus", BuiltinEntry::cny(5.0, 5.0, SRC_GLM));
+    m.insert("glm-4", BuiltinEntry::cny(5.0, 5.0, SRC_GLM));
+    m.insert("glm-4-air", BuiltinEntry::cny(0.5, 0.5, SRC_GLM));
+    m.insert("glm-4-flash", BuiltinEntry::cny(0.0, 0.0, SRC_GLM));
 
-    // Kimi (Moonshot)
-    m.insert("moonshot-v1-8k", (0.1, 0.3));
-    m.insert("moonshot-v1-32k", (0.2, 0.6));
-    m.insert("moonshot-v1-128k", (0.4, 1.2));
+    // Kimi (Moonshot)（官方人民币价）
+    m.insert("moonshot-v1-8k", BuiltinEntry::cny(2.0, 10.0, SRC_KIMI));
+    m.insert("moonshot-v1-32k", BuiltinEntry::cny(5.0, 20.0, SRC_KIMI));
+    m.insert("moonshot-v1-128k", BuiltinEntry::cny(10.0, 30.0, SRC_KIMI));
 
-    // OpenRouter 常用
-    m.insert("mistral-large", (2.0, 6.0));
-    m.insert("mistral-small", (0.2, 0.6));
-    m.insert("llama-3.1-405b", (3.5, 3.5));
+    // OpenRouter 常用（美元价）
+    m.insert("mistral-large", BuiltinEntry::usd(2.0, 6.0, SRC_OPENROUTER));
+    m.insert("mistral-small", BuiltinEntry::usd(0.2, 0.6, SRC_OPENROUTER));
+    m.insert(
+        "llama-3.1-405b",
+        BuiltinEntry::usd(3.5, 3.5, SRC_OPENROUTER),
+    );
 
     // Google
-    m.insert("gemini-2.5-pro", (1.25, 10.0));
-    m.insert("gemini-2.5-flash", (0.15, 0.6));
-    m.insert("gemini-2.0-flash", (0.1, 0.4));
+    m.insert("gemini-2.5-pro", BuiltinEntry::usd(1.25, 10.0, SRC_GOOGLE));
+    m.insert("gemini-2.5-flash", BuiltinEntry::usd(0.15, 0.6, SRC_GOOGLE));
+    m.insert("gemini-2.0-flash", BuiltinEntry::usd(0.1, 0.4, SRC_GOOGLE));
 
     // xAI
-    m.insert("grok-3", (3.0, 15.0));
-    m.insert("grok-3-mini", (0.3, 0.5));
-    m.insert("grok-2", (2.0, 10.0));
+    m.insert("grok-3", BuiltinEntry::usd(3.0, 15.0, SRC_XAI));
+    m.insert("grok-3-mini", BuiltinEntry::usd(0.3, 0.5, SRC_XAI));
+    m.insert("grok-2", BuiltinEntry::usd(2.0, 10.0, SRC_XAI));
 
-    // 国产其他（键必须小写：lookup 会先把模型名转小写）
-    m.insert("ernie-4.0", (0.12, 0.12));
-    m.insert("ernie-3.5", (0.12, 0.12));
+    // 百度文心（官方人民币价，ERNIE-4.0 按降价后 4/16）
+    m.insert("ernie-4.0", BuiltinEntry::cny(4.0, 16.0, SRC_ERNIE));
+    m.insert("ernie-3.5", BuiltinEntry::cny(4.0, 12.0, SRC_ERNIE));
 
     m
 }
@@ -102,7 +229,10 @@ fn builtin_pricing() -> HashMap<&'static str, PricePair> {
 /// （is_priced + calc_cost），1 万条记录就是近 100ms 的纯开销。
 /// 内置表是编译期常量，进程内只需构建一次。
 struct BuiltinTable {
+    /// 已统一折算成 USD 的单价，计费只读这一份。
     prices: HashMap<&'static str, PricePair>,
+    /// 原始币种/来源/原价，仅用于 UI 展示与审计。
+    meta: HashMap<&'static str, PriceMeta>,
     /// 前缀匹配候选，按长度降序（优先最长前缀）
     prefix_keys: Vec<&'static str>,
 }
@@ -111,11 +241,27 @@ fn builtin_table() -> &'static BuiltinTable {
     use std::sync::OnceLock;
     static TABLE: OnceLock<BuiltinTable> = OnceLock::new();
     TABLE.get_or_init(|| {
-        let prices = builtin_pricing();
+        let entries = builtin_pricing();
+        let mut prices = HashMap::with_capacity(entries.len());
+        let mut meta = HashMap::with_capacity(entries.len());
+        for (key, entry) in &entries {
+            prices.insert(*key, entry.usd_pair());
+            meta.insert(
+                *key,
+                PriceMeta {
+                    currency: entry.currency,
+                    source: entry.source,
+                    as_of: entry.as_of,
+                    original_input: entry.input,
+                    original_output: entry.output,
+                },
+            );
+        }
         let mut prefix_keys: Vec<&'static str> = prices.keys().copied().collect();
         prefix_keys.sort_by_key(|k| std::cmp::Reverse(k.len()));
         BuiltinTable {
             prices,
+            meta,
             prefix_keys,
         }
     })
@@ -132,9 +278,17 @@ pub struct PricingTable {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, ts_rs::TS)]
 pub struct PricingRow {
     pub model: String,
-    /// 内置快照的输入/输出单价（USD / 1M tokens），未知型号为 null
+    /// 内置快照的输入/输出单价（已折算为 USD / 1M tokens），未知型号为 null
     pub builtin_input: Option<f64>,
     pub builtin_output: Option<f64>,
+    /// 内置价的**原始币种**（USD / CNY）。null 表示非内置型号。
+    pub builtin_currency: Option<String>,
+    /// 内置价的原始输入/输出单价（未折算），用于 UI 显示「¥5.00 → $0.694」
+    pub builtin_original_input: Option<f64>,
+    pub builtin_original_output: Option<f64>,
+    /// 价格来源与快照日期，便于审计
+    pub builtin_source: Option<String>,
+    pub builtin_as_of: Option<String>,
     /// 当前生效的覆盖值；没有覆盖时为 null
     pub override_input: Option<f64>,
     pub override_output: Option<f64>,
@@ -167,10 +321,16 @@ impl PricingTable {
             .into_iter()
             .map(|model| {
                 let b = builtin.prices.get(model.as_str()).copied();
+                let m = builtin.meta.get(model.as_str());
                 let o = self.overrides.get(&model).copied();
                 PricingRow {
                     builtin_input: b.map(|p| p.0),
                     builtin_output: b.map(|p| p.1),
+                    builtin_currency: m.map(|x| x.currency.to_string()),
+                    builtin_original_input: m.map(|x| x.original_input),
+                    builtin_original_output: m.map(|x| x.original_output),
+                    builtin_source: m.map(|x| x.source.to_string()),
+                    builtin_as_of: m.map(|x| x.as_of.to_string()),
                     override_input: o.map(|p| p.0),
                     override_output: o.map(|p| p.1),
                     model,
@@ -359,8 +519,52 @@ mod tests {
     #[test]
     fn ernie_keys_match_lowercase_lookup() {
         let t = PricingTable::default();
-        assert_eq!(t.lookup("ernie-4.0"), (0.12, 0.12));
-        assert_eq!(t.lookup("ERNIE-4.0"), (0.12, 0.12));
+        let expected = (round6(4.0 / CNY_PER_USD), round6(16.0 / CNY_PER_USD));
+        assert_eq!(t.lookup("ernie-4.0"), expected);
+        assert_eq!(t.lookup("ERNIE-4.0"), expected);
+    }
+
+    #[test]
+    fn cny_prices_are_converted_at_documented_rate() {
+        let t = PricingTable::default();
+        for (model, cny_input, cny_output) in [
+            ("doubao-pro-32k", 0.8, 2.0),
+            ("glm-4-plus", 5.0, 5.0),
+            ("moonshot-v1-8k", 2.0, 10.0),
+            ("ernie-4.0", 4.0, 16.0),
+        ] {
+            let (input, output) = t.lookup(model);
+            assert!(
+                (input - cny_input / CNY_PER_USD).abs() < 1e-6,
+                "{model} 输入价未按汇率折算: got {input}"
+            );
+            assert!(
+                (output - cny_output / CNY_PER_USD).abs() < 1e-6,
+                "{model} 输出价未按汇率折算: got {output}"
+            );
+        }
+    }
+
+    #[test]
+    fn builtin_rows_expose_currency_source_and_original_price() {
+        let rows = PricingTable::default().rows();
+
+        let doubao = rows.iter().find(|r| r.model == "doubao-pro-32k").unwrap();
+        assert_eq!(doubao.builtin_currency.as_deref(), Some("CNY"));
+        assert_eq!(doubao.builtin_original_input, Some(0.8));
+        assert_eq!(doubao.builtin_original_output, Some(2.0));
+        assert!((doubao.builtin_input.unwrap() - 0.8 / CNY_PER_USD).abs() < 1e-6);
+        assert!(doubao
+            .builtin_source
+            .as_deref()
+            .unwrap_or_default()
+            .contains("火山"));
+        assert_eq!(doubao.builtin_as_of.as_deref(), Some(PRICE_AS_OF));
+
+        let gpt = rows.iter().find(|r| r.model == "gpt-4o").unwrap();
+        assert_eq!(gpt.builtin_currency.as_deref(), Some("USD"));
+        assert_eq!(gpt.builtin_input, Some(2.5));
+        assert_eq!(gpt.builtin_original_input, Some(2.5));
     }
 
     #[test]

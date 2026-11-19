@@ -26,7 +26,6 @@ import {
   swatchOf,
 } from "../lib/theme/presets";
 import { mix, type ThemeInput } from "../lib/theme/tokens";
-import type { MotionLevel } from "../lib/theme/apply";
 import {
   LAYOUTS,
   SHELLS,
@@ -42,13 +41,7 @@ import { buildShareUrl } from "../lib/theme/share";
 import { downscaleDimensions, fitsLocalStorage, pickOutputMime } from "../lib/image";
 import { isBackgroundDataUrl } from "../lib/store";
 import { Btn, Card, Field, SectionTitle } from "../ui";
-
-/** 动效三档（关/标准/满格）。顺序即展示顺序，off 在最前。 */
-const MOTIONS: { id: MotionLevel; key: string }[] = [
-  { id: "off", key: "settings.motionOff" },
-  { id: "standard", key: "settings.motionStandard" },
-  { id: "rich", key: "settings.motionRich" },
-];
+import { MotionSelector } from "./MotionSelector";
 
 /**
  * 外观面板：主题（含自定义与导入导出）、外壳、概览版面、组件摆放。
@@ -245,24 +238,7 @@ export function AppearancePanel() {
     <>
       <Card>
         <SectionTitle>{t("settings.motionSection")}</SectionTitle>
-        <div className="flex flex-wrap gap-1.5">
-          {MOTIONS.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              data-motion-level={m.id}
-              aria-pressed={motion === m.id}
-              onClick={() => setMotion(m.id)}
-              className={`t-btn border px-2.5 py-1 text-[11.5px] font-medium ${
-                motion === m.id
-                  ? "border-accent bg-accent text-[var(--color-on-accent)]"
-                  : "border-line bg-panel2/70 text-dim hover:text-text"
-              }`}
-            >
-              {t(m.key)}
-            </button>
-          ))}
-        </div>
+        <MotionSelector value={motion} onChange={setMotion} markLevel />
         <p className="mt-2 text-[11px] leading-relaxed text-dim">
           {t("settings.motionHint")}
         </p>

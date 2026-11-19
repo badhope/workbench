@@ -9,6 +9,7 @@ import { applyMotion, applyTheme } from "./lib/theme/apply";
 import { tokensFor } from "./lib/theme/presets";
 import { consumeThemeHash } from "./lib/theme/share";
 import { detectTransport } from "./lib/transport";
+import { quitApp } from "./lib/api";
 
 // 分享链接：URL 带 #theme= 时先消费掉（一次性，成功与否都清 hash），
 // 再做主题同步 —— 这样下面这行 applyTheme 应用的已经是导入后的主题。
@@ -49,8 +50,7 @@ if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
   void import("@tauri-apps/api/event").then(({ listen }) =>
     listen("workbench://quit-requested", async () => {
       await flushPendingSave();
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("quit_app").catch(() => undefined);
+      await quitApp().catch(() => undefined);
     })
   );
 }

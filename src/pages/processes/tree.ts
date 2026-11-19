@@ -1,5 +1,5 @@
 import type { ProcInfo } from "../../types";
-import type { ProcSortKey } from "../processFilter";
+import { compareProcs, type ProcSortKey } from "../processFilter";
 
 /**
  * 进程树：把扁平快照还原成父子森林。
@@ -20,14 +20,8 @@ export interface TreeRow {
   hasChildren: boolean;
 }
 
-function compare(a: ProcInfo, b: ProcInfo, sort: ProcSortKey): number {
-  if (sort === "name") return a.name.localeCompare(b.name);
-  if (sort === "pid") return a.pid - b.pid;
-  return (b[sort] ?? 0) - (a[sort] ?? 0);
-}
-
 function sortNodes(nodes: TreeNode[], sort: ProcSortKey): void {
-  nodes.sort((a, b) => compare(a.p, b.p, sort));
+  nodes.sort((a, b) => compareProcs(a.p, b.p, sort));
   for (const n of nodes) sortNodes(n.children, sort);
 }
 

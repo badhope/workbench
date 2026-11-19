@@ -71,10 +71,11 @@ describe("IPC 命令名", () => {
   it("扫描出足够多的前端调用点（防止 glob 匹配失效导致空跑通过）", () => {
     // 这条是「测试自身有效性」的守卫：如果 glob 没匹配到文件，
     // 上面的断言会因为空数组而永远通过 —— 那才是真的假绿灯。
-    // 实际调用点是两个文件（api.ts 32 处 / AppHeader.tsx 1 处）共 33 处；
-    // 阈值定在 25 处、2 个文件，既能挡住 glob 失效，也不会因为
-    // 有人把某个 invoke 挪进新的 API 模块就误报。
+    // 传输层已收敛到 api.ts：所有 invoke 必须集中在一个文件。
+    // 数量阈值挡住 glob 失效；文件集合断言挡住“又有人绕过 api.ts 直接 invoke”。
     expect(calls.length).toBeGreaterThan(25);
-    expect(new Set(calls.map((c) => c.file)).size).toBeGreaterThanOrEqual(2);
+    const files = new Set(calls.map((c) => c.file));
+    expect(files.size).toBe(1);
+    expect([...files][0]).toBe("./api.ts");
   });
 });

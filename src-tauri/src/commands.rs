@@ -8,16 +8,15 @@ use crate::cost_store::{
     ModelBreakdownRow, ProjectBreakdownRow,
 };
 use crate::data::{self, WorkbenchData};
-use crate::devserver::{self, DevServer};
 use crate::diagnostics::{self, DiagnosticsReport};
 use crate::ipc_guard::{AllowedPorts, KnownDirs};
 use crate::paths::DataRoot;
-use crate::ports::{self, PortEntry};
 use crate::pricing::PricingTable;
 use crate::procs::{self, ProcInfo};
 use crate::session_meter::{self, SessionFileEntry};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+#[cfg(windows)]
 use std::process::Command;
 
 /// 桌面壳里把 Tauri 的 `app_data_dir()` 收敛成 `DataRoot`。
@@ -37,46 +36,8 @@ fn data_root(app: &AppHandle) -> Result<DataRoot, String> {
     Ok(DataRoot::new(dir).ensure()?.clone())
 }
 
-/// 派生外部命令（Windows 上不闪控制台窗口）。
-///
-/// 目前只有 git 探测走这里；端口采集已统一到 procs::run_quiet
-/// （按平台选 netstat / ss）。
-fn silent(cmd: Command) -> Command {
-    #[cfg(windows)]
-    let mut cmd = cmd;
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        // 0x08000000 = CREATE_NO_WINDOW
-        cmd.creation_flags(0x0800_0000);
-    }
-    cmd
-}
-
-/// 端口采样短缓存。`list_ports` 与 `list_dev_servers` 在一次前端刷新里
-/// 各要一份端口表，原先各起一次采集子进程；这里让同一刷新周期共享。
-const PORTS_TTL: std::time::Duration = std::time::Duration::from_millis(400);
-
-fn cached_port_entries() -> Result<Vec<PortEntry>, String> {
-    use std::sync::Mutex;
-    use std::time::Instant;
-    static CACHE: Mutex<Option<(Instant, Vec<PortEntry>)>> = Mutex::new(None);
-
-    let mut guard = CACHE.lock().unwrap_or_else(|p| p.into_inner());
-    if let Some((at, entries)) = guard.as_ref() {
-        if at.elapsed() < PORTS_TTL {
-            return Ok(entries.clone());
-        }
-    }
-    let entries = ports::collect()?;
-    *guard = Some((Instant::now(), entries.clone()));
-    Ok(entries)
-}
-
-/// 构建 PID 索引哈希表（消除 O(n*m) 端口→进程扫描）
-fn build_pid_index(procs: Vec<ProcInfo>) -> HashMap<u32, ProcInfo> {
-    procs.into_iter().map(|p| (p.pid, p)).collect()
-}
+// 端口缓存、dev-server 组装、git 探测都只在 runtime.rs 实现一份；
+// 这里保留薄命令层，避免 IPC 与 HTTP 两套口径分叉。
 
 #[tauri::command(async)]
 pub async fn list_processes() -> Result<Vec<ProcInfo>, String> {
@@ -86,11 +47,17 @@ pub async fn list_processes() -> Result<Vec<ProcInfo>, String> {
 }
 
 #[tauri::command(async)]
-pub async fn terminate_process(pid: u32) -> Result<(), String> {
-    log::info!("请求终止进程 PID={pid}");
-    let result = tauri::async_runtime::spawn_blocking(move || procs::terminate_process(pid))
-        .await
-        .map_err(|e| format!("任务执行失败: {e}"))?;
+pub async fn terminate_process(
+    pid: u32,
+    expected_name: String,
+    expected_start_time: u64,
+) -> Result<(), String> {
+    log::info!("请求终止进程 PID={pid} name={expected_name}");
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        procs::terminate_process(pid, &expected_name, expected_start_time)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?;
     // 终止后强制刷新快照，否则前端立刻刷新时可能读到 400ms 内的旧快照
     if result.is_ok() {
         let _ = tauri::async_runtime::spawn_blocking(procs::snapshot_processes_fresh).await;
@@ -154,38 +121,27 @@ fn run_elevated_taskkill(_pid: u32) -> Result<(), String> {
     Err("仅 Windows 支持提权结束".to_string())
 }
 
-/// 二次身份比对（纯函数，单测不碰 UAC）：首次校验通过后到实际 spawn 之间
-/// 存在等待窗口（前端延迟 + UAC 弹窗停留时间，可达数十秒），目标退出后
-/// PID 会被系统复用给无关进程，直接 taskkill 等于误杀。因此 spawn 前按
-/// 「PID + 进程名」再比对一次：目标已退出（None）或名字与首次校验不一致
-/// 都必须拒绝，宁可少杀不可错杀。
-fn verify_elevated_target_unchanged(
-    fresh_name: Option<String>,
-    expected_name: &str,
-) -> Result<(), String> {
-    match fresh_name {
-        Some(name) if name == expected_name => Ok(()),
-        Some(name) => Err(format!(
-            "目标进程已退出或 PID 已被复用（首次校验「{expected_name}」，现名「{name}」）"
-        )),
-        None => Err("目标进程已退出或 PID 已被复用".to_string()),
-    }
-}
-
 /// 以管理员权限结束进程：`taskkill /PID <pid> /T /F` 经 UAC runas 启动。
-/// 与普通 terminate_process 共用 procs.rs 的同一份保护名单：受保护进程
-/// （System/lsass 等）在提权路径下同样直接拒绝，UAC 通过也不例外。
+/// 与普通 terminate_process 共用 procs.rs 的同一份保护名单与身份校验：
+/// 受保护进程（System/lsass 等）在提权路径下同样直接拒绝，UAC 通过也不例外。
 /// 安全注记：校验通过后仍存在 UAC 等待窗口（用户停留在弹窗的时间不定，
-/// 目标可能退出、PID 可能被复用），故在 spawn 前按「PID + 进程名」做
-/// 第二次比对（verify_elevated_target_unchanged），不一致直接拒绝、不弹 UAC。
+/// 目标可能退出、PID 可能被复用），故 spawn 前按「PID + 名字 + 启动时间」
+/// 再比对一次；不一致直接拒绝、不弹 UAC。
 #[tauri::command(async)]
-pub async fn terminate_process_elevated(pid: u32) -> Result<(), String> {
-    log::info!("请求提权终止进程 PID={pid}");
+pub async fn terminate_process_elevated(
+    pid: u32,
+    expected_name: String,
+    expected_start_time: u64,
+) -> Result<(), String> {
+    log::info!("请求提权终止进程 PID={pid} name={expected_name}");
     tauri::async_runtime::spawn_blocking(move || {
-        let name = procs::validate_termination_target(pid)?;
-        // 二次校验：实时取当前进程名，与首次校验比对，防窗口期 PID 复用误杀
-        let fresh = procs::process_name_by_pid(pid);
-        verify_elevated_target_unchanged(fresh, &name)?;
+        let current = procs::validate_termination_target(pid)?;
+        if !procs::identity_matches(&current, &expected_name, expected_start_time) {
+            return Err(format!(
+                "目标进程已变化（确认时「{expected_name}」，当前「{}」），已取消结束；请刷新后重试",
+                current.name
+            ));
+        }
         run_elevated_taskkill(pid)
     })
     .await
@@ -193,57 +149,23 @@ pub async fn terminate_process_elevated(pid: u32) -> Result<(), String> {
 }
 
 #[tauri::command(async)]
-pub async fn list_ports() -> Result<Vec<PortEntry>, String> {
-    tauri::async_runtime::spawn_blocking(cached_port_entries)
+pub async fn list_ports() -> Result<Vec<crate::ports::PortEntry>, String> {
+    tauri::async_runtime::spawn_blocking(crate::runtime::cached_ports)
         .await
         .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 开发服务器 = LISTENING 的 TCP 端口 + 命令行命中框架规则的进程。
 #[tauri::command(async)]
-pub async fn list_dev_servers(dirs: tauri::State<'_, KnownDirs>) -> Result<Vec<DevServer>, String> {
-    let servers = tauri::async_runtime::spawn_blocking(|| -> Result<Vec<DevServer>, String> {
-        let ports = cached_port_entries()?;
-        let procs = procs::snapshot_processes();
-        let pid_index = build_pid_index(procs);
-
-        let mut servers = Vec::new();
-        for entry in ports.iter().filter(|e| e.protocol == "TCP") {
-            if !ports::is_listening(&entry.state) || entry.local_port == 0 {
-                continue;
-            }
-            let proc = match pid_index.get(&entry.pid) {
-                Some(p) => p,
-                None => continue,
-            };
-            let cmd_lower = proc.cmd_line.to_ascii_lowercase();
-            let exe_name_lower = std::path::Path::new(&proc.exe_path)
-                .file_name()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_default()
-                .to_ascii_lowercase();
-            let classified = devserver::classify_dev_server(&cmd_lower, &exe_name_lower);
-            if let Some((framework, confidence)) = classified {
-                // 用结构化 argv 而不是把 cmd_line 按空格重切：含空格的路径
-                // 会被切碎，推出一个不存在的相对目录并被登记进白名单。
-                let project_dir =
-                    devserver::guess_project_dir(&proc.argv, &proc.exe_path, &proc.cwd);
-                servers.push(DevServer {
-                    port: entry.local_port,
-                    protocol: entry.protocol.clone(),
-                    pid: entry.pid,
-                    process_name: proc.name.clone(),
-                    framework: framework.to_string(),
-                    project_dir,
-                    cmd_line: proc.cmd_line.clone(),
-                    confidence,
-                });
-            }
-        }
-        servers.sort_by_key(|s| s.port);
-        servers.dedup_by_key(|s| s.port);
-        Ok(servers)
-    })
+pub async fn list_dev_servers(
+    dirs: tauri::State<'_, KnownDirs>,
+) -> Result<Vec<crate::devserver::DevServer>, String> {
+    let servers = tauri::async_runtime::spawn_blocking(
+        || -> Result<Vec<crate::devserver::DevServer>, String> {
+            let ports = crate::runtime::cached_ports()?;
+            Ok(crate::runtime::collect_dev_servers(&ports))
+        },
+    )
     .await
     .map_err(|e| format!("任务执行失败: {e}"))??;
 
@@ -290,38 +212,24 @@ pub struct OpencodeSessionsResult {
 pub async fn opencode_sessions(
     ports_state: tauri::State<'_, AllowedPorts>,
 ) -> Result<OpencodeSessionsResult, String> {
-    let result = tauri::async_runtime::spawn_blocking(|| {
-        let procs = procs::snapshot_processes();
-        let mut ports = vec![4096u16];
-        ports.extend(discover_opencode_ports(&procs));
-        ports.sort();
-        ports.dedup();
-        let mut last_err = String::new();
-        for port in ports {
-            match ai::fetch_opencode_sessions(port) {
-                Ok(sessions) => return Ok(OpencodeSessionsResult { port, sessions }),
-                Err(e) => last_err = e,
-            }
-        }
+    let probe = tauri::async_runtime::spawn_blocking(crate::runtime::probe_opencode)
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?;
+    if let Some(error) = probe.error {
         // 「本机没装 opencode」是正常状态，不是错误：AI 会话页每 3 秒轮询一次，
         // 记 WARN 会把这个事实刷成每 5 秒两条，把真正的故障日志淹掉
         // （安装版实测 20 分钟就写满一屏）。只记一次 debug，错误仍原样返回给前端。
-        log_once_no_opencode(&last_err);
-        Err(format!(
-            "未检测到运行中的 opencode 服务（默认端口 4096）：{last_err}"
-        ))
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))??;
-
+        log_once_no_opencode(&error);
+        return Err(format!(
+            "未检测到运行中的 opencode 服务（默认端口 4096）：{error}"
+        ));
+    }
     // 只允许详情请求复用刚刚探测成功的端口
-    ports_state.record([result.port]);
-    Ok(result)
-}
-
-fn discover_opencode_ports(procs: &[ProcInfo]) -> Vec<u16> {
-    // 端口发现逻辑与 HTTP 服务共用一份，避免两处漏掉 `--port=` 或 `--port N` 写法。
-    crate::runtime::collect_opencode_ports(procs)
+    ports_state.record([probe.port]);
+    Ok(OpencodeSessionsResult {
+        port: probe.port,
+        sessions: probe.sessions,
+    })
 }
 
 // ── AI 会话详情 ──────────────────────────────────────────
@@ -363,18 +271,9 @@ pub async fn git_branch(dirs: tauri::State<'_, KnownDirs>, dir: String) -> Resul
         log::warn!("拒绝未登记的目录 git 探测: {dir}");
         return Err("该目录不在允许列表内".to_string());
     }
-    let output = tauri::async_runtime::spawn_blocking(move || {
-        silent(Command::new("git"))
-            .args(["-C", &dir, "branch", "--show-current"])
-            .output()
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
-    .map_err(|e| format!("git 执行失败: {e}"))?;
-    if !output.status.success() {
-        return Ok(String::new());
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    tauri::async_runtime::spawn_blocking(move || crate::runtime::git_branch(&dir))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 切换主窗口置顶。前端在标题栏提供开关；失败时前端回滚状态。
@@ -847,103 +746,79 @@ pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String
 // 成本读取全部走 spawn_blocking：SQLite 查询是同步阻塞调用，
 // 而 Tauri 的非 async 命令在主线程执行 —— 前端进入 AI 页时用 Promise.all
 // 同时发 4 个查询，在主线程上就是数百毫秒的冻结。
+//
+// 所有成本命令共享「加账本锁 + 解析数据目录 + 执行查询」这三步，
+// 合并成一个 helper：锁定顺序与错误映射只有一处，新增查询不会漏锁。
+async fn run_cost<T, F>(app: AppHandle, query: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce(&DataRoot) -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(move || {
+        let _scan_guard = lock_ledger_operation()?;
+        query(&data_root(&app)?)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
+}
 
 /// 获取成本总览（不重新扫描）
 #[tauri::command(async)]
 pub async fn get_cost_overview(app: AppHandle) -> Result<CostOverview, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let _scan_guard = lock_ledger_operation()?;
-        cost_store::build_overview(&data_root(&app)?)
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+    run_cost(app, cost_store::build_overview).await
 }
 
 /// 获取成本趋势
 #[tauri::command(async)]
 pub async fn get_cost_trend(app: AppHandle, days: usize) -> Result<Vec<CostTrendRow>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let _scan_guard = lock_ledger_operation()?;
-        cost_store::build_trend(&data_root(&app)?, days)
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+    run_cost(app, move |root| cost_store::build_trend(root, days)).await
 }
 
 /// 按模型分解成本
 #[tauri::command(async)]
 pub async fn get_model_breakdown(app: AppHandle) -> Result<Vec<ModelBreakdownRow>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let _scan_guard = lock_ledger_operation()?;
-        cost_store::build_model_breakdown(&data_root(&app)?)
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+    run_cost(app, cost_store::build_model_breakdown).await
 }
 
 /// 按项目目录归因成本（"哪个仓库花钱最多"）
 #[tauri::command(async)]
 pub async fn get_project_breakdown(app: AppHandle) -> Result<Vec<ProjectBreakdownRow>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let _scan_guard = lock_ledger_operation()?;
-        cost_store::build_project_breakdown(&data_root(&app)?)
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+    run_cost(app, cost_store::build_project_breakdown).await
 }
 
 /// 扩展趋势：最近 `days` 天按日，更早的按月聚合
 #[tauri::command(async)]
 pub async fn get_cost_trend_extended(app: AppHandle, days: usize) -> Result<ExtendedTrend, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let _scan_guard = lock_ledger_operation()?;
-        cost_store::build_trend_extended(&data_root(&app)?, days)
+    run_cost(app, move |root| {
+        cost_store::build_trend_extended(root, days)
     })
     .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 台账导出：原始成本记录（含估算行，来源列自述）
 #[tauri::command(async)]
 pub async fn get_cost_export(app: AppHandle, limit: usize) -> Result<Vec<CostExportRow>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let _scan_guard = lock_ledger_operation()?;
-        cost_store::build_cost_export(&data_root(&app)?, limit)
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+    run_cost(app, move |root| cost_store::build_cost_export(root, limit)).await
 }
 
 /// 获取 / 保存成本设置（预算 / 告警阈值 / 是否计入估算）
 #[tauri::command(async)]
 pub async fn get_cost_settings_cmd(app: AppHandle) -> Result<CostSettings, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let _scan_guard = lock_ledger_operation()?;
-        cost_store::get_cost_settings(&data_root(&app)?)
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+    run_cost(app, cost_store::get_cost_settings).await
 }
 
 #[tauri::command(async)]
 pub async fn save_cost_settings_cmd(app: AppHandle, settings: CostSettings) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let _scan_guard = lock_ledger_operation()?;
-        cost_store::save_cost_settings(&data_root(&app)?, settings)
+    run_cost(app, move |root| {
+        cost_store::save_cost_settings(root, settings)
     })
     .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 清空全部成本记录
 #[tauri::command(async)]
 pub async fn clear_cost_records(app: AppHandle) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let _scan_guard = lock_ledger_operation()?;
-        cost_store::clear_records(&data_root(&app)?)
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+    run_cost(app, cost_store::clear_records).await
 }
 
 /// 扫描结果回传
@@ -1723,7 +1598,10 @@ mod tests {
                 .split_once(end)
                 .unwrap()
                 .0;
-            assert!(body.contains("lock_ledger_operation()"), "{start}");
+            assert!(
+                body.contains("lock_ledger_operation()") || body.contains("run_cost("),
+                "{start} 必须直接加锁或走 run_cost"
+            );
         }
     }
 
@@ -1828,18 +1706,6 @@ mod tests {
                 "/T".to_string(),
                 "/F".to_string()
             ]
-        );
-    }
-
-    /// 二次比对：名字不一致（PID 复用）或目标已退出都必须拒绝，一致才放行。
-    #[test]
-    fn elevated_second_check_rejects_reused_or_dead_pid() {
-        assert!(verify_elevated_target_unchanged(None, "notepad.exe").is_err());
-        assert!(
-            verify_elevated_target_unchanged(Some("explorer.exe".into()), "notepad.exe").is_err()
-        );
-        assert!(
-            verify_elevated_target_unchanged(Some("notepad.exe".into()), "notepad.exe").is_ok()
         );
     }
 

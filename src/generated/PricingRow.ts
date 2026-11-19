@@ -5,9 +5,21 @@
  */
 export type PricingRow = { model: string, 
 /**
- * 内置快照的输入/输出单价（USD / 1M tokens），未知型号为 null
+ * 内置快照的输入/输出单价（已折算为 USD / 1M tokens），未知型号为 null
  */
 builtin_input: number | null, builtin_output: number | null, 
+/**
+ * 内置价的**原始币种**（USD / CNY）。null 表示非内置型号。
+ */
+builtin_currency: string | null, 
+/**
+ * 内置价的原始输入/输出单价（未折算），用于 UI 显示「¥5.00 → $0.694」
+ */
+builtin_original_input: number | null, builtin_original_output: number | null, 
+/**
+ * 价格来源与快照日期，便于审计
+ */
+builtin_source: string | null, builtin_as_of: string | null, 
 /**
  * 当前生效的覆盖值；没有覆盖时为 null
  */

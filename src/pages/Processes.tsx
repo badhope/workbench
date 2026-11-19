@@ -11,7 +11,7 @@ import { filterProcs, type ProcSortKey } from "./processFilter";
 import { ProcessTable } from "./processes/ProcessTable";
 import { buildForest, flattenTree, type TreeNode } from "./processes/tree";
 import { useT } from "../lib/i18n";
-import { downloadText, toCsv } from "../lib/export";
+import { downloadCsv } from "../lib/export";
 import type { Bucket } from "../lib/aggregate";
 import type { ProcInfo } from "../types";
 import type { EChartsCoreOption } from "echarts/core";
@@ -134,8 +134,7 @@ export default function Processes() {
       p.exe_path,
       p.cmd_line,
     ]);
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    downloadText(`workbench-processes-${stamp}.csv`, toCsv([header, ...body]));
+    downloadCsv("processes", [header, ...body]);
     setToast(t("procs.exported", { count: body.length }));
   };
 

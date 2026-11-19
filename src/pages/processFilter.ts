@@ -21,7 +21,7 @@ export function filterProcs(procs: ProcInfo[], f: ProcFilter): ProcInfo[] {
   const query = f.query.trim().toLowerCase();
   const byChip = procs.filter((p) => matchesChip(p, f));
   const list = query ? byChip.filter((p) => matchesQuery(p, query)) : byChip;
-  return [...list].sort((a, b) => compare(a, b, f.sort));
+  return [...list].sort((a, b) => compareProcs(a, b, f.sort));
 }
 
 function matchesChip(p: ProcInfo, f: ProcFilter): boolean {
@@ -39,7 +39,7 @@ function matchesQuery(p: ProcInfo, query: string): boolean {
   );
 }
 
-function compare(a: ProcInfo, b: ProcInfo, sort: ProcSortKey): number {
+export function compareProcs(a: ProcInfo, b: ProcInfo, sort: ProcSortKey): number {
   if (sort === "name") return a.name.localeCompare(b.name);
   if (sort === "pid") return a.pid - b.pid;
   return b[sort] - a[sort];

@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use crate::ai::{self, AiProcess};
+use crate::ai::{self, AiProcess, OpencodeSession};
 use crate::devserver::{self, DevServer};
 use crate::ports::{self, PortEntry};
 use crate::procs::{self, ProcInfo};
@@ -88,6 +88,66 @@ pub fn collect_dev_servers(port_entries: &[PortEntry]) -> Vec<DevServer> {
     servers.sort_by_key(|s| s.port);
     servers.dedup_by_key(|s| s.port);
     servers
+}
+
+/// 当前 git 分支（detached HEAD 返回空串）。
+///
+/// 只做执行，不做白名单判断：IPC 与 HTTP 各自从自己的 KnownDirs 校验后
+/// 再调这里，保证「哪些目录可探测」的策略只有一处。
+pub fn git_branch(dir: &str) -> Result<String, String> {
+    use std::process::Command;
+    let mut cmd = Command::new("git");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let output = cmd
+        .args(["-C", dir, "branch", "--show-current"])
+        .output()
+        .map_err(|e| format!("git 执行失败: {e}"))?;
+    if !output.status.success() {
+        return Ok(String::new());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// opencode 在线探测结果。`error == None` 表示 `sessions` 有效。
+pub struct OpencodeProbe {
+    pub port: u16,
+    pub sessions: Vec<OpencodeSession>,
+    pub error: Option<String>,
+}
+
+impl OpencodeProbe {
+    pub fn available(&self) -> bool {
+        self.error.is_none()
+    }
+}
+
+/// 探测本机 opencode 服务。IPC 与 HTTP 共用这一份端口发现/逐个尝试逻辑，
+/// 避免「桌面能连上、浏览器连不上」的口径分叉。
+pub fn probe_opencode() -> OpencodeProbe {
+    let procs = procs::snapshot_processes();
+    let ports = collect_opencode_ports(&procs);
+    let mut last_err = String::new();
+    for port in ports {
+        match ai::fetch_opencode_sessions(port) {
+            Ok(sessions) => {
+                return OpencodeProbe {
+                    port,
+                    sessions,
+                    error: None,
+                }
+            }
+            Err(e) => last_err = e,
+        }
+    }
+    OpencodeProbe {
+        port: 4096,
+        sessions: Vec::new(),
+        error: Some(last_err),
+    }
 }
 
 /// 一次快照：进程 + 端口 + 开发服务器，供 UI 首屏与 REST 消费者一次拿全。

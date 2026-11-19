@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { csvCell, downloadText, toCsv } from "./export";
+import { csvCell, downloadText, timestampForFilename, toCsv } from "./export";
 
 describe("csvCell", () => {
   it("leaves plain values alone", () => {
@@ -33,6 +33,14 @@ describe("toCsv", () => {
         [1, 2],
       ])
     ).toBe("a,b\r\n1,2\r\n");
+  });
+});
+
+describe("timestampForFilename", () => {
+  it("produces a filename-safe UTC timestamp", () => {
+    expect(timestampForFilename(new Date("2026-11-19T10:30:00Z"))).toBe(
+      "2026-11-19-10-30-00"
+    );
   });
 });
 

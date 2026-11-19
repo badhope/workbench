@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import {
   Menu,
   Moon,
@@ -9,7 +8,10 @@ import {
   Search,
   Sun,
 } from "lucide-react";
-import { isTauri } from "../lib/api";
+import {
+  isTauri,
+  setAlwaysOnTop as applyAlwaysOnTop,
+} from "../lib/api";
 import { openMiniWindow } from "../lib/miniWindow";
 
 import { localeFor, useLang, useT } from "../lib/i18n";
@@ -19,7 +21,7 @@ import { useShallow } from "zustand/react/shallow";
 import { allThemes, findTheme } from "../lib/theme/presets";
 import { Btn, Spinner } from "../ui";
 import { BrandBlock, HorizontalNav } from "./Nav";
-import type { ViewKey } from "../pages/registry";
+import type { ViewKey } from "../navigation";
 
 /**
  * 顶栏：标题 + 运行模式 + 右侧控制簇。
@@ -109,7 +111,7 @@ export function AppHeaderControls() {
               const next = !alwaysOnTop;
               setAlwaysOnTop(next);
               try {
-                await invoke("set_always_on_top", { on: next });
+                await applyAlwaysOnTop(next);
               } catch {
                 setAlwaysOnTop(!next);
               }

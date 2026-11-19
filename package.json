@@ -27,7 +27,8 @@
     "test:e2e:update": "playwright test --update-snapshots --workers=1",
     "icons:check": "python scripts/check_icons.py",
     "icons:build": "python scripts/make_icons.py",
-    "dup": "jscpd src --threshold 3 --min-tokens 60"
+    "dup": "jscpd src --threshold 3 --min-tokens 60",
+    "check:modules": "node scripts/check-modules.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

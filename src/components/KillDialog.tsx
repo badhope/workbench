@@ -33,7 +33,7 @@ export function KillDialog() {
   const confirmKill = async () => {
     if (!killTarget) return;
     const pid = killTarget.pid;
-    await killProcess(pid);
+    await killProcess(killTarget);
     // 成功时 store 会清空 killTarget；仍在则说明普通结束失败，亮出提权入口
     const stillOpen = useStore.getState().killTarget?.pid === pid;
     setKillFailed(stillOpen);
@@ -41,10 +41,10 @@ export function KillDialog() {
 
   const elevatedKill = async () => {
     if (!killTarget) return;
-    const pid = killTarget.pid;
+    const { pid, name, start_time } = killTarget;
     setElevating(true);
     try {
-      await terminateProcessElevated(pid);
+      await terminateProcessElevated(pid, name, start_time);
       closeDialog();
       setToast(t("store.killElevatedSent", { pid }));
     } catch (e) {

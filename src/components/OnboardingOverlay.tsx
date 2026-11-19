@@ -2,16 +2,9 @@ import { useState } from "react";
 import { useStore } from "../lib/store";
 import { useT } from "../lib/i18n";
 import { BUILTIN_THEMES, swatchOf } from "../lib/theme/presets";
-import type { MotionLevel } from "../lib/theme/apply";
 import { Btn, Modal } from "../ui";
 import { WorkModeChoices } from "./WorkModeChoices";
-
-/** 引导第 3 步可选的动效档位。与外观面板同一份语义，各自维护展示文案。 */
-const MOTIONS: { id: MotionLevel; key: string }[] = [
-  { id: "off", key: "settings.motionOff" },
-  { id: "standard", key: "settings.motionStandard" },
-  { id: "rich", key: "settings.motionRich" },
-];
+import { MotionSelector } from "./MotionSelector";
 
 /**
  * 首启 3 步引导（视觉 2.0，P0-7）。
@@ -126,22 +119,8 @@ export function OnboardingOverlay() {
           <div>
             <h3 className="text-[15px] font-semibold">{t("onboarding.step3Title")}</h3>
             <p className="mt-1 text-[12px] text-dim">{t("onboarding.step3Body")}</p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {MOTIONS.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  aria-pressed={motion === m.id}
-                  onClick={() => setMotion(m.id)}
-                  className={`t-btn border px-2.5 py-1 text-[11.5px] font-medium ${
-                    motion === m.id
-                      ? "border-accent bg-accent text-[var(--color-on-accent)]"
-                      : "border-line bg-panel2/70 text-dim hover:text-text"
-                  }`}
-                >
-                  {t(m.key)}
-                </button>
-              ))}
+            <div className="mt-3">
+              <MotionSelector value={motion} onChange={setMotion} />
             </div>
           </div>
         )}

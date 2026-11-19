@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PAGES } from "../../pages/registry";
+import { PAGES } from "../../navigation";
 import { dict as core } from "./core";
 import { dict as overview } from "./overview";
 import { dict as processes } from "./processes";
@@ -9,6 +9,9 @@ import { dict as projects } from "./projects";
 import { dict as tasks } from "./tasks";
 import { dict as settings } from "./settings";
 import { dict as logs } from "./logs";
+import { dict as today } from "./today";
+import { dict as review } from "./review";
+import { dict as mini } from "./mini";
 
 /**
  * 三语词典对齐门禁。
@@ -27,6 +30,9 @@ const MODULES = {
   tasks,
   settings,
   logs,
+  today,
+  review,
+  mini,
 };
 
 const LANGS = ["en", "zh", "ja"] as const;

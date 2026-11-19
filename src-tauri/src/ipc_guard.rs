@@ -153,16 +153,12 @@ pub fn is_absolute_path(raw: &str) -> bool {
         return false;
     }
     let unified = trimmed.replace('\\', "/");
-    // POSIX 绝对路径
+    // POSIX 绝对路径，或 Windows 盘符绝对路径：X:/... 或 X:\...
     if unified.starts_with('/') {
         return true;
     }
-    // Windows 盘符绝对路径：X:/... 或 X:\...
     let bytes = unified.as_bytes();
-    if bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'/' {
-        return true;
-    }
-    false
+    bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'/'
 }
 
 /// 绝对路径 + 存在 + 是目录。相对路径一律拒绝：它会随进程工作目录漂移。

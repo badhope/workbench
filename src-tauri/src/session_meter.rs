@@ -328,7 +328,7 @@ fn parse_usage_from_value(v: &serde_json::Value, strict: bool) -> Result<Option<
     if strict {
         for key in keys {
             if let Some(value) = usage.get(key) {
-                if !usage_token_u64(Some(value)).is_some_and(|n| n <= i64::MAX as u64) {
+                if usage_token_u64(Some(value)).is_none_or(|n| n > i64::MAX as u64) {
                     return Err(format!("无效的会话 token 字段: {key}"));
                 }
             }

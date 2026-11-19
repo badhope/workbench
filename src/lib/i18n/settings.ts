@@ -26,7 +26,9 @@ export const dict = {
     "settings.backgroundInvalid": "Could not read that image.",
     "pricing.title": "Model pricing overrides",
     "pricing.hint":
-      "Built-in prices are a snapshot of public list prices (USD per 1M tokens). Override any model here; the override wins over the built-in value and is stored in pricing_overrides.json next to your data.",
+      "Built-in prices are a dated snapshot. USD list prices are used as-is; CNY list prices are converted at 1 USD = 7.2 CNY before billing. Override any model here; the override wins over the built-in value and is stored in pricing_overrides.json next to your data.",
+    "pricing.fxHint":
+      "Original CNY list prices are shown under the USD value. Conversion rate: 1 USD = 7.2 CNY (snapshot 2026-11-19). Overrides are always USD per 1M tokens.",
     "pricing.desktopOnly":
       "Pricing overrides need the desktop app — the browser preview has no backend.",
     "pricing.search": "Filter models…",
@@ -253,7 +255,9 @@ export const dict = {
     "settings.backgroundInvalid": "无法读取这张图片。",
     "pricing.title": "模型价格覆盖",
     "pricing.hint":
-      "内置价格是公开标价的快照（USD / 百万 tokens）。可在这里覆盖任意型号；覆盖值优先于内置值，保存在数据目录的 pricing_overrides.json。",
+      "内置价格是带日期的公开标价快照。美元价直接使用；人民币官方价按 1 USD = 7.2 CNY 折算后参与计费。可在这里覆盖任意型号；覆盖值优先于内置值，保存在数据目录的 pricing_overrides.json。",
+    "pricing.fxHint":
+      "人民币原价显示在美元价下方。换算汇率 1 USD = 7.2 CNY（2026-11-19 快照）；覆盖值请按 USD / 百万 tokens 填写。",
     "pricing.desktopOnly": "价格覆盖需要桌面端——浏览器预览没有后端。",
     "pricing.search": "筛选型号…",
     "pricing.count": "{shown} / {total} 个型号",
@@ -469,7 +473,9 @@ export const dict = {
     "settings.backgroundInvalid": "その画像は読み込めませんでした。",
     "pricing.title": "モデル価格の上書き",
     "pricing.hint":
-      "組み込み価格は公開価格のスナップショットです（USD / 100万トークン）。任意のモデルを上書きできます。上書き値は組み込み値より優先され、データフォルダの pricing_overrides.json に保存されます。",
+      "組み込み価格は日付付きの公開価格スナップショットです。USD 価格はそのまま、CNY 公式価格は 1 USD = 7.2 CNY で換算して課金に使います。任意のモデルを上書きできます。上書き値は組み込み値より優先され、データフォルダの pricing_overrides.json に保存されます。",
+    "pricing.fxHint":
+      "人民元の原価は USD 価格の下に表示されます。換算レート 1 USD = 7.2 CNY（2026-11-19 スナップショット）。上書き値は USD / 100万トークンで入力してください。",
     "pricing.desktopOnly":
       "価格の上書きはデスクトップ版のみです（ブラウザプレビューにはバックエンドがありません）。",
     "pricing.search": "モデルを絞り込む…",
