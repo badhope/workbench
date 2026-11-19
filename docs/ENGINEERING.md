@@ -82,6 +82,10 @@ src/
 | 每 3 秒枚举磁盘挂载点                                                     | `disk_info_blocking` 加 30 秒缓存                                |
 | 原子写只 fsync 文件                                                       | rename 后 Unix 下再 fsync 父目录                                 |
 | 成本扫描无进度                                                            | `cost-scan-progress` 事件按文件上报，成本页显示 done/total       |
+| 成本扫描在 IPC / HTTP 各写一套「预备算 → 单事务 → 聚合」                  | `commands::scan_cost_records(root, progress)` 唯一编排            |
+| 保存数据时 schema 版本校验在 IPC / HTTP 各一份                            | `data::stamp_schema_version(data, action)`                        |
+| HTTP 端 20 余处 `spawn_blocking + map_err` 样板                           | `server::{blocking, blocking_value}`                             |
+| 任务优先级文案在今日 / 任务 / 回顾三处各写一套                            | `lib/workbench::priorityLabel`                                    |
 
 新增同类能力时，先查上表；能进已有模块就不开新文件。
 

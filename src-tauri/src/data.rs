@@ -18,6 +18,21 @@ use crate::json_store;
 /// 读的时候按版本迁移，写的时候按版本备份。缺版本号一律按 v1 读。
 pub const SCHEMA_VERSION: u32 = 2;
 
+/// 保存前统一校验版本：拒绝未来版本，并把当前版本号盖上。
+///
+/// `action` 只影响错误文案（导入/保存），校验规则本身只有这一份。
+pub fn stamp_schema_version(data: &mut WorkbenchData, action: &str) -> Result<(), String> {
+    if let Some(version) = data.schema_version {
+        if version > SCHEMA_VERSION {
+            return Err(format!(
+                "数据来自更新版本（v{version}），当前版本只支持到 v{SCHEMA_VERSION}；请升级应用后再{action}"
+            ));
+        }
+    }
+    data.schema_version = Some(SCHEMA_VERSION);
+    Ok(())
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, ts_rs::TS)]
 pub struct WorkbenchData {
     /// 数据格式版本。缺失 = v1。
@@ -503,5 +518,21 @@ mod tests {
         assert_eq!(backups(), 1, "已是当前版本时不应重复备份");
 
         fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn save_stamp_rejects_future_version_and_forces_current() {
+        let mut future = WorkbenchData {
+            schema_version: Some(SCHEMA_VERSION + 1),
+            ..Default::default()
+        };
+        assert!(stamp_schema_version(&mut future, "导入").is_err());
+
+        let mut legacy = WorkbenchData {
+            schema_version: None,
+            ..Default::default()
+        };
+        stamp_schema_version(&mut legacy, "保存").unwrap();
+        assert_eq!(legacy.schema_version, Some(SCHEMA_VERSION));
     }
 }

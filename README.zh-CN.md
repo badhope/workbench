@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/badge/version-0.9.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.zh-CN.md#系统要求)
-[![Tests](https://img.shields.io/badge/tests-614%20unit%20%2B%20188%20backend%20%2B%2030%20e2e-8b5cf6)](#质量门禁)
+[![Tests](https://img.shields.io/badge/tests-614%20unit%20%2B%20189%20backend%20%2B%2030%20e2e-8b5cf6)](#质量门禁)
 
 ![工作台](docs/screenshots/zh/12-brand-hero.png)
 

@@ -28,6 +28,7 @@ import {
   type Tone,
 } from "../ui";
 import { dueLabel } from "../lib/util";
+import { priorityLabel } from "../lib/workbench";
 import { isBlocked, taskMatchesScope, type TaskScope } from "../lib/workbench";
 import { useT } from "../lib/i18n";
 import type { Task } from "../types";
@@ -62,19 +63,6 @@ function columnLabel(key: string, t: TFunc): string {
       return t("tasks.colDoing");
     case "done":
       return t("tasks.colDone");
-    default:
-      return key;
-  }
-}
-
-function priorityLabel(key: string, t: TFunc): string {
-  switch (key) {
-    case "low":
-      return t("tasks.priorityLow");
-    case "normal":
-      return t("tasks.priorityNormal");
-    case "high":
-      return t("tasks.priorityHigh");
     default:
       return key;
   }
@@ -144,10 +132,10 @@ export default function Tasks() {
     });
   }, [data.tasks, projectFilter, taskScope, query]);
 
-/** 新建任务的默认到期日：今天/本周范围补今天，否则无日期（收件箱/全部）。 */
-function defaultDueForScope(scope: TaskScope): string | null {
-  return scope === "today" || scope === "week" ? dayjs().format("YYYY-MM-DD") : null;
-}
+  /** 新建任务的默认到期日：今天/本周范围补今天，否则无日期（收件箱/全部）。 */
+  function defaultDueForScope(scope: TaskScope): string | null {
+    return scope === "today" || scope === "week" ? dayjs().format("YYYY-MM-DD") : null;
+  }
 
   const addFromList = () => {
     const title = newTitle.trim();

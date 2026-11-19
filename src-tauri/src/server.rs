@@ -38,7 +38,6 @@ use crate::data::{self, WorkbenchData};
 use crate::diagnostics;
 use crate::paths::DataRoot;
 use crate::runtime::RuntimeSnapshot;
-use crate::session_meter::ScanReadBudget;
 
 /// 编译期嵌入的前端构建产物（`../dist`）。
 ///
@@ -202,6 +201,29 @@ type ApiResult<T> = Result<Json<T>, ApiError>;
 
 fn ok<T: Serialize>(value: T) -> ApiResult<T> {
     Ok(Json(value))
+}
+
+/// 把同步查询丢进阻塞线程池，并统一 spawn/业务错误映射。
+async fn blocking<T, F>(f: F) -> Result<T, ApiError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
+        .map_err(ApiError::internal)
+}
+
+/// 同上，但闭包本身不会失败（纯采集函数）。
+async fn blocking_value<T, F>(f: F) -> Result<T, ApiError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> T + Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))
 }
 
 /// 构建路由。抽出来是为了能在测试里直接 `oneshot` 调用，不用真的监听端口。
@@ -412,26 +434,19 @@ async fn diagnostics_handler(
     State(st): State<AppState>,
 ) -> ApiResult<diagnostics::DiagnosticsReport> {
     let root = st.root.clone();
-    let report = tokio::task::spawn_blocking(move || {
-        diagnostics::collect(env!("CARGO_PKG_VERSION"), root.as_path())
-    })
-    .await
-    .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?;
+    let report =
+        blocking_value(move || diagnostics::collect(env!("CARGO_PKG_VERSION"), root.as_path()))
+            .await?;
     ok(report)
 }
 
 async fn list_processes() -> ApiResult<Vec<crate::procs::ProcInfo>> {
-    let rows = tokio::task::spawn_blocking(crate::procs::snapshot_processes)
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?;
+    let rows = blocking_value(crate::procs::snapshot_processes).await?;
     ok(rows)
 }
 
 async fn list_ports() -> ApiResult<Vec<crate::ports::PortEntry>> {
-    let rows = tokio::task::spawn_blocking(crate::runtime::cached_ports)
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-        .map_err(ApiError::internal)?;
+    let rows = blocking(crate::runtime::cached_ports).await?;
     ok(rows)
 }
 
@@ -455,21 +470,17 @@ async fn list_dev_servers(
 }
 
 async fn list_ai_processes() -> ApiResult<Vec<crate::ai::AiProcess>> {
-    let rows = tokio::task::spawn_blocking(crate::runtime::collect_ai_processes)
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?;
+    let rows = blocking_value(crate::runtime::collect_ai_processes).await?;
     ok(rows)
 }
 
 /// 最近会话文件预览（与桌面 AI 页同一份数据）。
 async fn session_previews() -> ApiResult<Vec<crate::ai::SessionFilePreview>> {
-    let rows = tokio::task::spawn_blocking(|| {
+    let rows = blocking(|| {
         let home = crate::commands::home_dir().ok_or_else(|| "无法定位用户主目录".to_string())?;
         crate::ai::scan_session_files_with_preview(&home).map_err(str::to_string)
     })
-    .await
-    .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-    .map_err(ApiError::internal)?;
+    .await?;
     ok(rows)
 }
 
@@ -486,9 +497,7 @@ struct OpencodeProbe {
 }
 
 async fn opencode_sessions(State(state): State<AppState>) -> ApiResult<OpencodeProbe> {
-    let probe = tokio::task::spawn_blocking(crate::runtime::probe_opencode)
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?;
+    let probe = blocking_value(crate::runtime::probe_opencode).await?;
     if probe.available() {
         state.allowed_ports.record([probe.port]);
     }
@@ -515,11 +524,8 @@ async fn opencode_session_detail(
     if !state.allowed_ports.contains(query.port) {
         return Err(ApiError::forbidden("端口不在允许列表内，请刷新会话列表"));
     }
-    let detail = tokio::task::spawn_blocking(move || {
-        crate::ai::fetch_session_detail(query.port, &session_id)
-    })
-    .await
-    .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?;
+    let detail =
+        blocking_value(move || crate::ai::fetch_session_detail(query.port, &session_id)).await?;
     ok(detail)
 }
 
@@ -537,10 +543,7 @@ async fn git_branch(
     if !state.known_dirs.contains(&query.dir) {
         return Err(ApiError::forbidden("该目录不在允许列表内"));
     }
-    let branch = tokio::task::spawn_blocking(move || crate::runtime::git_branch(&query.dir))
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-        .map_err(ApiError::internal)?;
+    let branch = blocking(move || crate::runtime::git_branch(&query.dir)).await?;
     ok(branch)
 }
 
@@ -553,10 +556,7 @@ struct Snapshot {
 
 /// 一次拿全：进程 + 端口 + 开发服务器。浏览器端刷新只要一次往返。
 async fn snapshot() -> ApiResult<Snapshot> {
-    let snap = tokio::task::spawn_blocking(RuntimeSnapshot::capture)
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-        .map_err(ApiError::internal)?;
+    let snap = blocking(RuntimeSnapshot::capture).await?;
     ok(Snapshot {
         procs: snap.procs,
         ports: snap.ports,
@@ -566,16 +566,12 @@ async fn snapshot() -> ApiResult<Snapshot> {
 
 async fn system_info() -> ApiResult<crate::commands::SystemInfo> {
     // 与 IPC 版共用同一份实现，避免两处字段漂移。
-    let info = tokio::task::spawn_blocking(crate::commands::system_info_blocking)
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?;
+    let info = blocking_value(crate::commands::system_info_blocking).await?;
     ok(info)
 }
 
 async fn disks() -> ApiResult<Vec<crate::commands::DiskInfo>> {
-    let rows = tokio::task::spawn_blocking(crate::commands::disk_info_blocking)
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?;
+    let rows = blocking_value(crate::commands::disk_info_blocking).await?;
     ok(rows)
 }
 
@@ -603,10 +599,7 @@ async fn clear_logs(State(st): State<AppState>, headers: axum::http::HeaderMap) 
     require_same_origin(&headers)?;
     require_write_header(&headers)?;
     let root = st.root.clone();
-    tokio::task::spawn_blocking(move || crate::logging_setup::clear_logs_at(root.as_path()))
-        .await
-        .map_err(|e| ApiError::internal(format!("清空日志失败: {e}")))?
-        .map_err(ApiError::internal)?;
+    blocking(move || crate::logging_setup::clear_logs_at(root.as_path())).await?;
     log::info!("应用日志已清空（HTTP）");
     ok(true)
 }
@@ -616,7 +609,9 @@ struct LogQuery {
     max_lines: Option<usize>,
 }
 
-async fn load_data(State(st): State<AppState>) -> ApiResult<VersionedData> {
+async fn load_data(
+    State(st): State<AppState>,
+) -> ApiResult<crate::commands::VersionedWorkbenchData> {
     let root = st.root.clone();
     let snapshot = tokio::task::spawn_blocking(move || {
         let data = data::load_from_disk(&root)?;
@@ -624,18 +619,12 @@ async fn load_data(State(st): State<AppState>) -> ApiResult<VersionedData> {
         // （文件身份 + 长度）作为乐观锁令牌，语义与桌面端 generation 等价：
         // 别的写方动过，令牌就变。
         let generation = data::fingerprint(&root)?;
-        Ok::<_, String>(VersionedData { data, generation })
+        Ok::<_, String>(crate::commands::VersionedWorkbenchData { data, generation })
     })
     .await
     .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
     .map_err(ApiError::internal)?;
     ok(snapshot)
-}
-
-#[derive(Serialize)]
-struct VersionedData {
-    data: WorkbenchData,
-    generation: String,
 }
 
 /// 写入项目/任务数据。
@@ -657,16 +646,8 @@ async fn save_data(
     require_write_header(&headers)?;
 
     // 与 IPC save_data 完全相同的版本判定，避免 HTTP 成为绕过口。
-    if let Some(version) = payload.schema_version {
-        if version > data::SCHEMA_VERSION {
-            return Err(ApiError::bad_request(format!(
-                "数据来自更新版本（v{version}），当前版本只支持到 v{}；请升级应用后再保存",
-                data::SCHEMA_VERSION
-            )));
-        }
-    }
     let mut payload = payload;
-    payload.schema_version = Some(data::SCHEMA_VERSION);
+    data::stamp_schema_version(&mut payload, "保存").map_err(ApiError::bad_request)?;
 
     let root = st.root.clone();
     let expected = header_str(&headers, "if-match");
@@ -729,10 +710,7 @@ fn require_write_header(headers: &axum::http::HeaderMap) -> Result<(), ApiError>
 
 async fn cost_overview(State(st): State<AppState>) -> ApiResult<cost_store::CostOverview> {
     let root = st.root.clone();
-    let v = tokio::task::spawn_blocking(move || cost_store::build_overview(&root))
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-        .map_err(ApiError::internal)?;
+    let v = blocking(move || cost_store::build_overview(&root)).await?;
     ok(v)
 }
 
@@ -752,10 +730,7 @@ async fn cost_trend(
 ) -> ApiResult<Vec<cost_store::CostTrendRow>> {
     let root = st.root.clone();
     let days = q.days.clamp(1, 3650);
-    let v = tokio::task::spawn_blocking(move || cost_store::build_trend(&root, days))
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-        .map_err(ApiError::internal)?;
+    let v = blocking(move || cost_store::build_trend(&root, days)).await?;
     ok(v)
 }
 
@@ -765,19 +740,13 @@ async fn cost_trend_extended(
 ) -> ApiResult<cost_store::ExtendedTrend> {
     let root = st.root.clone();
     let days = q.days.clamp(1, 3650);
-    let v = tokio::task::spawn_blocking(move || cost_store::build_trend_extended(&root, days))
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-        .map_err(ApiError::internal)?;
+    let v = blocking(move || cost_store::build_trend_extended(&root, days)).await?;
     ok(v)
 }
 
 async fn cost_models(State(st): State<AppState>) -> ApiResult<Vec<cost_store::ModelBreakdownRow>> {
     let root = st.root.clone();
-    let v = tokio::task::spawn_blocking(move || cost_store::build_model_breakdown(&root))
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-        .map_err(ApiError::internal)?;
+    let v = blocking(move || cost_store::build_model_breakdown(&root)).await?;
     ok(v)
 }
 
@@ -785,10 +754,7 @@ async fn cost_projects(
     State(st): State<AppState>,
 ) -> ApiResult<Vec<cost_store::ProjectBreakdownRow>> {
     let root = st.root.clone();
-    let v = tokio::task::spawn_blocking(move || cost_store::build_project_breakdown(&root))
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-        .map_err(ApiError::internal)?;
+    let v = blocking(move || cost_store::build_project_breakdown(&root)).await?;
     ok(v)
 }
 
@@ -808,19 +774,13 @@ async fn cost_export(
 ) -> ApiResult<Vec<cost_store::CostExportRow>> {
     let root = st.root.clone();
     let limit = q.limit.clamp(1, 200_000);
-    let v = tokio::task::spawn_blocking(move || cost_store::build_cost_export(&root, limit))
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-        .map_err(ApiError::internal)?;
+    let v = blocking(move || cost_store::build_cost_export(&root, limit)).await?;
     ok(v)
 }
 
 async fn cost_settings(State(st): State<AppState>) -> ApiResult<CostSettings> {
     let root = st.root.clone();
-    let v = tokio::task::spawn_blocking(move || cost_store::get_cost_settings(&root))
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-        .map_err(ApiError::internal)?;
+    let v = blocking(move || cost_store::get_cost_settings(&root)).await?;
     ok(v)
 }
 
@@ -832,30 +792,14 @@ async fn save_cost_settings(
     require_same_origin(&headers)?;
     require_write_header(&headers)?;
     let root = st.root.clone();
-    tokio::task::spawn_blocking(move || cost_store::save_cost_settings(&root, settings))
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-        .map_err(ApiError::internal)?;
+    blocking(move || cost_store::save_cost_settings(&root, settings)).await?;
     Ok(Json(json!({ "ok": true })))
 }
 
-#[derive(Serialize)]
-struct ScanResponse {
-    new_records: usize,
-    total_scanned: usize,
-    overview: cost_store::CostOverview,
-    trend: Vec<cost_store::CostTrendRow>,
-    model_breakdown: Vec<cost_store::ModelBreakdownRow>,
-}
-
-/// 扫描会话文件并落库。与 IPC 版是同一段逻辑（步进式预算 + 单事务）。
 /// 定价视图（内置表 + 覆盖状态）。
 async fn pricing_view(State(st): State<AppState>) -> ApiResult<crate::commands::PricingView> {
     let root = st.root.clone();
-    let v = tokio::task::spawn_blocking(move || crate::commands::get_pricing_at(&root))
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-        .map_err(ApiError::internal)?;
+    let v = blocking(move || crate::commands::get_pricing_at(&root)).await?;
     ok(v)
 }
 
@@ -868,85 +812,23 @@ async fn save_pricing_view(
     require_same_origin(&headers)?;
     require_write_header(&headers)?;
     let root = st.root.clone();
-    let v = tokio::task::spawn_blocking(move || crate::commands::save_pricing_at(&root, payload))
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?
-        .map_err(ApiError::internal)?;
+    let v = blocking(move || crate::commands::save_pricing_at(&root, payload)).await?;
     ok(v)
 }
 
 async fn cost_scan(
     State(st): State<AppState>,
     headers: axum::http::HeaderMap,
-) -> Result<Json<ScanResponse>, ApiError> {
+) -> Result<Json<crate::commands::ScanCostResult>, ApiError> {
     // 扫描会写成本库，属于写操作：与 data/pricing 用同一套门槛。
     require_same_origin(&headers)?;
     require_write_header(&headers)?;
     let root = st.root.clone();
-    let result = tokio::task::spawn_blocking(move || scan_sessions(&root))
-        .await
-        .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?;
-    match result {
-        Ok(v) => Ok(Json(v)),
-        Err(e) => Err(ApiError::internal(e)),
-    }
-}
-
-fn scan_sessions(root: &DataRoot) -> Result<ScanResponse, String> {
-    let home = crate::commands::home_dir().ok_or_else(|| "无法定位用户主目录".to_string())?;
-    let session_files = crate::ai::collect_all_session_files(&home).map_err(str::to_string)?;
-    let entries: Vec<crate::session_meter::SessionFileEntry> = session_files
-        .iter()
-        .map(|f| crate::session_meter::SessionFileEntry {
-            path: f.path.clone(),
-            tool: f.tool.clone(),
-            project: f.project.clone(),
-            modified: f.modified,
-            size: f.size,
-        })
-        .collect();
-
-    let overrides = cost_store::read_pricing_overrides(root)?;
-    if !overrides.problems.is_empty() {
-        return Err(format!("定价覆盖无效: {}", overrides.problems.join("; ")));
-    }
-    let pricing_table = crate::pricing::PricingTable {
-        overrides: overrides.overrides,
-    };
-    let mut records = Vec::new();
-    let mut scanned_paths = Vec::new();
-    let mut errors = Vec::new();
-    const SCAN_TOTAL_BYTES: u64 = 256 * 1024 * 1024;
-    let mut budget = ScanReadBudget::new(SCAN_TOTAL_BYTES);
-    for entry in &entries {
-        match crate::session_meter::scan_complete_sessions_with_budget(
-            std::slice::from_ref(entry),
-            &pricing_table,
-            &mut budget,
-        ) {
-            Ok(file_records) => {
-                records.extend(file_records);
-                scanned_paths.push(entry.path.clone());
-            }
-            Err(err) => errors.push(err),
-        }
-    }
-    let total_scanned = records.len();
-    let outcome = cost_store::import_and_aggregate(root, &records, &scanned_paths, 14)?;
-    if !errors.is_empty() {
-        return Err(format!(
-            "{} 个会话扫描失败，旧记录已保留；成功文件已更新: {}",
-            errors.len(),
-            errors.join("; ")
-        ));
-    }
-    Ok(ScanResponse {
-        new_records: outcome.net_new,
-        total_scanned,
-        overview: outcome.overview,
-        trend: outcome.trend,
-        model_breakdown: outcome.breakdown,
-    })
+    let result =
+        tokio::task::spawn_blocking(move || crate::commands::scan_cost_records(&root, |_, _| {}))
+            .await
+            .map_err(|e| ApiError::internal(format!("任务执行失败: {e}")))?;
+    result.map(Json).map_err(ApiError::internal)
 }
 
 /// 解析静态目录：显式指定 > 可执行文件同级 `dist` > 当前工作目录 `dist`。

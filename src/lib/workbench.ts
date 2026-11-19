@@ -19,6 +19,22 @@ export function isBlocked(task: Task): boolean {
   return isOpenTask(task) && Boolean(task.blocked_reason?.trim());
 }
 
+type Translate = (key: string, vars?: Record<string, string | number>) => string;
+
+/** 任务优先级 → 三语文案；未知值原样返回，不伪装成 normal。 */
+export function priorityLabel(key: string, t: Translate): string {
+  switch (key) {
+    case "low":
+      return t("tasks.priorityLow");
+    case "high":
+      return t("tasks.priorityHigh");
+    case "normal":
+      return t("tasks.priorityNormal");
+    default:
+      return key;
+  }
+}
+
 function dueDay(task: Task): dayjs.Dayjs | null {
   if (!task.due) return null;
   const d = dayjs(task.due);

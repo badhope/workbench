@@ -2,17 +2,9 @@ import type { ReactNode } from "react";
 import { Check } from "lucide-react";
 import { useT } from "../../lib/i18n";
 import { dueLabel } from "../../lib/util";
-import { isBlocked } from "../../lib/workbench";
+import { isBlocked, priorityLabel } from "../../lib/workbench";
 import { Badge, Empty } from "../../ui";
 import type { Project, Task } from "../../types";
-
-type Translate = (key: string, vars?: Record<string, string | number>) => string;
-
-function priorityLabel(key: string, t: Translate): string {
-  if (key === "low") return t("tasks.priorityLow");
-  if (key === "high") return t("tasks.priorityHigh");
-  return t("tasks.priorityNormal");
-}
 
 export function TaskRow({
   task,

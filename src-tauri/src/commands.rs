@@ -482,8 +482,8 @@ pub async fn disk_info() -> Result<Vec<DiskInfo>, String> {
 
 #[derive(Serialize)]
 pub struct VersionedWorkbenchData {
-    data: WorkbenchData,
-    generation: String,
+    pub(crate) data: WorkbenchData,
+    pub(crate) generation: String,
 }
 
 #[tauri::command(async)]
@@ -527,18 +527,8 @@ pub async fn save_data(
     );
     // 客户端可能拿着更新版本导出的数据。宁可明确拒绝，也不能「读进来猜着改」——
     // 新版本可能已经改了字段语义，旧版本写回去会把用户数据改坏。
-    if let Some(version) = data.schema_version {
-        if version > data::SCHEMA_VERSION {
-            return Err(format!(
-                "数据来自更新版本（v{version}），当前版本只支持到 v{}；请升级应用后再导入",
-                data::SCHEMA_VERSION
-            ));
-        }
-    }
-    // 落盘时统一盖上当前版本号：文件里的版本号必须由后端说了算，
-    // 不能因为某个客户端忘了带就写出个没有版本号的文件。
     let mut data = data;
-    data.schema_version = Some(data::SCHEMA_VERSION);
+    data::stamp_schema_version(&mut data, "导入")?;
     // 入参来自 WebView：只登记真实存在的绝对目录，避免注入脚本借 save_data
     // 把任意目录灌进白名单后，再用 git_branch / open_known_path 触达它。
     // 存在性校验会触碰文件系统，放进阻塞线程，避免断网盘卡住主线程。
@@ -662,10 +652,6 @@ fn read_pricing_overrides_at(path: &std::path::Path) -> Result<cost_store::Overr
     Ok(result)
 }
 
-fn read_pricing_overrides(app: &AppHandle) -> Result<cost_store::OverrideRead, String> {
-    read_pricing_overrides_at(&cost_store::cost_data_path_overrides(&data_root(app)?))
-}
-
 /// 扫描进度：按文件计数，供重度历史用户在长任务里判断是否卡死。
 #[derive(Clone, Serialize)]
 struct CostScanProgress {
@@ -678,77 +664,9 @@ struct CostScanProgress {
 #[tauri::command(async)]
 pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        // 扫描锁只保护「写成本库」那一小段。读会话文件可能持续几十秒，
-        // 把它也罩在锁里会让 save_data（前端 300ms 防抖）排队几十秒，
-        // 用户看到的是「编辑没反应」。文件读取只读用户目录，与成本库无关。
-        let home = dirs_home().ok_or_else(|| "无法定位用户主目录".to_string())?;
-        let session_files = ai::collect_all_session_files(&home).map_err(str::to_string)?;
-
-        let entries: Vec<SessionFileEntry> = session_files
-            .iter()
-            .map(|f| SessionFileEntry {
-                path: f.path.clone(),
-                tool: f.tool.clone(),
-                project: f.project.clone(),
-                modified: f.modified,
-                size: f.size,
-            })
-            .collect();
-
-        let overrides = read_pricing_overrides(&app)?;
-        if !overrides.problems.is_empty() {
-            return Err(format!("定价覆盖无效: {}", overrides.problems.join("; ")));
-        }
-        let pricing_table = PricingTable {
-            overrides: overrides.overrides,
-        };
-        let mut records = Vec::new();
-        let mut scanned_paths = Vec::new();
-        let mut errors = Vec::new();
-        // 单文件上限之外的兜底：一次扫描最多读 256 MiB。否则 10,000 个文件
-        // 各 32 MiB 就是 312 GiB，长时间持锁且拖慢整个应用。到顶后剩余文件
-        // 按失败上报（保留旧账），不静默截断成"扫描成功"。
-        const SCAN_TOTAL_BYTES: u64 = 256 * 1024 * 1024;
-        let mut bytes_budget = session_meter::ScanReadBudget::new(SCAN_TOTAL_BYTES);
-        for (idx, entry) in entries.iter().enumerate() {
-            match session_meter::scan_complete_sessions_with_budget(
-                std::slice::from_ref(entry),
-                &pricing_table,
-                &mut bytes_budget,
-            ) {
-                Ok(file_records) => {
-                    records.extend(file_records);
-                    scanned_paths.push(entry.path.clone());
-                }
-                Err(err) => errors.push(err),
-            }
-            let _ = app.emit(
-                "cost-scan-progress",
-                CostScanProgress {
-                    done: idx + 1,
-                    total: entries.len(),
-                },
-            );
-        }
-        let total_scanned = records.len();
-        let outcome = {
-            let _scan_guard = lock_ledger_operation()?;
-            cost_store::import_and_aggregate(&data_root(&app)?, &records, &scanned_paths, 14)?
-        };
-        if !errors.is_empty() {
-            return Err(format!(
-                "{} 个会话扫描失败，旧记录已保留；成功文件已更新: {}",
-                errors.len(),
-                errors.join("; ")
-            ));
-        }
-
-        Ok(ScanCostResult {
-            new_records: outcome.net_new,
-            total_scanned,
-            overview: outcome.overview,
-            trend: outcome.trend,
-            model_breakdown: outcome.breakdown,
+        let root = data_root(&app)?;
+        scan_cost_records(&root, |done, total| {
+            let _ = app.emit("cost-scan-progress", CostScanProgress { done, total });
         })
     })
     .await
@@ -841,6 +759,80 @@ pub struct ScanCostResult {
     pub overview: CostOverview,
     pub trend: Vec<CostTrendRow>,
     pub model_breakdown: Vec<ModelBreakdownRow>,
+}
+
+/// 扫描全部 session 文件并落库，IPC 与 HTTP 共用这一份编排。
+///
+/// 进度回调在每次文件处理完后调用；HTTP 没有事件通道，传空闭包即可。
+pub(crate) fn scan_cost_records(
+    root: &DataRoot,
+    mut progress: impl FnMut(usize, usize),
+) -> Result<ScanCostResult, String> {
+    // 扫描锁只保护「写成本库」那一小段。读会话文件可能持续几十秒，
+    // 把它也罩在锁里会让 save_data（前端 300ms 防抖）排队几十秒，
+    // 用户看到的是「编辑没反应」。文件读取只读用户目录，与成本库无关。
+    let home = dirs_home().ok_or_else(|| "无法定位用户主目录".to_string())?;
+    let session_files = ai::collect_all_session_files(&home).map_err(str::to_string)?;
+    let entries: Vec<SessionFileEntry> = session_files
+        .iter()
+        .map(|f| SessionFileEntry {
+            path: f.path.clone(),
+            tool: f.tool.clone(),
+            project: f.project.clone(),
+            modified: f.modified,
+            size: f.size,
+        })
+        .collect();
+
+    let overrides = cost_store::read_pricing_overrides(root)?;
+    if !overrides.problems.is_empty() {
+        return Err(format!("定价覆盖无效: {}", overrides.problems.join("; ")));
+    }
+    let pricing_table = PricingTable {
+        overrides: overrides.overrides,
+    };
+    let mut records = Vec::new();
+    let mut scanned_paths = Vec::new();
+    let mut errors = Vec::new();
+    // 单文件上限之外的兜底：一次扫描最多读 256 MiB。否则 10,000 个文件
+    // 各 32 MiB 就是 312 GiB，长时间持锁且拖慢整个应用。到顶后剩余文件
+    // 按失败上报（保留旧账），不静默截断成"扫描成功"。
+    const SCAN_TOTAL_BYTES: u64 = 256 * 1024 * 1024;
+    let mut bytes_budget = session_meter::ScanReadBudget::new(SCAN_TOTAL_BYTES);
+    for (idx, entry) in entries.iter().enumerate() {
+        match session_meter::scan_complete_sessions_with_budget(
+            std::slice::from_ref(entry),
+            &pricing_table,
+            &mut bytes_budget,
+        ) {
+            Ok(file_records) => {
+                records.extend(file_records);
+                scanned_paths.push(entry.path.clone());
+            }
+            Err(err) => errors.push(err),
+        }
+        progress(idx + 1, entries.len());
+    }
+    let total_scanned = records.len();
+    let outcome = {
+        let _scan_guard = lock_ledger_operation()?;
+        cost_store::import_and_aggregate(root, &records, &scanned_paths, 14)?
+    };
+    if !errors.is_empty() {
+        return Err(format!(
+            "{} 个会话扫描失败，旧记录已保留；成功文件已更新: {}",
+            errors.len(),
+            errors.join("; ")
+        ));
+    }
+
+    Ok(ScanCostResult {
+        new_records: outcome.net_new,
+        total_scanned,
+        overview: outcome.overview,
+        trend: outcome.trend,
+        model_breakdown: outcome.breakdown,
+    })
 }
 
 /// 一个可恢复的备份点。
@@ -1596,8 +1588,19 @@ mod tests {
     #[test]
     fn ledger_operations_share_scan_lock() {
         let source = include_str!("commands.rs");
+        let scan_cmd = source
+            .split_once("pub async fn scan_session_costs(")
+            .unwrap()
+            .1
+            .split_once("// 成本读取全部")
+            .unwrap()
+            .0;
+        assert!(
+            scan_cmd.contains("scan_cost_records("),
+            "scan_session_costs 必须走共享扫描编排"
+        );
         for (start, end) in [
-            ("pub async fn scan_session_costs(", "// 成本读取全部"),
+            ("pub(crate) fn scan_cost_records(", "/// 一个可恢复的备份点"),
             ("pub async fn clear_cost_records(", "/// 扫描结果回传"),
             ("pub async fn backup_data(", "/// 同步版本"),
             ("pub async fn restore_backup(", "fn restore_now("),

@@ -16,6 +16,7 @@ import {
   completionTrend,
   isOpenTask,
   isOverdue,
+  priorityLabel,
   projectProgress,
 } from "../lib/workbench";
 import { formatTime } from "../lib/util";
@@ -83,12 +84,7 @@ export default function Review() {
     () =>
       PRIORITY_ORDER.map((priority) => ({
         key: priority,
-        name:
-          priority === "high"
-            ? t("tasks.priorityHigh")
-            : priority === "normal"
-              ? t("tasks.priorityNormal")
-              : t("tasks.priorityLow"),
+        name: priorityLabel(priority, t),
         value: data.tasks.filter((task) => isOpenTask(task) && task.priority === priority)
           .length,
         color:
