@@ -105,7 +105,9 @@ npm run dup                        # jscpd 阈值 3%
 
 工具链固定为 `rust-toolchain.toml` 的 `1.95.0`（与 `Cargo.toml` 的 `rust-version` 一致）；CI 与 release 同样使用 `dtolnay/rust-toolchain@1.95.0`。升级 MSRV 时三处同步改。
 
-`vitest.config.mts` 固定 `pool: "vmThreads"`：默认 forks 每个测试文件重建一次 jsdom，全量实测约 1281s；vmThreads 仍按文件隔离，实测约 140s。不要为了“更稳”改回 forks，那只是把 21 分钟的反馈环重新引回来。
+`vitest.config.mts` 固定 `pool: "vmThreads"`：默认 forks 每个测试文件重建一次 jsdom，全量实测约 1281s；vmThreads 仍按文件隔离，实测约 80s。不要为了“更稳”改回 forks，那只是把 20 分钟的反馈环重新引回来。
+
+覆盖率口径：`npm run coverage` 只承诺 `src/lib/**`、`src/ui.tsx`、`src/ErrorBoundary.tsx` 的 90/85/90/90 阈值；`src/pages/**` 由 Playwright 结构回归与桌面 E2E 覆盖，不把页面塞进 lib 阈值里制造“全应用 90%”的误读。
 
 重复率基线（`jscpd --min-tokens 30`）：改造前 38 处 / 315 行 / 1.35%；当前 8 处 / 82 行 / 0.28%（生产代码 0 处，剩余为测试文件的共享导入/断言样板）。`npm run dup` 的 3% 阈值是防止回潮的上限，不是目标值。
 
