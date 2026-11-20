@@ -36,7 +36,7 @@ jobs:
           - os: windows-latest
             bundles: nsis
             artifact: workbench-windows-x64
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             bundles: deb,appimage
             artifact: workbench-linux-amd64
           - os: macos-latest
@@ -64,7 +64,7 @@ jobs:
           workspaces: src-tauri
 
       - name: Install Linux system deps
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
@@ -332,7 +332,7 @@ jobs:
           | Platform | File | Notes |
           |----------|------|-------|
           | Windows 10/11 x64 | \`Workbench_${version}_x64-setup.exe\` (NSIS) | Code-signed when a certificate secret is configured; otherwise SmartScreen may warn |
-          | Linux x64 | \`Workbench_${version}_amd64.deb\` / \`Workbench_${version}_amd64.AppImage\` | AppImage needs a system WebKitGTK 4.1 runtime; the .deb installs dependencies |
+          | Linux x64 | \`Workbench_${version}_amd64.deb\` / \`Workbench_${version}_amd64.AppImage\` | Built on Ubuntu 22.04 (glibc 2.35+). AppImage needs WebKitGTK 4.1; the .deb installs dependencies |
           | macOS arm64 | \`Workbench_${version}_aarch64.dmg\` / \`.app.zip\` | Signed and notarized when Apple secrets are configured; otherwise Gatekeeper requires right-click -> Open |
 
           \`latest.json\` and the \`.sig\` files are the signed update channel. The app

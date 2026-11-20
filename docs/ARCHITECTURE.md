@@ -58,7 +58,7 @@
 | Item | Requirement |
 |------|-------------|
 | OS | Windows, Linux and macOS have CI jobs; platform-specific verification varies |
-| Runtime | Windows needs WebView2 (preinstalled on Windows 11); Linux needs WebKitGTK 4.1; macOS uses the system webview |
+| Runtime | Windows needs WebView2 (preinstalled on Windows 11); Linux needs WebKitGTK 4.1 and glibc 2.35+ (built on Ubuntu 22.04); macOS uses the system webview |
 | Disk | Depends on the platform and bundle |
 | Privileges | No admin required; killing a process needs same-or-higher privileges. If a normal kill fails, it can be retried with one click through UAC elevation (Windows only) |
 | Network | None required. The only optional probe is the local opencode service when you open the AI sessions page |

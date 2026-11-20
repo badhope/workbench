@@ -45,7 +45,7 @@
 | 项 | 要求 |
 |----|------|
 | 操作系统 | CI 定义了 Windows、Linux 和 macOS 任务；各平台验证情况不同 |
-| 运行时 | Windows 需 WebView2（Windows 11 预装）；Linux 需 WebKitGTK 4.1；macOS 使用系统 WebView |
+| 运行时 | Windows 需 WebView2（Windows 11 预装）；Linux 需 WebKitGTK 4.1 与 glibc 2.35+（在 Ubuntu 22.04 上构建）；macOS 使用系统 WebView |
 | 磁盘 | 取决于平台和安装包 |
 | 权限 | 无需管理员权限；进程终止需与目标进程同级权限。普通结束失败后可一键经 UAC 提权重试（仅 Windows） |
 | 网络 | 不需联网。仅在你主动使用 AI 会话页时会探测本地 opencode 服务 |

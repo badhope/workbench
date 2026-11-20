@@ -56,7 +56,7 @@
 | 項目 | 要件 |
 |------|------|
 | OS | Windows / Linux / macOS の CI ジョブを定義。プラットフォームごとの検証状況は異なります |
-| ランタイム | Windows は WebView2（Windows 11 に同梱）、Linux は WebKitGTK 4.1、macOS はシステムの WebView を使用 |
+| ランタイム | Windows は WebView2（Windows 11 に同梱）、Linux は WebKitGTK 4.1 と glibc 2.35+（Ubuntu 22.04 でビルド）、macOS はシステムの WebView を使用 |
 | ディスク | プラットフォームとバンドルによって異なります |
 | 権限 | 管理者権限は不要。プロセス終了には対象と同等以上の権限が必要。通常終了が失敗した場合は、UAC による昇格でワンクリック再試行できます（Windows のみ） |
 | ネットワーク | 不要。AI セッションページを開いたときにローカル opencode サービスを探知するだけ |

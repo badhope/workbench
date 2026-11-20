@@ -87,7 +87,9 @@ jobs:
   # 这类问题无法被发现。
   backend-linux:
     name: Backend (Linux)
-    runs-on: ubuntu-latest
+    # 与发布构建保持一致：Ubuntu 24.04 编出的二进制要求 glibc 2.38+，
+    # 在 22.04 / Debian 12 等常见环境上会直接起不来。
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
 

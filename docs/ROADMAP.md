@@ -12,7 +12,7 @@ Current version: **1.0.0** · Status legend: ✅ shipped · 🚧 in progress · 
 |------|--------|----------|
 | npm / Rust dependency refresh | ✅ | React 19.3, Vite 8.3, ESLint 10.15, jsdom 31, Tauri 2.12.7; `minimatch` pinned to 11 |
 | Signed in-app updates | ✅ | `tauri-plugin-updater`, minisign key in GitHub Secrets, Settings update card, `scripts/make-latest-json.mjs` |
-| Linux AppImage | ✅ | `Workbench_1.0.0_amd64.AppImage` + `.sig` built in CI; system WebKitGTK 4.1 documented |
+| Linux AppImage | ✅ | `Workbench_1.0.0_amd64.AppImage` + `.sig` built in CI; built on Ubuntu 22.04, WebKitGTK 4.1 + glibc 2.35 documented |
 | macOS DMG | ✅ | DMG + `.app` + `.app.tar.gz` updater payload built in CI |
 | Authenticode / notarization hooks | ✅ | Release workflow imports a PFX and verifies Authenticode; Apple certificate / notary secrets are passed through and verified with `codesign` + `spctl` |
 | Release manifest and checksums | ✅ | `latest.json`, per-platform `.sig`, `SHA256SUMS.txt` verified before publish |
@@ -102,7 +102,7 @@ Current version: **1.0.0** · Status legend: ✅ shipped · 🚧 in progress · 
 |------|--------|-------|
 | Signed Windows installer | 🚧 | Workflow imports a PFX and verifies Authenticode when `WINDOWS_CERTIFICATE_BASE64` is set; the certificate itself is external |
 | Auto-update | ✅ | Signed `latest.json` + minisign, checked from Settings |
-| Linux AppImage | ✅ | Ships; needs a system WebKitGTK 4.1 runtime (documented) |
+| Linux AppImage | ✅ | Ships; built on Ubuntu 22.04; needs WebKitGTK 4.1 + glibc 2.35 (documented) |
 | Homebrew tap | ⬜ | A Cask can ship the DMG, but a clean `brew audit` still expects notarization |
 
 ## Next
