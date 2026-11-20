@@ -26,11 +26,11 @@
   --color-danger: #c02b2b;
   --font-sans:
     "Segoe UI Variable Display", "Segoe UI", -apple-system, "PingFang SC",
-    "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC",
-    "Noto Sans CJK", "Source Han Sans SC", system-ui, sans-serif;
+    "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans CJK",
+    "Source Han Sans SC", system-ui, sans-serif;
   --font-mono:
-    "Cascadia Code", "JetBrains Mono", "SF Mono", "Consolas",
-    "Noto Sans Mono CJK SC", ui-monospace, monospace;
+    "Cascadia Code", "JetBrains Mono", "SF Mono", "Consolas", "Noto Sans Mono CJK SC",
+    ui-monospace, monospace;
   --font-display: var(--font-sans);
 
   /* 形状与密度：主题切换时整体改写，让不同风格在「结构」上也不同 */
