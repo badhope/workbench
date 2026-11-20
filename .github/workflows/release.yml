@@ -312,7 +312,7 @@ jobs:
           | Platform | File | Notes |
           |----------|------|-------|
           | Windows 10/11 x64 | \`Workbench_${version}_x64-setup.exe\` (NSIS) | Code-signed when a certificate secret is configured; otherwise SmartScreen may warn |
-          | Linux x64 | \`workbench_${version}_amd64.deb\` / \`Workbench_${version}_amd64.AppImage\` | AppImage needs a system WebKitGTK 4.1 runtime; the .deb installs dependencies |
+          | Linux x64 | \`Workbench_${version}_amd64.deb\` / \`Workbench_${version}_amd64.AppImage\` | AppImage needs a system WebKitGTK 4.1 runtime; the .deb installs dependencies |
           | macOS arm64 | \`Workbench_${version}_aarch64.dmg\` / \`.app.zip\` | Signed and notarized when Apple secrets are configured; otherwise Gatekeeper requires right-click -> Open |
 
           \`latest.json\` and the \`.sig\` files are the signed update channel. The app

@@ -150,7 +150,7 @@ jobs:
       - run: npm ci
 
       - name: Build deb package
-        run: npx tauri build --bundles deb
+        run: npx tauri build --bundles deb --config src-tauri/tauri.ci.conf.json
 
       - name: Verify deb structure
         run: |
@@ -220,7 +220,7 @@ jobs:
       - run: npm ci
 
       - name: Build app bundle
-        run: npx tauri build --bundles app
+        run: npx tauri build --bundles app --config src-tauri/tauri.ci.conf.json
 
       - name: Verify bundle structure
         run: |
