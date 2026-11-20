@@ -43,6 +43,15 @@ const LAYOUTS = [
 ] as const;
 const SHELLS = ["rail", "dock", "zen"] as const;
 
+/** 截图前把内容区和窗口都回顶，避免 Playwright 的自动滚动污染基线。 */
+async function resetScroll(page: Page) {
+  await page.evaluate(() => {
+    const main = document.querySelector("main");
+    if (main) main.scrollTop = 0;
+    window.scrollTo(0, 0);
+  });
+}
+
 /** 通过侧栏/顶部坞的导航按钮打开页面（title 在折叠态也有，比文字稳）。 */
 async function gotoPage(page: Page, label: string) {
   await page
@@ -50,6 +59,10 @@ async function gotoPage(page: Page, label: string) {
     .first()
     .click();
   await page.waitForTimeout(700);
+  // 点击不可见的导航项时浏览器会先 scrollIntoView；设置页本身可滚动，
+  // 于是新页面会带着上一页的 scrollTop 出现在截图里。CI 的字体度量与
+  // 本地略有差异，恰好会把某个导航项推到视口外，表现为整页错位十几像素。
+  await resetScroll(page);
 }
 
 async function gotoAppearance(page: Page) {
