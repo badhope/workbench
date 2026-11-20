@@ -289,19 +289,19 @@ const LINE_HEIGHT: Record<Density, string> = {
 
 const FONTS: Record<FontChoice, { sans: string; display: string; mono: string }> = {
   sans: {
-    sans: `"Segoe UI Variable Display", "Segoe UI", -apple-system, "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif`,
-    display: `"Segoe UI Variable Display", "Segoe UI", -apple-system, "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif`,
-    mono: `"Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, ui-monospace, monospace`,
+    sans: `"Segoe UI Variable Display", "Segoe UI", -apple-system, "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC", "Noto Sans CJK", "Source Han Sans SC", system-ui, sans-serif`,
+    display: `"Segoe UI Variable Display", "Segoe UI", -apple-system, "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC", "Noto Sans CJK", "Source Han Sans SC", system-ui, sans-serif`,
+    mono: `"Cascadia Code", "JetBrains Mono", "SF Mono", "Consolas", "Noto Sans Mono CJK SC", ui-monospace, monospace`,
   },
   serif: {
-    sans: `"Iowan Old Style", "Palatino Linotype", "Songti SC", "SimSun", Georgia, serif`,
-    display: `"Iowan Old Style", "Palatino Linotype", "Songti SC", "SimSun", Georgia, serif`,
-    mono: `"Cascadia Code", "JetBrains Mono", Consolas, ui-monospace, monospace`,
+    sans: `"Iowan Old Style", "Palatino Linotype", "Songti SC", "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif`,
+    display: `"Iowan Old Style", "Palatino Linotype", "Songti SC", "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif`,
+    mono: `"Cascadia Code", "JetBrains Mono", "Consolas", "Noto Sans Mono CJK SC", ui-monospace, monospace`,
   },
   mono: {
-    sans: `"Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, ui-monospace, monospace`,
-    display: `"Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, ui-monospace, monospace`,
-    mono: `"Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, ui-monospace, monospace`,
+    sans: `"Cascadia Code", "JetBrains Mono", "SF Mono", "Consolas", "Noto Sans Mono CJK SC", ui-monospace, monospace`,
+    display: `"Cascadia Code", "JetBrains Mono", "SF Mono", "Consolas", "Noto Sans Mono CJK SC", ui-monospace, monospace`,
+    mono: `"Cascadia Code", "JetBrains Mono", "SF Mono", "Consolas", "Noto Sans Mono CJK SC", ui-monospace, monospace`,
   },
 };
 

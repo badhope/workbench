@@ -59,8 +59,13 @@ jobs:
 
       # 视觉回归：捕获布局塌陷、图表标签重叠、元素不可见这类问题。
       # 单元测试和类型检查对它们完全无感。
+      # 字体必须钉死：基线里有中文，缺 Noto CJK 时 Chromium 会退到
+      # 文泉驿等系统字体，字重和度量不同，整页文本都会判成差异。
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
+
+      - name: Install CJK fonts
+        run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
 
       - name: Visual regression
         run: npm run test:e2e

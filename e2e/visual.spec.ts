@@ -111,6 +111,8 @@ async function pickShell(page: Page, id: string) {
   await gotoAppearance(page);
   await page.locator(`button[data-shell="${id}"]`).click();
   await page.waitForTimeout(350);
+  // 外壳按钮在设置页下半部分，点击时的 scrollIntoView 会留在截图里。
+  await resetScroll(page);
 }
 
 test.describe("布局稳定性", () => {
