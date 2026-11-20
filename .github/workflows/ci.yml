@@ -105,6 +105,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          # Swatinem 的默认 key 只区分 linux/macOS/windows，不区分 Ubuntu 版本；
+          # 24.04 的 target 缓存拿到 22.04 上会缺依赖、报 cannot find crate。
+          key: ubuntu-22.04
 
       - uses: actions/setup-node@v7
         with:
@@ -187,6 +190,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          # Swatinem 的默认 key 只区分 linux/macOS/windows，不区分 Ubuntu 版本；
+          # 24.04 的 target 缓存拿到 22.04 上会缺依赖、报 cannot find crate。
+          key: ubuntu-22.04
 
       - uses: actions/setup-node@v7
         with:
