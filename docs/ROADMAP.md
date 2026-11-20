@@ -4,7 +4,18 @@ Workbench ships in small, verifiable increments. Every entry below states what
 is done, what is next, and what is explicitly **not** planned — a roadmap that
 only lists ambitions is a wish list, not a plan.
 
-Current version: **0.9.8** · Status legend: ✅ shipped · 🚧 in progress · ⬜ planned
+Current version: **1.0.0** · Status legend: ✅ shipped · 🚧 in progress · ⬜ planned
+
+## 1.0.0 — Distribution hardening (shipped 2026-11-20)
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| npm / Rust dependency refresh | ✅ | React 19.3, Vite 8.3, ESLint 10.15, jsdom 31, Tauri 2.12.7; `minimatch` pinned to 11 |
+| Signed in-app updates | ✅ | `tauri-plugin-updater`, minisign key in GitHub Secrets, Settings update card, `scripts/make-latest-json.mjs` |
+| Linux AppImage | ✅ | `Workbench_1.0.0_amd64.AppImage` + `.sig` built in CI; system WebKitGTK 4.1 documented |
+| macOS DMG | ✅ | DMG + `.app` + `.app.tar.gz` updater payload built in CI |
+| Authenticode / notarization hooks | ✅ | Release workflow imports a PFX and verifies Authenticode; Apple certificate / notary secrets are passed through and verified with `codesign` + `spctl` |
+| Release manifest and checksums | ✅ | `latest.json`, per-platform `.sig`, `SHA256SUMS.txt` verified before publish |
 
 ## 0.4.0 — Integrity of the numbers (shipped 2026-11-02)
 
@@ -89,15 +100,16 @@ Current version: **0.9.8** · Status legend: ✅ shipped · 🚧 in progress · 
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Signed Windows installer | ⬜ | Blocked on a code-signing certificate; until then SmartScreen will warn and the release notes say so |
-| Auto-update | ⬜ | Only meaningful after signing |
-| Linux AppImage | ⬜ | `.deb` ships today; AppImage needs a bundled WebKitGTK or a documented runtime requirement |
-| Homebrew tap | ⬜ | Needs a notarised macOS build first |
+| Signed Windows installer | 🚧 | Workflow imports a PFX and verifies Authenticode when `WINDOWS_CERTIFICATE_BASE64` is set; the certificate itself is external |
+| Auto-update | ✅ | Signed `latest.json` + minisign, checked from Settings |
+| Linux AppImage | ✅ | Ships; needs a system WebKitGTK 4.1 runtime (documented) |
+| Homebrew tap | ⬜ | A Cask can ship the DMG, but a clean `brew audit` still expects notarization |
 
 ## Next
 
-All unblocked Next items are shipped. `0.8.0 Reach` remains blocked on the signing
-certificate and macOS build environment; no other planned item is open.
+1.0.0 closes the code-side distribution work: AppImage, DMG, signed updates and
+signing hooks all ship. The only remaining external dependency is the actual
+Windows certificate / Apple Developer ID; no other planned code item is open.
 
 ## Not planned
 

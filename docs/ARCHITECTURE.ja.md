@@ -63,9 +63,11 @@
 
 ### Release からインストール
 
-[最新リリース](../../../releases) で利用可能なアセットを確認してください。
-Windows と Linux のビルドは CI で生成・テストされ、macOS アプリは未署名で
-ビルドされます。どのリリースもコード署名されていません。
+[最新リリース](https://github.com/X33834/workbench/releases) で利用可能なアセットを確認してください。
+CI は Windows NSIS、Linux `.deb` / AppImage、macOS DMG / `.app` を生成します。
+デスクトップ版は設定ページで署名済み `latest.json` を読み、minisign 署名を検証して
+から更新します。Authenticode と Apple 公証はリポジトリに資格情報がある場合のみ
+実行され、未設定のビルドは Release ページに未署名と明記されます。
 
 ### ソースからビルド
 
@@ -230,7 +232,8 @@ PID 再利用による誤爆を防ぎます。
 <summary>Windows が「不明な発行元」と警告します</summary>
 
 実行する前に、ダウンロードしたファイルの発行元と署名状態を確認してください。
-Windows と Linux のビルドは CI で生成・テスト済み、macOS アプリは未署名です。
+Release ページに各成果物の署名状態が記載され、未署名の場合は SmartScreen または
+Gatekeeper の手動許可が必要です。
 </details>
 
 ## ロードマップ
@@ -241,7 +244,7 @@ Windows と Linux のビルドは CI で生成・テスト済み、macOS アプ�
 - [x] ダーク / ライトテーマ、ログビューア
 - [x] 多言語 UI（English / 简体中文 / 日本語）
 - [x] Windows / Linux / macOS 向けのクロスプラットフォーム CI ジョブを定義
-- [ ] インストーラーのコード署名（有料証明書が必要）
+- [x] 署名フック（Authenticode / 公証、資格情報はリポジトリ secrets で提供）
 - [x] `pricing_overrides.json` の UI エディタ
 - [x] SQLite コスト台帳（10 万件の集計が 246ms、シャーディング不要）
 - [x] ページ単位の E2E（Playwright で 16 テーマ・3 シェル・7 レイアウト + パッケージ版 2 種）
@@ -253,7 +256,7 @@ Windows と Linux のビルドは CI で生成・テスト済み、macOS アプ�
 - [x] ポート → プロセスの移動、プロセス詳細での逆引きポート一覧
 - [x] プロセスと待受ポートの CSV 書き出し
 - [x] 環境チェック（項目ごとに ok / warn / fail、レポートはコピー可能）
-- [ ] 自動更新（署名済みリリース経路が必要）
+- [x] 自動更新（署名済み `latest.json` + minisign、設定ページから確認）
 
 ## 既知の制限
 
@@ -265,7 +268,7 @@ Windows と Linux のビルドは CI で生成・テスト済み、macOS アプ�
 - コスト台帳は SQLite（`cost.db`、rusqlite bundled）で、日付 / モデル / ファイルに
   索引を持ちます。集計は SQL 内で完了するため、10 万件でも約 250ms。
   旧 `cost_data.json` は初回起動時に取り込み、`.migrated` に改名します（削除しません）
-- リリースビルドは未署名で、コード署名も公証もありません
+- リリースビルドはリポジトリに署名資格情報がある場合のみ Authenticode / 公証され、未設定なら未署名と明記されます
 - トレイメニューは中英併記で、UI の言語切替には追随しません（起動時に一度だけ構築）
 - **プラグイン API とリモート/複数マシン監視はありません**——意図的な割り切りです。
   ただしローカル専用の HTTP API は存在します: `workbench serve` が同一マシンの

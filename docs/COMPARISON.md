@@ -27,7 +27,7 @@ repository, not an aspiration.
 | Browser/web mode | ● (live, local) | ○ | ○ | ○ | ● | ● | ○ | ○ |
 | Scriptable CLI | ● | ○ | ◐ | ◐ | ● | ○ | ● | ● |
 | Plugin / extension API | ○ | ○ | ● | ○ | ● | ○ | ◐ | ○ |
-| Auto-update | ○ | ○ | ● | ○ | ◐ | ● | ○ | ○ |
+| Auto-update | ● | ○ | ● | ○ | ◐ | ● | ○ | ○ |
 | License | MIT | GPL-3.0 | MIT | Apache-2.0 | LGPL-3.0 | MIT | MIT | MIT |
 
 ## Where the others are better
@@ -49,8 +49,8 @@ Being specific matters more than claiming a win everywhere.
   client/server mode and CSV/JSON export. Workbench has a loopback-only local
   HTTP API, but no remote or multi-machine mode.
 - **Stats** owns macOS menu-bar monitoring, with 13 menu-bar widgets and a
-  privacy section that lists its two external APIs. Workbench's macOS build is
-  CI-built and unsigned.
+  privacy section that lists its two external APIs. Workbench ships a CI-built macOS DMG;
+  it is unsigned unless the repository has Apple signing credentials.
 - **ccusage** covers 18 coding agents from a single CLI, with `--instances` per
   project. Workbench reads Claude Code and Codex session files only.
 - **Claude Code Usage Monitor** predicts 5-hour block exhaustion and labels
@@ -70,9 +70,10 @@ Being specific matters more than claiming a win everywhere.
    live in Rust, the target identity is re-verified immediately before a kill,
    UAC elevation is per-action and off by default on other platforms, and the
    environment check reports what it actually verified.
-4. **It is honest about what it cannot do.** No code signing, no auto-update, no
-   plugin API, no remote monitoring. Those are listed as gaps in
-   [ARCHITECTURE.md](ARCHITECTURE.md), not hidden.
+4. **It is honest about what it cannot do.** In-app updates are signed and built
+   in, but OS-level Authenticode / notarization still require external
+   certificates. There is no plugin API and no remote monitoring. Those gaps
+   are listed in [ARCHITECTURE.md](ARCHITECTURE.md), not hidden.
 
 ## Choosing
 

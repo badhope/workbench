@@ -1,6 +1,6 @@
 [package]
 name = "workbench"
-version = "0.9.8"
+version = "1.0.0"
 description = "Workbench - local-first desktop workbench (Tauri 2 + React 19)"
 edition = "2021"
 rust-version = "1.95"  # Tauri 2 生态实际要求；1.77 从未被验证过
@@ -34,6 +34,8 @@ ignore = "0.4.34"
 rmcp = { version = "3.11.0", features = ["server", "transport-io"] }
 schemars = { version = "1.2.3", features = ["derive"] }
 tauri-plugin-dialog = "2.8.4"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 [dependencies.tauri]
 version = "2"

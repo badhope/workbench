@@ -14,6 +14,10 @@ vi.mock("../components/AppearancePanel", () => ({ AppearancePanel: () => null })
 vi.mock("../components/AutostartCard", () => ({ AutostartCard: () => null }));
 vi.mock("../components/BackupPanel", () => ({ BackupPanel: () => null }));
 vi.mock("../components/DiagnosticsPanel", () => ({ DiagnosticsPanel: () => null }));
+// 自动更新卡会在挂载后发起一次异步 IPC 检查；这里只测设置页的导入语义，
+// 单独桩掉，避免异步状态更新落到测试结束之后。
+vi.mock("../components/UpdateCard", () => ({ UpdateCard: () => null }));
+vi.mock("./knowledge/AiAccessCard", () => ({ AiAccessCard: () => null }));
 
 it("only discards pending changes after confirmation", async () => {
   setLang("zh");

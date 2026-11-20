@@ -52,8 +52,10 @@
 
 ### 从 Release 安装
 
-请在 [最新 Release](../../../releases) 查看可用附件。Windows 与 Linux 产物在 CI
-中构建并测试；macOS 产物由 CI 构建且未签名。所有发布产物都没有代码签名。
+请在 [最新 Release](https://github.com/X33834/workbench/releases) 查看可用附件。CI 构建 Windows NSIS、Linux
+`.deb` 与 AppImage、macOS DMG 与 `.app`。桌面版在设置页读取签名过的 `latest.json`，
+校验 minisign 签名后才安装更新。Authenticode 与 Apple 公证只在仓库配置了对应
+secrets 时执行；没有凭据的构建会在 Release 页面明确标注未签名。
 
 ### 从源码构建
 
@@ -212,8 +214,8 @@ Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×�
 <details>
 <summary>Windows 提示「未知发布者」怎么办？</summary>
 
-运行前请确认下载文件的发布者与签名状态。Windows 与 Linux 产物由 CI 构建并测试；
-macOS 产物未签名。
+运行前请确认下载文件的发布者与签名状态。Release 页面会写明每个产物是否签名；
+未签名构建需要 SmartScreen 或 Gatekeeper 手动放行。
 </details>
 
 ## Roadmap
@@ -228,7 +230,7 @@ macOS 产物未签名。
 - [x] 可拖拽、可隐藏的概览组件
 - [x] 多语言界面（English / 简体中文 / 日本語）
 - [x] 为 Windows、Linux 和 macOS 定义跨平台 CI 任务
-- [ ] 安装包代码签名（需付费证书）
+- [x] 安装包签名钩子（Authenticode / 公证，凭据由仓库 secrets 提供）
 - [x] 模型价格编辑器（界面内改价 / 新增 / 恢复内置价）
 - [x] 数据备份与恢复（带时间戳快照，一键回滚）
 - [x] 成本账本 SQLite（十万条聚合 246ms，无需分片）
@@ -242,15 +244,16 @@ macOS 产物未签名。
 - [x] 端口 → 进程跳转，以及进程详情里的反向端口列表
 - [x] 进程与监听端口的 CSV 导出
 - [x] 环境自检（逐项 ok / warn / fail，报告可复制）
-- [ ] 自动更新（需发布签名通道）
+- [x] 自动更新（签名 `latest.json` + minisign，设置页内检查）
 
 ## 已知限制
 
 - 端口采集在 Windows 使用 `netstat -ano`，Linux 使用 `ss -tulpn`（回退 `netstat`），
-  macOS 使用 `netstat -anv`。CI 在三个平台跑后端测试，并构建 `.deb` 与 `.app` 产物。
+  macOS 使用 `netstat -anv`。CI 在三个平台跑后端测试，并构建 `.deb`、AppImage、
+  DMG 与 `.app` 产物。
 - 交互路径由 Playwright（16 主题、3 外壳、7 布局的结构/对比度回归）、命令面板/进程树/端口跳转/CSV 导出的结构化用例，以及打包版桌面 E2E（真实 IPC）覆盖
 - 成本账本使用 SQLite（`cost.db`，rusqlite bundled），按日 / 模型 / 文件建索引；聚合在 SQL 内完成，十万条记录约 250ms，而不是每次查询都重新解析整个 JSON。旧 `cost_data.json` 首次启动自动导入并改名为 `.migrated`（不删除）
-- 发布产物未做代码签名，也没有公证
+- 发布产物仅在仓库配置签名凭据时做 Authenticode / 公证，否则明确标注未签名
 - 托盘菜单文案为中英双语，且不跟随界面语言切换（启动时构建一次）
 - **没有插件 API、没有远程/多机监控**——这是有意的取舍。但本机 HTTP API
   是有的：`workbench serve` 把同一套读取路径暴露给同机浏览器，只绑回环地址，

@@ -2,7 +2,7 @@
 
 [English](README.md) | **简体中文** | [日本語](README.ja.md)
 
-[![Version](https://img.shields.io/badge/version-0.9.8-22d3ee)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.0.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.zh-CN.md#系统要求)
 [![Tests](https://img.shields.io/badge/tests-643%20unit%20%2B%20198%20backend%20%2B%2030%20e2e-8b5cf6)](#质量)
@@ -29,7 +29,7 @@
 
 ## 运行
 
-从 [Releases](../../releases) 下载安装包，或从源码运行：
+从 [Releases](https://github.com/X33834/workbench/releases) 下载安装包，或从源码运行。Windows 提供 NSIS，Linux 提供 `.deb` 与 AppImage，macOS 提供 DMG。桌面版会在设置页检查签名过的 `latest.json` 更新通道，校验通过后才安装。
 
 ```bash
 npm ci

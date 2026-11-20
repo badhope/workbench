@@ -113,6 +113,11 @@ pub fn run() {
         // 「是否已启用」每次向操作系统查询，本地不存布尔 —— 用户可能在
         // 任务管理器 / 系统设置里手动关掉，只信本地标志会显示成错的。
         .plugin(tauri_plugin_autostart::Builder::new().build())
+        // 自动更新：检查 GitHub Releases 的 latest.json，下载后用内置
+        // minisign 公钥校验；未签名/篡改的包不会安装。这里只注册能力，
+        // 实际检查与安装由设置页的更新卡触发。
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             logging_setup::init_logging(app.handle());
             log::info!("工作台 v{} 启动", app.package_info().version);

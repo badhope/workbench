@@ -21,6 +21,7 @@ import { AiAccessCard } from "./knowledge/AiAccessCard";
 import { AutostartCard } from "../components/AutostartCard";
 import { BackupPanel } from "../components/BackupPanel";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
+import { UpdateCard } from "../components/UpdateCard";
 import { WorkModeChoices } from "../components/WorkModeChoices";
 import { WORK_MODES, type WorkMode } from "../lib/workModes";
 import { formatUsd } from "../lib/util";
@@ -545,6 +546,8 @@ export default function Settings() {
       />
       {/* ── AI 接入（只暴露 MCP 命令，不内置模型） ── */}
       <AiAccessCard />
+
+      <UpdateCard />
 
       {/* ── 关于 ── */}
       <Card className="">

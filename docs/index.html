@@ -291,7 +291,7 @@
       <!-- ── Hero ─────────────────────────────── -->
       <div class="hero">
         <div class="wrap hero-inner">
-          <div class="pill"><span class="dot"></span> <span data-i18n="hero.pill">v0.9.8 · Windows / Linux / macOS · MIT licensed</span></div>
+          <div class="pill"><span class="dot"></span> <span data-i18n="hero.pill">v1.0.0 · Windows / Linux / macOS · MIT licensed</span></div>
           <h1>
             <span data-i18n="hero.h1a">Your machine, your work</span><br />
             <span class="grad" data-i18n="hero.h1b">in one local window</span>
@@ -304,7 +304,7 @@
             <a class="btn btn-primary" id="cta-setup" href="#download" data-i18n="hero.cta1">Download installer</a>
             <a class="btn" id="cta-releases" href="#download" data-i18n="hero.cta2">All builds</a>
           </div>
-          <p class="meta" data-i18n="hero.meta">Windows 10 / 11 (NSIS) · Linux (.deb) · macOS (.app, CI-built) · no admin rights required</p>
+          <p class="meta" data-i18n="hero.meta">Windows 10 / 11 (NSIS) · Linux (.deb / AppImage) · macOS (DMG) · no admin rights required</p>
         </div>
       </div>
 
@@ -449,7 +449,7 @@
       <!-- ── Download ─────────────────────────── -->
       <section id="download" class="wrap">
         <h2 class="sec-title" data-i18n="dl.title">Download</h2>
-        <p class="sec-sub" data-i18n="dl.sub">Windows x64 installer. Linux .deb and macOS .app builds are on Releases too. The installer is not code-signed; Windows may warn "Unknown publisher" on first run.</p>
+        <p class="sec-sub" data-i18n="dl.sub">Windows NSIS, Linux .deb / AppImage and macOS DMG are built in CI. OS-level signing depends on repository credentials; without it Windows SmartScreen and macOS Gatekeeper will warn.</p>
         <div class="dl">
           <div class="card">
             <span class="tag rec" data-i18n="dl.tag1">Recommended</span>
@@ -459,14 +459,14 @@
           </div>
           <div class="card">
             <span class="tag" data-i18n="dl.tag2">Linux</span>
-            <h3 data-i18n="dl.t2">.deb package</h3>
-            <p data-i18n="dl.d2">Install with apt or dpkg on Debian or Ubuntu. Built in CI.</p>
+            <h3 data-i18n="dl.t2">.deb / AppImage</h3>
+            <p data-i18n="dl.d2">Use .deb on Debian / Ubuntu. AppImage runs on other distros with a system WebKitGTK 4.1 runtime.</p>
             <a class="btn" id="dl-linux" href="#" data-i18n="dl.b2">Open Releases</a>
           </div>
           <div class="card">
             <span class="tag" data-i18n="dl.tag3">macOS</span>
-            <h3 data-i18n="dl.t3">Unsigned .app</h3>
-            <p data-i18n="dl.d3">Zipped .app built in CI. Right-click Open on first launch.</p>
+            <h3 data-i18n="dl.t3">DMG / .app</h3>
+            <p data-i18n="dl.d3">DMG installer plus zipped .app. Until notarized, right-click Open on first launch.</p>
             <a class="btn" id="dl-macos" href="#" data-i18n="dl.b3">Open Releases</a>
           </div>
         </div>
@@ -491,11 +491,11 @@
         <ol class="steps">
           <li>
             <strong data-i18n="dl.step1t">Download the installer</strong>
-            <span data-i18n-html="dl.step1d">Click "Download installer" above to get <code>Workbench_0.9.8_x64-setup.exe</code>.</span>
+            <span data-i18n-html="dl.step1d">Click "Download installer" above to get <code>Workbench_1.0.0_x64-setup.exe</code>.</span>
           </li>
           <li>
             <strong data-i18n="dl.step2t">Allow the Windows prompt</strong>
-            <span data-i18n="dl.step2d">The installer is unsigned, so SmartScreen may step in: choose "More info" → "Run anyway".</span>
+            <span data-i18n="dl.step2d">If the release is unsigned, SmartScreen may step in: choose "More info" → "Run anyway".</span>
           </li>
           <li>
             <strong data-i18n="dl.step3t">Install and launch</strong>
@@ -516,9 +516,9 @@
         <details>
           <summary data-i18n="q1">Windows says "Protected your PC" or "Unknown publisher" — what now?</summary>
           <p data-i18n-html="a1">
-            The installer is not code-signed (signing certificates cost money), so Windows
-            SmartScreen steps in. Choose "More info" → "Run anyway". You can also build from
-            source. Verify integrity with the SHA-256 published on the Release page.
+            If the Release is not code-signed, Windows SmartScreen steps in. Choose "More info" →
+            "Run anyway". You can also build from source. Verify integrity with the SHA-256
+            published on the Release page.
           </p>
         </details>
         <details>
@@ -562,12 +562,13 @@
         <details>
           <summary data-i18n="q6">Which platforms are supported?</summary>
           <p data-i18n-html="a6">
-            Windows is the primary target (NSIS installer). Linux is built and tested in CI,
-            which produces a <code>.deb</code>; macOS is compiled, unit-tested and packaged as an
-            unsigned <code>.app</code> in CI on every commit. Port collection uses
+            Windows is the primary target (NSIS installer). Linux is built and tested in CI
+            and ships both <code>.deb</code> and <code>AppImage</code>; macOS is compiled,
+            unit-tested and packaged as a DMG plus <code>.app</code> in CI. Port collection uses
             <code>netstat -ano</code> on Windows and <code>ss -tulpn</code> (with a netstat fallback)
-            on Linux. macOS builds are not signed or notarized, so Gatekeeper requires right-click
-            → Open.
+            on Linux. Desktop builds check a signed <code>latest.json</code> for updates in
+            Settings; OS-level signing depends on repository credentials, so unsigned builds
+            still need SmartScreen / Gatekeeper confirmation.
           </p>
         </details>
       </section>
@@ -606,12 +607,12 @@
             title: "Workbench — Local system dashboard & AI session cost metering",
             "nav.features": "Features", "nav.screenshots": "Screenshots", "nav.download": "Download",
             "nav.faq": "FAQ", "nav.source": "Source",
-            "hero.pill": "v0.9.8 · Windows / Linux / macOS · MIT licensed",
+            "hero.pill": "v1.0.0 · Windows / Linux / macOS · MIT licensed",
             "hero.h1a": "Your machine, your work",
             "hero.h1b": "in one local window",
             "hero.sub": "Today's tasks, project progress, listening ports, running processes and AI session spend. <strong>All data stays on your device</strong>; nothing is uploaded.",
             "hero.cta1": "Download installer", "hero.cta2": "All builds",
-            "hero.meta": "Windows 10 / 11 (NSIS) · Linux (.deb) · macOS (.app, CI-built) · no admin rights required",
+            "hero.meta": "Windows 10 / 11 (NSIS) · Linux (.deb / AppImage) · macOS (DMG) · no admin rights required",
             "feat.title": "Features",
             "feat.sub": "A keyboard-first command palette and three ways to run it: see it, find it, count it.",
             "f1t": "Overview", "f1p": "Live CPU / memory trends, disk usage donut, process group stats and system info in one screen.",
@@ -643,15 +644,15 @@
             s10: "Command palette (Ctrl/Cmd+K) — pages, processes, ports, projects and tasks in one search",
             s11: "30-second tour — recorded from the real UI in browser demo mode",
             "dl.title": "Download",
-            "dl.sub": 'Windows x64 installer. Linux .deb and macOS .app builds are on Releases too. The installer is not code-signed; Windows may warn "Unknown publisher" on first run.',
+            "dl.sub": "Windows NSIS, Linux .deb / AppImage and macOS DMG are built in CI. OS-level signing depends on repository credentials; without it Windows SmartScreen and macOS Gatekeeper will warn.",
             "dl.tag1": "Recommended", "dl.t1": "NSIS installer",
             "dl.d1": "Double-click to install, with Start-menu entry and uninstaller.",
             "dl.b1": "Download installer",
-            "dl.tag2": "Linux", "dl.t2": ".deb package",
-            "dl.d2": "Install with apt or dpkg on Debian or Ubuntu. Built in CI.",
+            "dl.tag2": "Linux", "dl.t2": ".deb / AppImage",
+            "dl.d2": "Use .deb on Debian / Ubuntu. AppImage runs on other distros with a system WebKitGTK 4.1 runtime.",
             "dl.b2": "Open Releases",
-            "dl.tag3": "macOS", "dl.t3": "Unsigned .app",
-            "dl.d3": "Zipped .app built in CI. Right-click Open on first launch.",
+            "dl.tag3": "macOS", "dl.t3": "DMG / .app",
+            "dl.d3": "DMG installer plus zipped .app. Until notarized, right-click Open on first launch.",
             "dl.b3": "Open Releases",
             "dl.build": "Build from source",
             "dl.req": "Requirements", "dl.reqv": "Node.js 22.22.2+ (or 24.15+/26+), Rust 1.95+, WebView2 (preinstalled on Windows 11)",
@@ -659,9 +660,9 @@
             "dl.uionly": "UI only", "dl.uionlyv": "browser demo mode, no Rust needed",
             "dl.steps": "Fresh install",
             "dl.step1t": "Download the installer",
-            "dl.step1d": 'Click "Download installer" above to get <code>Workbench_0.9.8_x64-setup.exe</code>.',
+            "dl.step1d": 'Click "Download installer" above to get <code>Workbench_1.0.0_x64-setup.exe</code>.',
             "dl.step2t": "Allow the Windows prompt",
-            "dl.step2d": 'The installer is unsigned, so SmartScreen may step in: choose "More info" → "Run anyway".',
+            "dl.step2d": 'If the release is unsigned, SmartScreen may step in: choose "More info" → "Run anyway".',
             "dl.step3t": "Install and launch",
             "dl.step3d": "Once installed, launch Workbench from the Start menu.",
             "dl.step4t": "First-run tips",
@@ -669,7 +670,7 @@
             "faq.title": "FAQ",
             "faq.sub": "The questions that come up most around install and daily use.",
             q1: 'Windows says "Protected your PC" or "Unknown publisher" — what now?',
-            a1: 'The installer is not code-signed (signing certificates cost money), so Windows SmartScreen steps in. Choose "More info" → "Run anyway". You can also build from source. Verify integrity with the SHA-256 published on the Release page.',
+            a1: 'If the Release is not code-signed, Windows SmartScreen steps in. Choose "More info" → "Run anyway". You can also build from source. Verify integrity with the SHA-256 published on the Release page.',
             q2: "Will my data be uploaded to the cloud?",
             a2: 'No. Everything (projects, tasks, the cost ledger, logs) is written to the local app data directory. The app only does two local things: read <code>netstat</code> for ports and read local session files for costs. The only optional network call is probing the local opencode service (default port 4096); on failure it just shows "not detected" and nothing else is affected.',
             q3: "How is the cost metering computed? Is it accurate?",
@@ -679,7 +680,7 @@
             q5: "Where did the window go after closing? How do I really quit?",
             a5: 'Closing hides to the system tray (intentional — the app keeps monitoring). To truly exit, right-click the tray icon and choose "Quit". The hotkey <code>Ctrl+Shift+W</code> shows / hides the window anytime.',
             q6: "Which platforms are supported?",
-            a6: "Windows is the primary target (NSIS installer). Linux is built and tested in CI, which produces a <code>.deb</code>; macOS is compiled, unit-tested and packaged as an unsigned <code>.app</code> in CI on every commit. Port collection uses <code>netstat -ano</code> on Windows and <code>ss -tulpn</code> (with a netstat fallback) on Linux. macOS builds are not signed or notarized, so Gatekeeper requires right-click → Open.",
+            a6: "Windows is the primary target (NSIS installer). Linux is built and tested in CI and ships both <code>.deb</code> and <code>AppImage</code>; macOS is compiled, unit-tested and packaged as a DMG plus <code>.app</code> in CI. Port collection uses <code>netstat -ano</code> on Windows and <code>ss -tulpn</code> (with a netstat fallback) on Linux. Desktop builds check a signed <code>latest.json</code> for updates in Settings; OS-level signing depends on repository credentials, so unsigned builds still need SmartScreen / Gatekeeper confirmation.",
             "src.title": "Source code",
             "src.sub": "The same code is mirrored across five platforms — pick whichever you like.",
             current: "(current)",
@@ -689,12 +690,12 @@
             title: "工作台 Workbench — 本机运维仪表盘与 AI 会话成本计量",
             "nav.features": "功能", "nav.screenshots": "截图", "nav.download": "下载",
             "nav.faq": "常见问题", "nav.source": "源码",
-            "hero.pill": "v0.9.8 · Windows / Linux / macOS · MIT 开源",
+            "hero.pill": "v1.0.0 · Windows / Linux / macOS · MIT 开源",
             "hero.h1a": "这台机器，手头的活",
             "hero.h1b": "都在一个本地窗口",
             "hero.sub": "今天要做什么、项目推进到哪、端口被谁占着、进程在跑什么、AI 会话花了多少。<strong>数据只存本机</strong>，不上传任何信息。",
             "hero.cta1": "下载安装包", "hero.cta2": "所有平台",
-            "hero.meta": "Windows 10 / 11（NSIS）· Linux（.deb）· macOS（.app，CI 构建）· 无需管理员权限",
+            "hero.meta": "Windows 10 / 11（NSIS）· Linux（.deb / AppImage）· macOS（DMG）· 无需管理员权限",
             "feat.title": "功能",
             "feat.sub": "键盘优先的命令面板与三种运行方式：看得见、找得到、算得清。",
             "f1t": "概览", "f1p": "CPU / 内存实时趋势曲线、磁盘占用环形图、进程分类统计与系统信息一屏总览。",
@@ -728,15 +729,15 @@
             s10: "命令面板（Ctrl/Cmd+K）— 页面、进程、端口、项目、任务一次搜完",
             s11: "30 秒演示 — 浏览器演示模式的真实界面录制",
             "dl.title": "下载",
-            "dl.sub": "Windows x64 安装包；Linux .deb 与 macOS .app 也在 Releases 中。安装包未做代码签名，首次运行 Windows 可能提示「未知发布者」。",
+            "dl.sub": "Windows NSIS、Linux .deb / AppImage、macOS DMG 均由 CI 构建。系统级签名取决于仓库凭据；未配置时 Windows SmartScreen 与 macOS Gatekeeper 会提示。",
             "dl.tag1": "推荐", "dl.t1": "NSIS 安装包",
             "dl.d1": "双击安装，含开始菜单与卸载项。",
             "dl.b1": "下载安装包",
-            "dl.tag2": "Linux", "dl.t2": ".deb 安装包",
-            "dl.d2": "适用于 Debian / Ubuntu，用 apt 或 dpkg 安装，CI 构建。",
+            "dl.tag2": "Linux", "dl.t2": ".deb / AppImage",
+            "dl.d2": "Debian / Ubuntu 用 .deb；其他发行版的 AppImage 需要系统安装 WebKitGTK 4.1。",
             "dl.b2": "前往 Releases",
-            "dl.tag3": "macOS", "dl.t3": "未签名 .app",
-            "dl.d3": "CI 构建的 .app 压缩包；首次启动右键打开。",
+            "dl.tag3": "macOS", "dl.t3": "DMG / .app",
+            "dl.d3": "提供 DMG 安装包与 .app 压缩包；未公证前首次启动需右键打开。",
             "dl.b3": "前往 Releases",
             "dl.build": "从源码构建",
             "dl.req": "环境要求", "dl.reqv": "Node.js 22.22.2+（或 24.15+/26+）、Rust 1.95+、WebView2（Windows 11 预装）",
@@ -744,9 +745,9 @@
             "dl.uionly": "仅看界面", "dl.uionlyv": "浏览器演示模式，无需 Rust",
             "dl.steps": "全新安装",
             "dl.step1t": "下载安装包",
-            "dl.step1d": "点上方「下载安装包」，得到 <code>Workbench_0.9.8_x64-setup.exe</code>。",
+            "dl.step1d": "点上方「下载安装包」，得到 <code>Workbench_1.0.0_x64-setup.exe</code>。",
             "dl.step2t": "放行 Windows 提示",
-            "dl.step2d": "因未做代码签名，SmartScreen 可能拦截：点「更多信息」→「仍要运行」。",
+            "dl.step2d": "若该版本未做代码签名，SmartScreen 可能拦截：点「更多信息」→「仍要运行」。",
             "dl.step3t": "完成安装并启动",
             "dl.step3d": "安装完成后从开始菜单启动「工作台」。",
             "dl.step4t": "首次使用建议",
@@ -754,7 +755,7 @@
             "faq.title": "常见问题",
             "faq.sub": "安装与使用中最常被问到的几点。",
             q1: "Windows 提示「已保护你的电脑」或「未知发布者」，怎么办？",
-            a1: "安装包未做代码签名（签名证书需付费），Windows SmartScreen 因此会有提示。点「更多信息」→「仍要运行」即可。你也可以选择从源码自行构建。校验完整性可用 Release 页面提供的 SHA-256。",
+            a1: "若该版本未做代码签名，Windows SmartScreen 会有提示。点「更多信息」→「仍要运行」即可。你也可以选择从源码自行构建。校验完整性可用 Release 页面提供的 SHA-256。",
             q2: "会不会把我的数据上传到云端？",
             a2: "不会。所有数据（项目、任务、成本账本、日志）都写在本机的 app data 目录。应用只在你本机发起两件事：读 <code>netstat</code> 看端口，读本机 session 文件算成本。唯一的可选外连是探测本地的 opencode 服务（默认 4096 端口），失败也只是显示「未检测到」，不影响其它功能。",
             q3: "「成本计量」是怎么算出来的？准不准？",
@@ -764,7 +765,7 @@
             q5: "关闭窗口后程序去哪了？怎么真正退出？",
             a5: "点关闭是隐藏到系统托盘（这是有意设计，便于常驻监控）。要真正结束进程，右键托盘图标选「退出工作台」。快捷键 <code>Ctrl+Shift+W</code> 可随时显示 / 隐藏窗口。",
             q6: "支持哪些平台？",
-            a6: "Windows 是主要目标（NSIS 安装包）。Linux 在 CI 中真实构建并测试，产出 <code>.deb</code>；macOS 每次提交都会在 CI 里编译、跑单元测试并打出未签名的 <code>.app</code>。端口采集在 Windows 用 <code>netstat -ano</code>，Linux 用 <code>ss -tulpn</code>（失败回退 netstat）。macOS 产物未签名/未公证，首次打开需右键 → 打开。",
+            a6: "Windows 是主要目标（NSIS 安装包）。Linux 在 CI 中真实构建并测试，同时产出 <code>.deb</code> 与 <code>AppImage</code>；macOS 在 CI 里编译、跑测试并打出 DMG 与 <code>.app</code>。端口采集在 Windows 用 <code>netstat -ano</code>，Linux 用 <code>ss -tulpn</code>（失败回退 netstat）。桌面版会在设置页检查签名过的 <code>latest.json</code> 并校验更新包；系统级签名取决于仓库凭据，未签名产物仍需 SmartScreen / Gatekeeper 确认。",
             "src.title": "源码",
             "src.sub": "同一份代码镜像在五个平台，任选其一。",
             current: "（当前）",
@@ -774,12 +775,12 @@
             title: "Workbench — ローカル運用ダッシュボード & AI セッションコスト計測",
             "nav.features": "機能", "nav.screenshots": "スクリーンショット", "nav.download": "ダウンロード",
             "nav.faq": "FAQ", "nav.source": "ソース",
-            "hero.pill": "v0.9.8 · Windows / Linux / macOS · MIT ライセンス",
+            "hero.pill": "v1.0.0 · Windows / Linux / macOS · MIT ライセンス",
             "hero.h1a": "このマシンと、目の前の仕事を",
             "hero.h1b": "1 つのローカルウィンドウに",
             "hero.sub": "今日のタスク、プロジェクトの進捗、待ち受けポート、実行中のプロセス、AI セッションのコスト。<strong>データは端末内にのみ保存</strong>され、アップロードされません。",
             "hero.cta1": "インストーラーを入手", "hero.cta2": "全プラットフォーム",
-            "hero.meta": "Windows 10 / 11（NSIS）· Linux（.deb）· macOS（.app、CI ビルド）· 管理者権限不要",
+            "hero.meta": "Windows 10 / 11（NSIS）· Linux（.deb / AppImage）· macOS（DMG）· 管理者権限不要",
             "feat.title": "機能",
             "feat.sub": "キーボード優先のコマンドパレットと 3 つの実行形態。見つけて、数える。",
             "f1t": "概要", "f1p": "CPU / メモリのリアルタイム推移、ディスク使用率ドーナツ、プロセス分類とシステム情報を 1 画面で。",
@@ -813,15 +814,15 @@
             s10: "コマンドパレット（Ctrl/Cmd+K）— ページ・プロセス・ポート・プロジェクト・タスクを一括検索",
             s11: "30 秒ツアー — ブラウザのデモモードで実際の UI を録画",
             "dl.title": "ダウンロード",
-            "dl.sub": "Windows x64 インストーラー。Linux .deb と macOS .app も Releases にあります。インストーラーはコード署名されていないため、初回実行時に「不明な発行元」と表示されることがあります。",
+            "dl.sub": "Windows NSIS、Linux .deb / AppImage、macOS DMG を CI でビルドします。OS レベルの署名はリポジトリの資格情報に依存し、未設定の場合は SmartScreen と Gatekeeper が警告します。",
             "dl.tag1": "推奨", "dl.t1": "NSIS インストーラー",
             "dl.d1": "ダブルクリックでインストール。スタートメニュー登録とアンインストーラー付き。",
             "dl.b1": "インストーラーを入手",
-            "dl.tag2": "Linux", "dl.t2": ".deb パッケージ",
-            "dl.d2": "Debian / Ubuntu 向け。apt または dpkg でインストール。CI でビルド。",
+            "dl.tag2": "Linux", "dl.t2": ".deb / AppImage",
+            "dl.d2": "Debian / Ubuntu は .deb。他のディストリビューションの AppImage はシステムの WebKitGTK 4.1 が必要です。",
             "dl.b2": "Releases を見る",
-            "dl.tag3": "macOS", "dl.t3": "未署名 .app",
-            "dl.d3": "CI でビルドした .app の zip。初回は右クリックで開く。",
+            "dl.tag3": "macOS", "dl.t3": "DMG / .app",
+            "dl.d3": "DMG インストーラーと .app の zip。公証前は初回に右クリックで開きます。",
             "dl.b3": "Releases を見る",
             "dl.build": "ソースからビルド",
             "dl.req": "必要環境", "dl.reqv": "Node.js 22.22.2+（または 24.15+/26+）、Rust 1.95+、WebView2（Windows 11 は同梱）",
@@ -829,9 +830,9 @@
             "dl.uionly": "UI のみ", "dl.uionlyv": "ブラウザデモモード。Rust 不要",
             "dl.steps": "新規インストール",
             "dl.step1t": "インストーラーをダウンロード",
-            "dl.step1d": "上の「インストーラーを入手」から <code>Workbench_0.9.8_x64-setup.exe</code> を入手します。",
+            "dl.step1d": "上の「インストーラーを入手」から <code>Workbench_1.0.0_x64-setup.exe</code> を入手します。",
             "dl.step2t": "Windows の警告を許可",
-            "dl.step2d": "未署名のため SmartScreen が出ることがあります:「詳細情報」→「実行」を選択してください。",
+            "dl.step2d": "未署名の場合は SmartScreen が出ることがあります:「詳細情報」→「実行」を選択してください。",
             "dl.step3t": "インストールして起動",
             "dl.step3d": "インストール後、スタートメニューから Workbench を起動します。",
             "dl.step4t": "初回利用のヒント",
@@ -839,7 +840,7 @@
             "faq.title": "FAQ",
             "faq.sub": "インストールと日常利用でよくある質問。",
             q1: "Windows が「PC を保護しました」や「不明な発行元」と表示します",
-            a1: "インストーラーはコード署名されていないため（署名証明書には費用がかかります）、Windows SmartScreen が警告します。「詳細情報」→「実行」で続行できます。ソースからビルドすることもできます。整合性の検証には Release ページの SHA-256 をご利用ください。",
+            a1: "そのバージョンがコード署名されていない場合、Windows SmartScreen が警告します。「詳細情報」→「実行」で続行できます。ソースからビルドすることもできます。整合性の検証には Release ページの SHA-256 をご利用ください。",
             q2: "データをクラウドにアップロードしますか？",
             a2: "いいえ。すべてのデータ（プロジェクト・タスク・コスト台帳・ログ）はローカルの app data ディレクトリに書き込まれます。アプリがローカルで行うのは <code>netstat</code> でポートを確認することと、ローカルのセッションファイルでコストを計算することだけです。唯一の任意の通信はローカル opencode サービス（既定ポート 4096）の探知で、失敗しても「未検出」と表示されるだけで他への影響はありません。",
             q3: "コスト計測はどう計算されますか？正確ですか？",
@@ -849,7 +850,7 @@
             q5: "閉じたウィンドウはどこへ？本当に終了するには？",
             a5: "閉じるとシステムトレイに格納されます（常駐監視のための意図的な設計）。完全に終了するにはトレイアイコンを右クリックして「終了」を選択。<code>Ctrl+Shift+W</code> でいつでも表示 / 非表示を切り替えられます。",
             q6: "対応プラットフォームは？",
-            a6: "Windows が主対象（NSIS インストーラー）。Linux は CI で実際にビルド・テストされ <code>.deb</code> を生成します。macOS はコミットごとに CI でコンパイル・単体テスト・未署名の <code>.app</code> 生成まで実行します。ポート取得は Windows が <code>netstat -ano</code>、Linux が <code>ss -tulpn</code>（失敗時 netstat にフォールバック）。macOS は署名・公証なしのため、初回は右クリック→開くが必要です。",
+            a6: "Windows が主対象（NSIS インストーラー）。Linux は CI で実際にビルド・テストされ <code>.deb</code> と <code>AppImage</code> を生成します。macOS は CI でコンパイル・テスト・DMG と <code>.app</code> のパッケージまで実行します。ポート取得は Windows が <code>netstat -ano</code>、Linux が <code>ss -tulpn</code>（失敗時 netstat にフォールバック）。デスクトップ版は設定ページで署名済み <code>latest.json</code> を確認し、更新パッケージを検証します。OS レベルの署名はリポジトリの資格情報次第で、未署名なら SmartScreen / Gatekeeper の確認が必要です。",
             "src.title": "ソースコード",
             "src.sub": "同じコードが 5 プラットフォームにミラーされています。お好きなものをどうぞ。",
             current: "（現在）",
@@ -913,7 +914,10 @@
         };
 
         var repo = "https://github.com/X33834/workbench"; // fallback: primary mirror
-        var releases = repo + "/releases";
+        // 发行产物只在主仓构建。镜像站的下载按钮也指向主仓 Releases，
+        // 避免 Gitee / GitCode 上没有附件时点出 404。
+        var downloads = "https://github.com/X33834/workbench";
+        var releases = downloads + "/releases";
         var issues = repo + "/issues";
         var changelog = repo + "/blob/main/CHANGELOG.md";
 
@@ -927,7 +931,7 @@
         } else if (/gitcode\.(com|io)$/i.test(location.hostname)) {
           repo = "https://gitcode.com/badhope/workbench";
         }
-        releases = repo + "/releases";
+        releases = downloads + "/releases";
         issues = repo + "/issues";
         changelog = repo + "/blob/main/CHANGELOG.md";
 

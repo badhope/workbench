@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-[![Version](https://img.shields.io/badge/version-0.9.8-22d3ee)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.0.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.md#system-requirements)
 [![Tests](https://img.shields.io/badge/tests-643%20unit%20%2B%20198%20backend%20%2B%2030%20e2e-8b5cf6)](#quality)
@@ -33,7 +33,7 @@ AI session spend into one window. No account, no cloud, no telemetry.
 
 ## Run it
 
-Install a build from [Releases](../../releases), or run from source:
+Install a build from [Releases](https://github.com/X33834/workbench/releases), or run from source. Windows ships NSIS, Linux ships `.deb` and AppImage, macOS ships a DMG. Desktop builds check the signed `latest.json` channel in Settings and verify every update before installing.
 
 ```bash
 npm ci

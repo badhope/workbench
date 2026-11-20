@@ -65,9 +65,12 @@
 
 ### Install from Releases
 
-Check the [latest release](../../../releases)
-for available assets. Windows and Linux builds are produced and tested in CI;
-the macOS app is built unsigned. No release is code-signed.
+Check the [latest release](https://github.com/X33834/workbench/releases)
+for available assets. CI builds the Windows NSIS installer, the Linux `.deb` and
+AppImage, and the macOS DMG and `.app`. In-app updates read a signed
+`latest.json` and verify the minisign signature before installing. OS-level
+Authenticode / Apple notarization run only when the repository has the
+corresponding secrets; unsigned builds say so on the release page.
 
 ### Build from source
 
@@ -290,19 +293,19 @@ release is cut — lives in [ROADMAP.md](ROADMAP.md). Summary:
 - [x] Port → process jump and reverse port lookup in the process detail
 - [x] CSV export for processes and listening ports
 - [x] Environment self-check with per-item ok / warn / fail and a copyable report
-- [ ] Auto-update (needs a signed release channel)
+- [x] Auto-update (signed `latest.json` + minisign, checked in Settings)
 
 ## Known limitations
 
 - Port collection runs `netstat -ano` on Windows, `ss -tulpn` on Linux (falling
   back to `netstat`), and `netstat -anv` on macOS. CI runs backend tests on all
-  three and builds `.deb` and `.app` artifacts.
+  three and builds `.deb`, AppImage, DMG and `.app` artifacts.
 - Interaction paths are covered by Playwright (structure and WCAG AA across 16 themes, 3 shells and 7 layouts), a structural feature suite for the command palette / process tree / port jump / CSV export, plus a packaged-exe desktop E2E over real IPC
 - The cost ledger is a SQLite database (`cost.db`, `rusqlite` bundled) with
   indexes on day / model / file. Aggregation runs inside SQL, so 100k records
   aggregate in ~250 ms instead of re-parsing a whole JSON file per query.
   The old `cost_data.json` is imported once and renamed `.migrated` (never deleted)
-- Release builds are unsigned; there is no code-signing or notarization
+- Release builds are Authenticode / notarized only when the repository secrets are configured; otherwise they are labelled unsigned
 - The tray menu text is bilingual Chinese/English and does not follow the UI
   language switch (it is built once at startup)
 - **No plugin API and no remote/multi-machine monitoring** — by design.

@@ -26,7 +26,7 @@
 | 浏览器/网页模式 | ●（本地实时） | ○ | ○ | ○ | ● | ● | ○ | ○ |
 | 可脚本化 CLI | ● | ○ | ◐ | ◐ | ● | ○ | ● | ● |
 | 插件/扩展 API | ○ | ○ | ● | ○ | ● | ○ | ◐ | ○ |
-| 自动更新 | ○ | ○ | ● | ○ | ◐ | ● | ○ | ○ |
+| 自动更新 | ● | ○ | ● | ○ | ◐ | ● | ○ | ○ |
 | 许可证 | MIT | GPL-3.0 | MIT | Apache-2.0 | LGPL-3.0 | MIT | MIT | MIT |
 
 ## 别人更强的地方
@@ -44,7 +44,7 @@
 - **Glances** 赢在自动化：有文档化的 REST API、MCP server、客户端/服务端模式和
   CSV/JSON 导出。Workbench 有仅绑定回环地址的本地 HTTP API，但没有远程或多机模式。
 - **Stats** 是 macOS 菜单栏监视的代表：13 种菜单栏组件，并在说明里列出仅有的
-  两个外部 API。Workbench 的 macOS 产物由 CI 构建，且未签名。
+  两个外部 API。Workbench 在 CI 中分发 macOS DMG；只有仓库配置了 Apple 签名凭据时才会签名与公证。
 - **ccusage** 用一条命令覆盖 18 种编码代理，`--instances` 可按项目聚合。
   Workbench 目前只读 Claude Code 与 Codex 的会话文件。
 - **Claude Code Usage Monitor** 会预测 5 小时额度耗尽，并区分 `official` 与
@@ -60,8 +60,9 @@
    识别，带置信度，并以「开发服务器」而不是裸端口呈现。
 3. **安全是实现的，不是描述的。** 受保护进程名单在 Rust 里，结束前重新校验目标身份，
    UAC 提权按次授权、其它平台直接拒绝，环境自检报告它实际验证了什么。
-4. **它承认自己做不到什么。** 没有代码签名、没有自动更新、没有插件 API、没有远程监控——
-   这些写在 [ARCHITECTURE.zh-CN.md](ARCHITECTURE.zh-CN.md) 的缺口清单里，而不是藏起来。
+4. **它承认自己做不到什么。** 应用内更新已经实现并验签，但操作系统级 Authenticode /
+   公证仍需外部证书；没有插件 API，也没有远程监控。这些写在
+   [ARCHITECTURE.zh-CN.md](ARCHITECTURE.zh-CN.md) 的清单里，而不是藏起来。
 
 ## 怎么选
 

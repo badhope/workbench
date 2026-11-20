@@ -3,6 +3,37 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0] - 2026-11-20
+
+### Added — 发行链路补齐
+
+- **应用内更新**：接入 `tauri-plugin-updater` 与 `tauri-plugin-process`，设置页新增更新卡；检查、下载进度、签名校验、重启一条链路完成。更新包由内置 minisign 公钥验签，校验失败不会安装。
+- **Linux AppImage**：CI 产出 `Workbench_<version>_amd64.AppImage` 与 `.AppImage.sig`；AppImage 依赖系统 WebKitGTK 4.1，`.deb` 仍会自动装依赖。
+- **macOS DMG**：CI 产出 DMG、`.app`、`.app.tar.gz` 与签名，手动下载和自动更新都有对应产物。
+- **签名钩子**：Release workflow 在配置 `WINDOWS_CERTIFICATE_BASE64` 时导入 PFX、写入 `certificateThumbprint` 并用 `Get-AuthenticodeSignature` 验证；配置 Apple secrets 时用 `codesign` / `spctl` 验证。没有凭据时明确标记为未签名。
+- **更新清单**：`scripts/make-latest-json.mjs` 从真实 `.sig` 生成 `latest.json`，平台缺包、缺签名或出现重复包都会直接失败。
+
+### Changed — 依赖与工程基线
+
+- npm 依赖升到最新兼容版本：Playwright 1.65、Vite 8.3、Vitest 5.1、ESLint 10.15、jsdom 31、jest-dom 8、lucide-react 1.76；TypeScript 保持 5.9，因为 `typescript-eslint` 尚不支持 7.0。
+- `minimatch` 通过 `overrides` 固定到 `^11.0.5`，解决 `GHSA-g3hv-75wg-m249`；`npm ls minimatch` 只剩 11.0.9。
+- Rust 锁文件刷新到 Tauri 2.12.7 / wry 0.57.3 / rusqlite 0.43；Rust 1.95 工具链不变。
+- Release workflow 从「只发 NSIS / deb / zip」扩展为 NSIS、deb、AppImage、DMG、app.tar.gz、`latest.json` 和 `SHA256SUMS.txt` 的完整清单。
+- Vite 分包配置从已弃用的 `advancedChunks` 迁到 `codeSplitting`，构建不再出现弃用告警；ECharts 仍独立成块并长期缓存。
+
+### Known limitation
+
+- `glib 0.18.5` 的 `RUSTSEC-2024-0429` 仍会被 `cargo audit` 标为 warning。Tauri 2 的 GTK 栈固定在 0.18，唯一干净的升级路径是 Tauri 3（当前仍为 alpha）；本次选择不拿 alpha 换一条不可达的审计绿灯，CI 仍以退出码 0 通过并保留 warning。
+- 另有 `zbus_names` / `zvariant` / `zvariant_derive` 的上游「unmaintained」提示，来自 Tauri 2 的 Linux 依赖链，无法在稳定版内替换；`cargo audit` 以 allowed warning 处理。
+
+### Verification
+
+- 前端 66 个测试文件、646 项单测、覆盖率门禁、类型检查、ESLint、Prettier、重复代码、构建全部通过；新增更新卡的 3 项状态测试。
+- Playwright 25 passed / 5 skipped；新 Chromium 1255 下基线仍匹配。
+- Rust 198 项单测、`cargo clippy --all-targets -- -D warnings`、`cargo audit` 通过。
+- `npm audit --omit=dev`：0 vulnerabilities。
+- 本地 `tauri build --bundles appimage` 成功产出 `Workbench_1.0.0_amd64.AppImage`（88.06 MiB）与 `.AppImage.sig`。
+
 ## [0.9.8] - 2026-11-20
 
 ### Added — 英语复数与本地化格式

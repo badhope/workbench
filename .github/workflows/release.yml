@@ -1,7 +1,7 @@
 name: Release
 
 # 打 v* tag 时构建三平台产物并发布 Release；手动触发只构建、不发布。
-# 未签名产物不会自动更新，也不伪装成已签名：Release 正文明确写清楚。
+# 未签名产物不会伪装成已签名：Release 正文明确写清楚，签名状态由 CI 实际检查。
 on:
   push:
     tags: ["v*"]
@@ -16,16 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v7
         with:
           node-version: "22.22.2"
-
-      # 手动触发没有 tag，先校验所有版本字段一致；打 tag 时再校验 tag 与
-      # package.json 一致，避免产物文件名、应用内版本和 Release 标题各说各话。
       - name: Version consistency
         run: node scripts/check-version.mjs
-
       - name: Verify tag matches package version
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
@@ -39,25 +34,33 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            bundle: nsis
+            bundles: nsis
             artifact: workbench-windows-x64
           - os: ubuntu-latest
-            bundle: deb
+            bundles: deb,appimage
             artifact: workbench-linux-amd64
           - os: macos-latest
-            bundle: app
+            bundles: app,dmg
             artifact: workbench-macos
     runs-on: ${{ matrix.os }}
+    env:
+      # 更新包签名与系统代码签名是两套东西：这里只保证 Tauri updater 的
+      # minisign 校验。系统签名/公证在下面按 secret 是否存在决定。
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v7
         with:
           node-version: "22.22.2"
           cache: npm
-
       - uses: dtolnay/rust-toolchain@1.95.0
-
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
@@ -68,31 +71,55 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
             libayatana-appindicator3-dev patchelf libssl-dev pkg-config
+          # AppImage 打包/运行需要 FUSE；24.04 的包名是 libfuse2t64。
+          sudo apt-get install -y libfuse2 || sudo apt-get install -y libfuse2t64
+
+      - name: Configure Windows Authenticode (optional)
+        if: matrix.os == 'windows-latest' && secrets.WINDOWS_CERTIFICATE_BASE64 != ''
+        shell: pwsh
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP "workbench.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String("${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}"))
+          $secure = ConvertTo-SecureString "${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}" -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $secure
+          $conf = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          $conf.bundle.windows | Add-Member -NotePropertyName certificateThumbprint -NotePropertyValue $cert.Thumbprint -Force
+          $conf.bundle.windows | Add-Member -NotePropertyName digestAlgorithm -NotePropertyValue "sha256" -Force
+          $conf.bundle.windows | Add-Member -NotePropertyName timestampUrl -NotePropertyValue "http://timestamp.digicert.com" -Force
+          $conf | ConvertTo-Json -Depth 30 | Set-Content src-tauri/tauri.conf.json
+          Write-Host "Authenticode certificate: $($cert.Thumbprint)"
 
       - run: npm ci
 
       - name: Build bundle
-        run: npx tauri build --bundles ${{ matrix.bundle }}
+        run: npx tauri build --bundles ${{ matrix.bundles }}
 
       - name: Collect assets
         shell: bash
         run: |
           mkdir -p release-assets
           shopt -s nullglob
-          for f in src-tauri/target/release/bundle/nsis/*-setup.exe \
-                   src-tauri/target/release/bundle/deb/*.deb; do
-            cp "$f" release-assets/
-          done
-          if [ -d src-tauri/target/release/bundle/macos ]; then
-            for d in src-tauri/target/release/bundle/macos/*.app; do
-              (cd src-tauri/target/release/bundle/macos && zip -qry "$OLDPWD/release-assets/$(basename "$d" .app).zip" "$(basename "$d")")
-            done
-          fi
+          case "${{ matrix.bundles }}" in
+            nsis)
+              cp src-tauri/target/release/bundle/nsis/*-setup.exe release-assets/ 2>/dev/null || true
+              cp src-tauri/target/release/bundle/nsis/*-setup.exe.sig release-assets/ 2>/dev/null || true
+              ;;
+            deb,appimage)
+              cp src-tauri/target/release/bundle/deb/*.deb release-assets/ 2>/dev/null || true
+              cp src-tauri/target/release/bundle/appimage/*.AppImage release-assets/ 2>/dev/null || true
+              cp src-tauri/target/release/bundle/appimage/*.AppImage.sig release-assets/ 2>/dev/null || true
+              ;;
+            app,dmg)
+              cp src-tauri/target/release/bundle/dmg/*.dmg release-assets/ 2>/dev/null || true
+              cp src-tauri/target/release/bundle/macos/*.app.tar.gz release-assets/ 2>/dev/null || true
+              cp src-tauri/target/release/bundle/macos/*.app.tar.gz.sig release-assets/ 2>/dev/null || true
+              for d in src-tauri/target/release/bundle/macos/*.app; do
+                (cd src-tauri/target/release/bundle/macos && zip -qry "$OLDPWD/release-assets/$(basename "$d" .app).zip" "$(basename "$d")")
+              done
+              ;;
+          esac
           ls -la release-assets
 
-      # 打包步骤退出 0 不代表产物真的落地：bundle 目标写错、产物被清理、
-      # 打包器改名都会留下空目录。这里按平台断言「恰好一份、非空、版本号
-      # 出现在文件名里」，失败即非 0。
       - name: Verify assets
         shell: bash
         run: |
@@ -120,22 +147,26 @@ jobs:
             echo "ok ${label}: $FOUND (${bytes} bytes)"
           }
 
-          case "${{ matrix.bundle }}" in
+          case "${{ matrix.bundles }}" in
             nsis)
               expect_one "release-assets/*-setup.exe" "NSIS 安装包"
               case "$FOUND" in
                 *"$version"*) echo "ok 文件名包含版本号" ;;
-                *) echo "::error::NSIS 文件名不含版本 ${version}：${FOUND}"; exit 1 ;;
+                *) echo "::error::NSIS 文件名不含版本 ${version}：$FOUND"; exit 1 ;;
               esac
+              expect_one "release-assets/*-setup.exe.sig" "NSIS 更新签名"
               ;;
-            deb)
+            deb,appimage)
               expect_one "release-assets/*.deb" "deb 包"
               case "$FOUND" in
-                *"$version"*) echo "ok 文件名包含版本号" ;;
-                *) echo "::error::deb 文件名不含版本 ${version}：${FOUND}"; exit 1 ;;
+                *"$version"*) echo "ok deb 文件名包含版本号" ;;
+                *) echo "::error::deb 文件名不含版本 ${version}：$FOUND"; exit 1 ;;
               esac
+              expect_one "release-assets/*.AppImage" "AppImage"
+              test -x "$FOUND" || { echo "::error::AppImage 不可执行：$FOUND"; exit 1; }
+              expect_one "release-assets/*.AppImage.sig" "AppImage 更新签名"
               ;;
-            app)
+            app,dmg)
               app="$(ls -d src-tauri/target/release/bundle/macos/*.app 2>/dev/null | head -1 || true)"
               if [ -z "${app}" ] || [ ! -d "${app}" ]; then
                 echo "::error::.app 目录不存在"
@@ -146,8 +177,6 @@ jobs:
                 echo "::error::缺少 Info.plist：${app}"
                 exit 1
               fi
-              # 以 Info.plist 声明的 CFBundleExecutable 为准，确认主程序真的
-              # 存在且非空；只检查 .app 目录存在会把空壳当成功。
               exe_name=$(awk '/<key>CFBundleExecutable<\/key>/{getline; gsub(/.*<string>|<\/string>.*/,""); print; exit}' "${app}/Contents/Info.plist")
               if [ -z "${exe_name}" ]; then
                 echo "::error::Info.plist 缺少 CFBundleExecutable：${app}"
@@ -158,23 +187,22 @@ jobs:
                 ls -la "${app}/Contents/MacOS" || true
                 exit 1
               fi
-              # 注意：$app 之类的展开必须加花括号 —— macOS runner 的 bash 3.2
-              # 会把紧跟其后的全角字符（如 $app（ ）吞进变量名，set -u 下
-              # 直接 unbound 报错（v0.6.0 的 Release 就挂在第 63 行）。
               echo "ok .app: ${app}（CFBundleExecutable=${exe_name}）"
-              expect_one "release-assets/*.zip" "macOS zip"
-              unzip -l "${FOUND}" | grep -q "Contents/MacOS/" || {
-                echo "::error::zip 内缺少 Contents/MacOS/：${FOUND}"
+              expect_one "release-assets/*.dmg" "macOS DMG"
+              expect_one "release-assets/*.app.tar.gz" "macOS 更新包"
+              expect_one "release-assets/*.app.tar.gz.sig" "macOS 更新签名"
+              expect_one "release-assets/*.zip" "macOS 手动下载 zip"
+              unzip -l release-assets/*.zip | grep -q "Contents/MacOS/" || {
+                echo "::error::zip 内缺少 Contents/MacOS/"
                 exit 1
               }
               ;;
             *)
-              echo "::error::未知 bundle 类型：${{ matrix.bundle }}"
+              echo "::error::未知 bundle 类型：${{ matrix.bundles }}"
               exit 1
               ;;
           esac
 
-          # 收集目录里不允许出现 0 字节文件（上传后会变成看似正常的空包）。
           for f in release-assets/*; do
             [ -f "$f" ] || continue
             if [ ! -s "$f" ]; then
@@ -182,6 +210,25 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Verify Windows signature (when configured)
+        if: matrix.os == 'windows-latest' && secrets.WINDOWS_CERTIFICATE_BASE64 != ''
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem release-assets/*-setup.exe | Select-Object -First 1
+          $sig = Get-AuthenticodeSignature $exe.FullName
+          if ($sig.Status -ne 'Valid') {
+            Write-Error "Authenticode 校验失败：$($sig.Status) $($sig.StatusMessage)"
+            exit 1
+          }
+          Write-Host "Authenticode: $($sig.SignerCertificate.Subject) / $($sig.Status)"
+
+      - name: Verify macOS signature (when configured)
+        if: matrix.os == 'macos-latest' && secrets.APPLE_CERTIFICATE != ''
+        run: |
+          app=$(ls -d src-tauri/target/release/bundle/macos/*.app | head -1)
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl --assess --type execute --verbose=2 "$app"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -195,13 +242,22 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v8
         with:
           path: release-assets
           merge-multiple: true
 
-      # 校验和只有在「条目数 = 产物数、每个产物都有条目、且能回溯校验」时
-      # 才有意义；否则一个漏条目的 SHA256SUMS.txt 会被当成完整清单发布。
+      - name: Generate updater manifest
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          node scripts/make-latest-json.mjs \
+            --assets=release-assets \
+            --repo="${{ github.repository }}" \
+            --version="$version" \
+            --tag="${{ github.ref_name }}" \
+            --out=release-assets/latest.json
+
       - name: Generate and verify checksums
         run: |
           set -euo pipefail
@@ -213,12 +269,14 @@ jobs:
           for f in *; do
             [ -f "$f" ] || continue
             [ "$f" = "SHA256SUMS.txt" ] && continue
+            [ "$f" = "latest.json" ] && continue
             assets+=("$f")
           done
           shopt -u nullglob
 
-          if [ "${#assets[@]}" -ne 3 ]; then
-            echo "::error::期望 3 个平台产物，实际 ${#assets[@]} 个：${assets[*]:-<无>}"
+          # Windows 2 + Linux 3 + macOS 4 = 9 个平台产物。
+          if [ "${#assets[@]}" -ne 9 ]; then
+            echo "::error::期望 9 个平台产物，实际 ${#assets[@]} 个：${assets[*]:-<无>}"
             ls -la
             exit 1
           fi
@@ -231,21 +289,11 @@ jobs:
 
           sha256sum "${assets[@]}" > SHA256SUMS.txt
           cat SHA256SUMS.txt
-
           entries=$(wc -l < SHA256SUMS.txt | tr -d ' ')
           if [ "$entries" -ne "${#assets[@]}" ]; then
             echo "::error::SHA256SUMS 条目数 $entries 与产物数 ${#assets[@]} 不一致"
             exit 1
           fi
-          # Windows 版 sha256sum 会在文件名前加 `*`（二进制模式标记），
-          # Ubuntu 版不会；两种都要能解析出文件名。
-          listed=$(awk '{print $2}' SHA256SUMS.txt | sed 's/^\*//')
-          for f in "${assets[@]}"; do
-            if ! printf '%s\n' "$listed" | grep -Fxq "$f"; then
-              echo "::error::SHA256SUMS 缺少条目：$f"
-              exit 1
-            fi
-          done
           sha256sum -c SHA256SUMS.txt
 
       - uses: softprops/action-gh-release@v2
@@ -255,12 +303,13 @@ jobs:
           body: |
             ## Downloads
 
-            | Platform | File |
-            |----------|------|
-            | Windows 10/11 x64 | `Workbench_<version>_x64-setup.exe` (NSIS) |
-            | Linux x64 | `workbench_<version>_amd64.deb` |
-            | macOS | `Workbench.zip` (unsigned `.app`) |
+            | Platform | File | Notes |
+            |----------|------|-------|
+            | Windows 10/11 x64 | `Workbench_<version>_x64-setup.exe` (NSIS) | Code-signed when a certificate secret is configured; otherwise SmartScreen may warn |
+            | Linux x64 | `workbench_<version>_amd64.deb` / `Workbench_<version>_amd64.AppImage` | AppImage needs a system WebKitGTK 4.1 runtime; `.deb` installs dependencies |
+            | macOS arm64 | `Workbench_<version>_aarch64.dmg` / `.app.zip` | Signed and notarized when Apple secrets are configured; otherwise Gatekeeper requires right-click → Open |
 
-            These builds are **not code-signed**. Windows SmartScreen may ask for
-            "More info → Run anyway"; on macOS right-click the app and choose Open
-            the first time. Verify downloads against `SHA256SUMS.txt`.
+            `latest.json` and the `.sig` files are the signed update channel. The app
+            verifies every update with the built-in minisign public key before installing.
+
+            Verify downloads against `SHA256SUMS.txt`.
