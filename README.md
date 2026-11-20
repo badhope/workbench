@@ -33,7 +33,7 @@ AI session spend into one window. No account, no cloud, no telemetry.
 
 ## Run it
 
-Install a build from [Releases](https://github.com/X33834/workbench/releases), or run from source. Windows ships NSIS, Linux ships `.deb` and AppImage, macOS ships a DMG. Desktop builds check the signed `latest.json` channel in Settings and verify every update before installing.
+Install a build from [GitHub Releases](https://github.com/X33834/workbench/releases); mirrors are also available on [Gitee Releases](https://gitee.com/badhope/workbench/releases) and [GitCode Releases](https://gitcode.com/badhope/workbench/releases). Or run from source. Windows ships NSIS, Linux ships `.deb` and AppImage, macOS ships a DMG. Desktop builds check the signed `latest.json` channel in Settings and verify every update before installing.
 
 ```bash
 npm ci

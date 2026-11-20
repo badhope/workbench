@@ -34,7 +34,7 @@ AI セッションのコストを 1 つのウィンドウにまとめます。�
 
 ## 実行
 
-[Releases](https://github.com/X33834/workbench/releases) からビルドを入手するか、ソースから実行します。Windows は NSIS、Linux は `.deb` と AppImage、macOS は DMG を提供します。デスクトップ版は設定ページで署名済み `latest.json` を確認し、検証後に更新します。
+[GitHub Releases](https://github.com/X33834/workbench/releases) からビルドを入手します。国内向けの [Gitee Releases](https://gitee.com/badhope/workbench/releases) と [GitCode Releases](https://gitcode.com/badhope/workbench/releases) も利用できます。またはソースから実行します。Windows は NSIS、Linux は `.deb` と AppImage、macOS は DMG を提供します。デスクトップ版は設定ページで署名済み `latest.json` を確認し、検証後に更新します。
 
 ```bash
 npm ci

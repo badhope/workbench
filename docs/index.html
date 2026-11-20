@@ -914,9 +914,8 @@
         };
 
         var repo = "https://github.com/X33834/workbench"; // fallback: primary mirror
-        // 发行产物只在主仓构建。镜像站的下载按钮也指向主仓 Releases，
-        // 避免 Gitee / GitCode 上没有附件时点出 404。
-        var downloads = "https://github.com/X33834/workbench";
+        // 五个仓库现在都有 v1.0.0 发行附件，下载按钮跟随当前仓库走。
+        var downloads = repo;
         var releases = downloads + "/releases";
         var issues = repo + "/issues";
         var changelog = repo + "/blob/main/CHANGELOG.md";

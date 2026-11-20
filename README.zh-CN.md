@@ -29,7 +29,7 @@
 
 ## 运行
 
-从 [Releases](https://github.com/X33834/workbench/releases) 下载安装包，或从源码运行。Windows 提供 NSIS，Linux 提供 `.deb` 与 AppImage，macOS 提供 DMG。桌面版会在设置页检查签名过的 `latest.json` 更新通道，校验通过后才安装。
+从 [GitHub Releases](https://github.com/X33834/workbench/releases) 下载安装包，国内也可用 [Gitee Releases](https://gitee.com/badhope/workbench/releases) 或 [GitCode Releases](https://gitcode.com/badhope/workbench/releases)；或从源码运行。Windows 提供 NSIS，Linux 提供 `.deb` 与 AppImage，macOS 提供 DMG。桌面版会在设置页检查签名过的 `latest.json` 更新通道，校验通过后才安装。
 
 ```bash
 npm ci
