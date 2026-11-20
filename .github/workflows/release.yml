@@ -59,9 +59,11 @@ jobs:
           node-version: "22.22.2"
           cache: npm
       - uses: dtolnay/rust-toolchain@1.95.0
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
+      # Release 构建不做 Rust target 缓存：缓存里只要缺一个依赖 rlib，
+      # cargo 就会在编译本包时报 "can't find crate for tauri"。
+      # 发布产物宁可多编译几分钟，也要从干净 target 开始。
+      - name: Clean target
+        run: cargo clean --manifest-path src-tauri/Cargo.toml
 
       - name: Install Linux system deps
         if: matrix.os == 'ubuntu-22.04'
