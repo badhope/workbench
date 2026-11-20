@@ -48,12 +48,6 @@ jobs:
       # minisign 校验。系统签名/公证在下面按 secret 是否存在决定。
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       # secrets 不能直接出现在 step 的 if 表达式里；先落到 env，再用
       # env 判断，既通过 GitHub 的上下文校验，也保留「有凭据才签名」。
       HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 != '' }}
@@ -78,6 +72,28 @@ jobs:
           # AppImage 打包/运行需要 FUSE；24.04 的包名是 libfuse2t64。
           sudo apt-get install -y libfuse2 || sudo apt-get install -y libfuse2t64
 
+      - name: Configure macOS signing (optional)
+        if: matrix.os == 'macos-latest' && env.HAS_APPLE_CERT == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          {
+            echo "APPLE_CERTIFICATE<<APPLE_CERT_EOF"
+            printf '%s\n' "$APPLE_CERTIFICATE"
+            echo "APPLE_CERT_EOF"
+            echo "APPLE_CERTIFICATE_PASSWORD=$APPLE_CERTIFICATE_PASSWORD"
+            echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY"
+            echo "APPLE_ID=$APPLE_ID"
+            echo "APPLE_PASSWORD=$APPLE_PASSWORD"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
+          } >> "$GITHUB_ENV"
+
       - name: Configure Windows Authenticode (optional)
         if: matrix.os == 'windows-latest' && env.HAS_WINDOWS_CERT == 'true'
         shell: pwsh
@@ -92,6 +108,10 @@ jobs:
           $conf.bundle.windows | Add-Member -NotePropertyName timestampUrl -NotePropertyValue "http://timestamp.digicert.com" -Force
           $conf | ConvertTo-Json -Depth 30 | Set-Content src-tauri/tauri.conf.json
           Write-Host "Authenticode certificate: $($cert.Thumbprint)"
+
+      - name: Configure Tauri updater signing
+        if: env.TAURI_SIGNING_PRIVATE_KEY != ''
+        run: echo "Updater signature key is configured"
 
       - run: npm ci
 
