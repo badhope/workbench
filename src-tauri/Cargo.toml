@@ -18,7 +18,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # 成本账本改用 SQLite：十万级记录下全量 JSON 读写的瓶颈在解析与 fsync，
 # 而不是磁盘吞吐。bundled 编进静态库，Windows/Linux/macOS 都不需系统 libsqlite3。
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.43", features = ["bundled"] }
 sysinfo = "0.39"
 reqwest = { version = "0.13", features = ["blocking", "json"] }
 log = "0.4"
