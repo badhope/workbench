@@ -14,7 +14,7 @@ jobs:
     # Ubuntu 上，Windows 兼容性交给下面的 backend-windows 作业。
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
@@ -74,7 +74,7 @@ jobs:
 
       - name: Upload visual diffs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visual-diffs
           path: |
@@ -89,7 +89,7 @@ jobs:
     name: Backend (Linux)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Tauri system deps
         run: |
@@ -162,7 +162,7 @@ jobs:
       # 产物上传：README 里「取 CI 的 linux-deb artifact」必须是真的可下载，
       # 否则又是一句没有兑现的声明。
       - name: Upload deb
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-deb
           path: src-tauri/target/release/bundle/deb/*.deb
@@ -176,7 +176,7 @@ jobs:
     name: Backend (macOS)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@1.95.0
         with:
@@ -230,7 +230,7 @@ jobs:
           test -f "$app/Contents/Info.plist" || { echo "Info.plist missing"; exit 1; }
 
       - name: Upload app bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-app
           path: src-tauri/target/release/bundle/macos/*.app
@@ -241,7 +241,7 @@ jobs:
     name: Backend (Windows)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:

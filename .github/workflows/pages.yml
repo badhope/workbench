@@ -28,7 +28,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # 落地页引用的每一张图、每一段视频都必须真实存在。
       # 上一版曾引用 screenshots/05-projects.png 这类从未生成的文件，
@@ -45,9 +45,9 @@ jobs:
           test "$missing" = "0" || exit 1
           echo "all referenced assets exist"
 
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: docs
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
