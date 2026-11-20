@@ -54,6 +54,10 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # secrets 不能直接出现在 step 的 if 表达式里；先落到 env，再用
+      # env 判断，既通过 GitHub 的上下文校验，也保留「有凭据才签名」。
+      HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 != '' }}
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v7
@@ -75,7 +79,7 @@ jobs:
           sudo apt-get install -y libfuse2 || sudo apt-get install -y libfuse2t64
 
       - name: Configure Windows Authenticode (optional)
-        if: matrix.os == 'windows-latest' && secrets.WINDOWS_CERTIFICATE_BASE64 != ''
+        if: matrix.os == 'windows-latest' && env.HAS_WINDOWS_CERT == 'true'
         shell: pwsh
         run: |
           $pfxPath = Join-Path $env:RUNNER_TEMP "workbench.pfx"
@@ -212,7 +216,7 @@ jobs:
           done
 
       - name: Verify Windows signature (when configured)
-        if: matrix.os == 'windows-latest' && secrets.WINDOWS_CERTIFICATE_BASE64 != ''
+        if: matrix.os == 'windows-latest' && env.HAS_WINDOWS_CERT == 'true'
         shell: pwsh
         run: |
           $exe = Get-ChildItem release-assets/*-setup.exe | Select-Object -First 1
@@ -224,7 +228,7 @@ jobs:
           Write-Host "Authenticode: $($sig.SignerCertificate.Subject) / $($sig.Status)"
 
       - name: Verify macOS signature (when configured)
-        if: matrix.os == 'macos-latest' && secrets.APPLE_CERTIFICATE != ''
+        if: matrix.os == 'macos-latest' && env.HAS_APPLE_CERT == 'true'
         run: |
           app=$(ls -d src-tauri/target/release/bundle/macos/*.app | head -1)
           codesign --verify --deep --strict --verbose=2 "$app"
