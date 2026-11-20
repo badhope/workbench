@@ -9,7 +9,10 @@ on:
 jobs:
   frontend:
     name: Frontend (typecheck / lint / format / test / build)
-    runs-on: windows-latest
+    # 视觉基线只在 Linux 维护（见 playwright.config.ts 的说明）。
+    # Windows 渲染会让同一份基线稳定漂移 1-3%，把平台无关的检查放在
+    # Ubuntu 上，Windows 兼容性交给下面的 backend-windows 作业。
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
