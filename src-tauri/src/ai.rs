@@ -174,6 +174,81 @@ pub fn fetch_opencode_sessions(port: u16) -> Result<Vec<OpencodeSession>, String
     Ok(sessions)
 }
 
+/// opencode 1.4.x 的消息不在 `/session/{id}` 里，而在 `/session/{id}/message`。
+/// 拿不到时返回 None，让调用方回退到旧版 `messages` 字段。
+fn fetch_opencode_messages(port: u16, session_id: &str) -> Option<Vec<serde_json::Value>> {
+    let url = format!(
+        "http://127.0.0.1:{port}/session/{}/message",
+        encode_path_segment(session_id)
+    );
+    let resp = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_millis(2000))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .ok()?
+        .get(&url)
+        .send()
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    resp.json::<serde_json::Value>().ok()?.as_array().cloned()
+}
+
+/// 把 opencode 的 `{info, parts}` 消息压成前端已有的 `{role, content}` 形状。
+/// 旧格式或无法识别的项原样保留，避免详情接口因版本差异整段失败。
+fn normalize_opencode_messages(messages: &[serde_json::Value]) -> Vec<serde_json::Value> {
+    messages
+        .iter()
+        .map(|message| {
+            let Some(info) = message.get("info") else {
+                return message.clone();
+            };
+            let role = info
+                .get("role")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let mut content = Vec::new();
+            if let Some(parts) = message.get("parts").and_then(|v| v.as_array()) {
+                for part in parts {
+                    match part.get("type").and_then(|v| v.as_str()) {
+                        Some("text") => {
+                            if let Some(text) = part.get("text").and_then(|v| v.as_str()) {
+                                content.push(serde_json::json!({
+                                    "type": "text",
+                                    "text": text,
+                                }));
+                            }
+                        }
+                        Some("tool") | Some("tool_use") => {
+                            if let Some(name) = part
+                                .get("tool")
+                                .or_else(|| part.get("name"))
+                                .and_then(|v| v.as_str())
+                            {
+                                content.push(serde_json::json!({
+                                    "type": "tool_use",
+                                    "name": name,
+                                }));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            let created = info
+                .get("time")
+                .and_then(|t| t.get("created"))
+                .and_then(|v| v.as_i64());
+            serde_json::json!({
+                "role": role,
+                "content": content,
+                "timestamp": created,
+            })
+        })
+        .collect()
+}
+
 /// 拉取单个 opencode 会话详情（GET /session/{id}）。
 pub fn fetch_session_detail(port: u16, session_id: &str) -> SessionDetail {
     if !is_safe_session_id(session_id) {
@@ -215,12 +290,15 @@ pub fn fetch_session_detail(port: u16, session_id: &str) -> SessionDetail {
         Err(e) => return detail_error(session_id, "(解析失败)", e.to_string()),
     };
 
-    // 解析消息列表
-    let messages = body
-        .get("messages")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
+    // 解析消息列表。opencode 1.4.x 把正文放在 /session/{id}/message，
+    // 每项是 {info, parts}；旧版/测试桩则可能直接返回 messages。
+    let messages = fetch_opencode_messages(port, session_id).unwrap_or_else(|| {
+        body.get("messages")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+    });
+    let messages = normalize_opencode_messages(&messages);
 
     let message_count = messages.len();
 
@@ -253,8 +331,16 @@ pub fn fetch_session_detail(port: u16, session_id: &str) -> SessionDetail {
             .unwrap_or_default()
     };
 
-    let first_message = messages.first().map(extract_text).unwrap_or_default();
-    let last_message = messages.last().map(extract_text).unwrap_or_default();
+    let first_message = messages.iter().find_map(|m| {
+        let text = extract_text(m);
+        (!text.trim().is_empty()).then_some(text)
+    });
+    let last_message = messages.iter().rev().find_map(|m| {
+        let text = extract_text(m);
+        (!text.trim().is_empty()).then_some(text)
+    });
+    let first_message = first_message.unwrap_or_default();
+    let last_message = last_message.unwrap_or_default();
 
     // 提取使用的工具（不去重：前端按次数做分布统计）
     let tools_used: Vec<String> = messages
@@ -280,9 +366,10 @@ pub fn fetch_session_detail(port: u16, session_id: &str) -> SessionDetail {
 
     // 持续时间（从消息时间戳推算）
     let get_ts = |v: &serde_json::Value| -> Option<i64> {
-        v.get("time")
-            .or_else(|| v.get("timestamp"))
-            .and_then(|t| t.as_i64())
+        v.get("time").or_else(|| v.get("timestamp")).and_then(|t| {
+            t.as_i64()
+                .or_else(|| t.get("created").and_then(|x| x.as_i64()))
+        })
     };
     let duration_seconds = match (
         messages.first().and_then(get_ts),
@@ -1269,6 +1356,34 @@ mod tests {
         assert_eq!(encode_path_segment("ses_abc-123.X~"), "ses_abc-123.X~");
         assert_eq!(encode_path_segment("a b"), "a%20b");
         assert_eq!(encode_path_segment("a/b?c"), "a%2Fb%3Fc");
+    }
+
+    #[test]
+    fn opencode_message_shape_is_normalized() {
+        let raw = serde_json::json!([
+            {
+                "info": {"role": "user", "time": {"created": 1000}},
+                "parts": [{"type": "text", "text": "你好"}]
+            },
+            {
+                "info": {"role": "assistant", "time": {"created": 3000}},
+                "parts": [
+                    {"type": "text", "text": "我来查一下"},
+                    {"type": "tool", "tool": "bash", "state": {"status": "completed"}},
+                    {"type": "tool", "tool": "read"}
+                ]
+            }
+        ]);
+        let normalized = normalize_opencode_messages(raw.as_array().unwrap());
+        assert_eq!(normalized.len(), 2);
+        assert_eq!(normalized[0]["role"], "user");
+        assert_eq!(normalized[0]["content"][0]["text"], "你好");
+        assert_eq!(normalized[1]["content"][0]["type"], "text");
+        assert_eq!(normalized[1]["content"][1]["type"], "tool_use");
+        assert_eq!(normalized[1]["content"][1]["name"], "bash");
+        assert_eq!(normalized[1]["content"][2]["name"], "read");
+        assert_eq!(normalized[0]["timestamp"], 1000);
+        assert_eq!(normalized[1]["timestamp"], 3000);
     }
 
     #[test]

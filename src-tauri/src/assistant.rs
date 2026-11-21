@@ -583,7 +583,7 @@ fn tool_specs() -> Value {
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "title": {"type": "string", "description": "任务标题，只写要做的事；不要写“请帮我”“创建任务”，也不要把优先级/项目/截止日塞进标题"},
+                        "title": {"type": "string", "description": "任务标题，只写要做的事；不要写“请帮我”“创建任务”，也不要把优先级/项目/截止日塞进标题。用户说中文时标题必须用中文，不要翻译成英文"},
                         "priority": {"type": "string", "enum": ["low", "normal", "high"]},
                         "due": {"type": "string", "description": "截止日 YYYY-MM-DD，可省略"},
                         "project_id": {"type": "string", "description": "所属项目 id，可省略"}
@@ -646,7 +646,7 @@ fn system_prompt(root: &DataRoot) -> String {
          5. 创建任务前必须确认标题来自用户原话；写入关闭时告诉用户去「知识库 → AI 接入」开启。\n\
          6. 任何算术（价格、折扣、百分比、差额）都必须调用 calculate，把结果照抄进回答，不要心算。\n\
          7. 涉及今天、明天、周五、几号、是否逾期时，必须先调用 current_date，不要凭记忆猜日期。
-         8. 用户明确要求创建、新建、添加、记录一个任务时，必须调用 create_task；不要只复述任务，也不要用 list_tasks 代替创建。标题只写要做的事，截止日先用 current_date 换算成 YYYY-MM-DD。"
+         8. 用户明确要求创建、新建、添加、记录一个任务时，必须调用 create_task；不要只复述任务，也不要用 list_tasks 代替创建。标题只写要做的事，保持用户原话的语言：用户说中文就写中文，不要把中文标题翻译成英文。截止日先用 current_date 换算成 YYYY-MM-DD。"
     )
 }
 
@@ -750,7 +750,7 @@ pub fn chat_stream(
             tool_calls_total += 1;
             let (id, name, mut arguments) = parse_tool_call(call)?;
             if name == "create_task" {
-                arguments = fill_create_task_due(&arguments, &last_user);
+                arguments = fill_create_task_fields(&arguments, &last_user);
             }
             let (result, ok) = match execute_tool(root, &name, &arguments) {
                 Ok(text) => (truncate_chars(&text, MAX_TOOL_RESULT_CHARS), true),
@@ -1261,8 +1261,16 @@ fn normalize_task_title(raw: &str) -> Result<String, String> {
         "请帮我创建任务：",
         "帮我创建一个任务：",
         "帮我创建任务：",
+        "请帮我建一个任务：",
+        "帮我建一个任务：",
+        "创建一个任务：",
         "创建任务：",
+        "新建一个任务：",
         "新建任务：",
+        "添加一个任务：",
+        "记录一个任务：",
+        "记一个任务：",
+        "建一个任务：",
         "任务：",
         "请帮我",
         "帮我",
@@ -1292,6 +1300,7 @@ fn normalize_task_title(raw: &str) -> Result<String, String> {
             }
         }
     }
+    let title = strip_leading_relative_date(title);
     let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
     if title.is_empty() {
         return Err("create_task 的 title 不能为空".to_string());
@@ -1300,6 +1309,78 @@ fn normalize_task_title(raw: &str) -> Result<String, String> {
         return Err("create_task 的 title 太长（上限 120 字符）".to_string());
     }
     Ok(title)
+}
+
+fn has_cjk(text: &str) -> bool {
+    text.chars()
+        .any(|c| matches!(c as u32, 0x3400..=0x4DBF | 0x4E00..=0x9FFF))
+}
+
+/// 标题里的“明天/周五”已经落到 `due`，不再留在标题里重复。
+fn strip_leading_relative_date(title: &str) -> &str {
+    for prefix in [
+        "大后天",
+        "后天",
+        "明天",
+        "今天",
+        "周一",
+        "周二",
+        "周三",
+        "周四",
+        "周五",
+        "周六",
+        "周日",
+        "星期一",
+        "星期二",
+        "星期三",
+        "星期四",
+        "星期五",
+        "星期六",
+        "星期日",
+        "星期天",
+    ] {
+        if let Some(rest) = title.strip_prefix(prefix) {
+            return rest.trim_start_matches([',', '，', '、', ' ', ':', '：']);
+        }
+    }
+    title
+}
+
+/// 从用户原话里抽一个中文标题，作为模型把中文翻成英文时的确定性兜底。
+/// 只做“去外壳、去尾注、去句首日期”，不改写语义。
+fn task_title_from_user(text: &str) -> Option<String> {
+    normalize_task_title(text).ok()
+}
+
+/// 模型已给中文标题就保留；用户是中文、模型却只给了 ASCII 标题时，
+/// 用原话里的中文标题覆盖，避免任务列表出现语言漂移。
+fn fill_create_task_fields(raw_args: &str, user_text: &str) -> String {
+    let Ok(mut value) = serde_json::from_str::<serde_json::Value>(raw_args) else {
+        return raw_args.to_string();
+    };
+    let mut changed = false;
+    let today = chrono::Local::now().date_naive();
+    if value.get("due").is_none_or(|v| v.is_null()) {
+        if let Some(due) = infer_due_from_text(user_text, today) {
+            value["due"] = serde_json::Value::String(due);
+            changed = true;
+        }
+    }
+    let model_title = value
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    if has_cjk(user_text) && !has_cjk(model_title) {
+        if let Some(title) = task_title_from_user(user_text) {
+            value["title"] = serde_json::Value::String(title);
+            changed = true;
+        }
+    }
+    if changed {
+        serde_json::to_string(&value).unwrap_or_else(|_| raw_args.to_string())
+    } else {
+        raw_args.to_string()
+    }
 }
 
 fn tool_create_task(root: &DataRoot, args: &Value) -> Result<String, String> {
@@ -1559,21 +1640,6 @@ fn infer_due_from_text(text: &str, today: chrono::NaiveDate) -> Option<String> {
     None
 }
 
-fn fill_create_task_due(raw_args: &str, user_text: &str) -> String {
-    let Ok(mut value) = serde_json::from_str::<serde_json::Value>(raw_args) else {
-        return raw_args.to_string();
-    };
-    if value.get("due").is_some_and(|v| !v.is_null()) {
-        return raw_args.to_string();
-    }
-    let today = chrono::Local::now().date_naive();
-    let Some(due) = infer_due_from_text(user_text, today) else {
-        return raw_args.to_string();
-    };
-    value["due"] = serde_json::Value::String(due);
-    serde_json::to_string(&value).unwrap_or_else(|_| raw_args.to_string())
-}
-
 /// 按字符截断，保证中文不会被切成半个 UTF-8 序列。
 pub fn truncate_chars(text: &str, max: usize) -> String {
     if text.chars().count() <= max {
@@ -1820,7 +1886,7 @@ mod tests {
         assert_eq!(infer_due_from_text("下周一检查", base), None);
 
         let today = chrono::Local::now().date_naive();
-        let args = fill_create_task_due(r#"{"title":"x"}"#, "明天检查登录页");
+        let args = fill_create_task_fields(r#"{"title":"x"}"#, "明天检查登录页");
         let value: serde_json::Value = serde_json::from_str(&args).unwrap();
         assert_eq!(
             value["due"].as_str().unwrap(),
@@ -1829,7 +1895,36 @@ mod tests {
                 .to_string()
         );
         let explicit = r#"{"title":"x","due":"2026-12-01"}"#;
-        assert_eq!(fill_create_task_due(explicit, "明天检查"), explicit);
+        let value: serde_json::Value =
+            serde_json::from_str(&fill_create_task_fields(explicit, "明天检查")).unwrap();
+        assert_eq!(value["due"].as_str().unwrap(), "2026-12-01");
+    }
+
+    #[test]
+    fn chinese_title_is_restored_when_model_translates_to_english() {
+        let user = "帮我创建任务：明天检查登录页报错，优先级高";
+        let args = fill_create_task_fields(r#"{"title":"Check login page error"}"#, user);
+        let value: serde_json::Value = serde_json::from_str(&args).unwrap();
+        assert_eq!(value["title"].as_str().unwrap(), "检查登录页报错");
+        assert_eq!(
+            value["due"].as_str().unwrap(),
+            (chrono::Local::now().date_naive() + chrono::Duration::days(1))
+                .format("%Y-%m-%d")
+                .to_string()
+        );
+
+        // 模型已经给出中文标题时不覆盖。
+        let args = fill_create_task_fields(r#"{"title":"修复登录页"}"#, user);
+        let value: serde_json::Value = serde_json::from_str(&args).unwrap();
+        assert_eq!(value["title"].as_str().unwrap(), "修复登录页");
+
+        // 用户用英文时不做中文兜底。
+        let args = fill_create_task_fields(
+            r#"{"title":"Check login page"}"#,
+            "Please create a task: check login page tomorrow",
+        );
+        assert!(args.contains("Check login page"));
+        assert_eq!(task_title_from_user(user).unwrap(), "检查登录页报错");
     }
 
     #[test]
@@ -1840,6 +1935,10 @@ mod tests {
             "修复登录页报错"
         );
         assert_eq!(normalize_task_title("  写周报  ").unwrap(), "写周报");
+        assert_eq!(
+            normalize_task_title("明天检查登录页报错").unwrap(),
+            "检查登录页报错"
+        );
         assert!(normalize_task_title("   ").is_err());
         assert!(normalize_task_title(&"长".repeat(121)).is_err());
     }
