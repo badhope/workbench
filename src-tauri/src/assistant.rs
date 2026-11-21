@@ -501,11 +501,7 @@ pub fn status(config: &AssistantConfig) -> AssistantStatus {
             return status;
         }
     };
-    let result = with_auth(
-        client.get(endpoint(&config.base_url, "models")),
-        &config,
-    )
-    .send();
+    let result = with_auth(client.get(endpoint(&config.base_url, "models")), &config).send();
     let result = match result {
         Ok(resp) if resp.status().is_success() => resp.json::<Value>(),
         Ok(resp) => Err(resp.error_for_status().unwrap_err()),
@@ -651,6 +647,7 @@ fn tool_specs() -> Value {
 /// 8 个工具的 JSON Schema 在 2B 模型上约占 600–800 prompt token，纯聊天/写作
 /// 却完全用不到。只在问题命中任务、端口、成本、知识库、算术或日期意图时才
 /// 发送工具，让普通问答的首字延迟少一半左右。
+#[cfg(test)]
 fn needs_tools(text: &str) -> bool {
     const HINTS: &[&str] = &[
         "任务",
@@ -718,7 +715,74 @@ fn needs_tools(text: &str) -> bool {
             && lower.chars().any(|c| "+-*/%×÷".contains(c)))
 }
 
-fn system_prompt(root: &DataRoot) -> String {
+/// 生成式路由：按用户这句话只下发真正相关的工具。
+///
+/// 8 个完整工具 Schema 一起发给网关时，部分 OpenAI 兼容上游会把
+/// `tool_choice=required` 当成建议而不是约束；裁到 1 个工具后，知识库、
+/// 算术、日期等单意图查询才能稳定落到工具上。
+fn relevant_tools(text: &str) -> Vec<&'static str> {
+    let lower = text.to_lowercase();
+    let has = |keys: &[&str]| keys.iter().any(|k| text.contains(k) || lower.contains(k));
+    let mut tools: Vec<&'static str> = Vec::new();
+    let mut push = |name: &'static str| {
+        if !tools.contains(&name) {
+            tools.push(name);
+        }
+    };
+
+    if has(&["创建", "新建", "添加", "记一个", "记录一个", "加一个"]) && has(&["任务", "待办"])
+    {
+        // 截止日由后端从原话推断，不再额外发 current_date，避免网关二选一。
+        return vec!["create_task"];
+    } else if has(&["任务", "待办"]) {
+        push("list_tasks");
+    }
+    if has(&["知识库", "笔记", "搜"]) {
+        push("search_knowledge");
+    }
+    if has(&["端口", "进程", "开发服务"]) {
+        push("list_ports");
+    }
+    if has(&["成本", "花费", "预算", "账单", "token"]) {
+        push("cost_summary");
+    }
+    if has(&["算", "计算", "折扣", "百分比", "差额"])
+        || (lower.chars().any(|c| c.is_ascii_digit())
+            && lower.chars().any(|c| "+-*/%×÷".contains(c)))
+    {
+        push("calculate");
+    }
+    if has(&[
+        "今天", "明天", "昨天", "后天", "几号", "星期", "周几", "到期", "截止",
+    ]) {
+        push("current_date");
+    }
+    if has(&["项目", "概况", "总览", "最该", "先处理"]) {
+        push("workbench_context");
+    }
+    tools
+}
+
+/// 从完整工具声明里筛出本轮需要的几项。`names` 为空时返回空数组。
+fn tool_specs_for(names: &[&str]) -> Value {
+    let all = tool_specs();
+    let mut selected = Vec::new();
+    if let Some(items) = all.as_array() {
+        for item in items {
+            let name = item
+                .get("function")
+                .and_then(|f| f.get("name"))
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if names.contains(&name) {
+                selected.push(item.clone());
+            }
+        }
+    }
+    Value::Array(selected)
+}
+
+fn system_prompt(root: &DataRoot, model: &str) -> String {
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
     let mut facts = String::from("无法读取任务数据。");
     let mut cost = String::from("无法读取成本数据。");
@@ -758,7 +822,7 @@ fn system_prompt(root: &DataRoot) -> String {
         );
     }
     format!(
-        "你是 Workbench 工作台的本地助手，模型 MiniCPM5-2B 运行在这台机器上。\n\
+        "你是 Workbench 工作台的本地助手，当前模型是 {model}。\n\
          今天是 {today}。\n\
          已知概况：{facts}{cost}项目：{project_names}。\n\
          规则：\n\
@@ -785,6 +849,102 @@ pub fn chat(
 
 /// 与 `chat` 相同，但把正文增量与工具步骤通过 `on_event` 推给调用方。
 /// `cancel` 每个 SSE 分片检查一次；置位后最多再等当前一行。
+/// 工具结果已经由 Rust 侧确定执行时，给模型一段“只许总结”的上下文。
+fn planned_tool_args(name: &str, text: &str) -> Value {
+    match name {
+        "search_knowledge" => json!({ "query": extract_search_query(text) }),
+        "calculate" => json!({ "expression": extract_math_expression(text) }),
+        "create_task" => {
+            let mut args = json!({ "title": task_title_from_user(text).unwrap_or_else(|| text.trim().to_string()) });
+            if let Some(due) = infer_due_from_text(text, chrono::Local::now().date_naive()) {
+                args["due"] = Value::String(due);
+            }
+            args
+        }
+        _ => json!({}),
+    }
+}
+
+fn extract_search_query(text: &str) -> String {
+    let mut query = text.trim().to_string();
+    for prefix in [
+        "在知识库里搜一下",
+        "在知识库里搜索",
+        "在知识库中搜索",
+        "知识库搜索",
+        "帮我搜一下",
+        "搜一下",
+        "搜索",
+    ] {
+        if let Some(rest) = query.strip_prefix(prefix) {
+            query = rest.trim().to_string();
+        }
+    }
+    query
+        .trim_matches(|c: char| c == '：' || c == ':' || c.is_whitespace())
+        .to_string()
+}
+
+fn extract_math_expression(text: &str) -> String {
+    let normalized = text
+        .replace('×', "*")
+        .replace('÷', "/")
+        .replace('（', "(")
+        .replace('）', ")")
+        .replace('−', "-");
+    let mut groups = Vec::new();
+    let mut current = String::new();
+    for ch in normalized.chars() {
+        if ch.is_ascii_digit() || "+-*/(). ".contains(ch) {
+            current.push(ch);
+        } else if !current.trim().is_empty() {
+            groups.push(current.trim().to_string());
+            current.clear();
+        }
+    }
+    if !current.trim().is_empty() {
+        groups.push(current.trim().to_string());
+    }
+    let mut best = String::new();
+    for group in groups {
+        let has_digit = group.chars().any(|c| c.is_ascii_digit());
+        let has_op = group.chars().any(|c| "+-*/".contains(c));
+        if has_digit && has_op && group.len() > best.len() {
+            best = group;
+        }
+    }
+    if best.is_empty() {
+        text.trim().to_string()
+    } else {
+        best
+    }
+}
+
+/// 对明确的单/多意图查询，先在本地把只读工具跑完，再把真实结果交给模型总结。
+/// 这样不依赖上游是否遵守 `tool_choice`，端口、成本、任务、知识库、日期、算术
+/// 都有确定的数据来源。
+fn run_planned_tools(root: &DataRoot, text: &str, names: &[&str]) -> Vec<AssistantStep> {
+    let mut steps = Vec::new();
+    for name in names {
+        let arguments = planned_tool_args(name, text);
+        let raw_args = arguments.to_string();
+        let (result, ok) = match execute_tool(root, name, &raw_args) {
+            Ok(text) => (truncate_chars(&text, MAX_TOOL_RESULT_CHARS), true),
+            Err(e) => (
+                truncate_chars(&format!("错误: {e}"), MAX_TOOL_RESULT_CHARS),
+                false,
+            ),
+        };
+        steps.push(AssistantStep {
+            tool: name.to_string(),
+            arguments: raw_args,
+            result,
+            ok,
+        });
+    }
+    steps
+}
+
 pub fn chat_stream(
     root: &DataRoot,
     config: &AssistantConfig,
@@ -801,16 +961,76 @@ pub fn chat_stream(
         .map(|m| m.content.clone())
         .unwrap_or_default();
     let client = client()?;
-    let with_tools = needs_tools(&last_user);
+    let tool_names = relevant_tools(&last_user);
+    let with_tools = !tool_names.is_empty();
     let mut payload_messages: Vec<Value> = vec![json!({
         "role": "system",
-        "content": system_prompt(root),
+        "content": system_prompt(root, &config.model),
     })];
     for message in &history {
         payload_messages.push(json!({
             "role": message.role,
             "content": message.content,
         }));
+    }
+
+    // 明确意图先在本地执行；模型只负责把真实结果说人话，不再赌上游 tool_choice。
+    if !tool_names.is_empty() {
+        let planned_steps = run_planned_tools(root, &last_user, &tool_names);
+        for step in &planned_steps {
+            on_event(AssistantEvent::step(step.clone()));
+        }
+        if !planned_steps.is_empty() {
+            let results = json!({
+                "tool_results": planned_steps.iter().map(|step| json!({
+                    "tool": step.tool,
+                    "ok": step.ok,
+                    "result": step.result,
+                })).collect::<Vec<_>>()
+            });
+            let mut system = system_prompt(root, &config.model);
+            system.push_str("\n\n以下工具已经由工作台执行完毕，结果如下（JSON）：\n");
+            system.push_str(&results.to_string());
+            system.push_str("\n请只依据这些结果回答；不要再调用工具，不要编造未返回的数据。");
+            payload_messages[0] = json!({ "role": "system", "content": system });
+
+            let mut steps = Vec::new();
+            let mut usage = AssistantUsage::default();
+            let (mut content, _) = stream_completion(
+                &client,
+                &config,
+                &payload_messages,
+                &[],
+                false,
+                false,
+                cancel,
+                &mut usage,
+                on_event,
+            )?;
+            if content.trim().is_empty() {
+                content = final_summary(
+                    &client,
+                    &config,
+                    &payload_messages,
+                    &planned_steps,
+                    cancel,
+                    &mut usage,
+                    on_event,
+                )?;
+            }
+            steps.extend(planned_steps);
+            if content.trim().is_empty() {
+                return Err("模型没有返回内容".to_string());
+            }
+            let reply = AssistantReply {
+                content,
+                steps,
+                usage,
+                model: config.model,
+            };
+            on_event(AssistantEvent::done(reply.clone()));
+            return Ok(reply);
+        }
     }
 
     let mut steps: Vec<AssistantStep> = Vec::new();
@@ -821,11 +1041,15 @@ pub fn chat_stream(
         if cancel.load(Ordering::Relaxed) {
             return Err(STOPPED.to_string());
         }
+        let force_tool =
+            with_tools && steps.is_empty() && config.api_key.is_some() && tool_names.len() == 1;
         let (content, calls) = stream_completion(
             &client,
             &config,
             &payload_messages,
+            &tool_names,
             with_tools,
+            force_tool,
             cancel,
             &mut usage,
             on_event,
@@ -919,9 +1143,17 @@ fn final_summary(
         "role": "user",
         "content": "请根据上面的工具结果，用中文简洁回答我最初的问题。不要再调用工具，也不要再查数据。"
     }));
-    if let Ok((content, _)) =
-        stream_completion(client, config, &messages, false, cancel, usage, on_event)
-    {
+    if let Ok((content, _)) = stream_completion(
+        client,
+        config,
+        &messages,
+        &[],
+        false,
+        false,
+        cancel,
+        usage,
+        on_event,
+    ) {
         if !content.trim().is_empty() {
             return Ok(content);
         }
@@ -942,7 +1174,9 @@ fn stream_completion(
     client: &reqwest::blocking::Client,
     config: &AssistantConfig,
     messages: &[Value],
+    tool_names: &[&str],
     with_tools: bool,
+    force_tool: bool,
     cancel: &AtomicBool,
     usage: &mut AssistantUsage,
     on_event: &mut dyn FnMut(AssistantEvent),
@@ -957,8 +1191,8 @@ fn stream_completion(
         "chat_template_kwargs": { "enable_thinking": config.thinking },
     });
     if with_tools {
-        body["tools"] = tool_specs();
-        body["tool_choice"] = Value::String("auto".into());
+        body["tools"] = tool_specs_for(tool_names);
+        body["tool_choice"] = Value::String(if force_tool { "required" } else { "auto" }.into());
     }
     let response = with_auth(
         client.post(endpoint(&config.base_url, "chat/completions")),
@@ -2159,6 +2393,31 @@ mod tests {
         assert!(needs_tools("本月 AI 花费多少？"));
         assert!(needs_tools("249*0.8 等于多少"));
         assert!(needs_tools("帮我创建一个任务：明天检查登录页"));
+    }
+
+    #[test]
+    fn tool_routing_keeps_single_intents_narrow() {
+        assert_eq!(
+            relevant_tools("在知识库里搜一下 Workbench"),
+            vec!["search_knowledge"]
+        );
+        assert_eq!(relevant_tools("算一下 (249*0.8)-15"), vec!["calculate"]);
+        assert_eq!(relevant_tools("本月 AI 花费多少？"), vec!["cost_summary"]);
+        assert_eq!(relevant_tools("有哪些端口被占用了？"), vec!["list_ports"]);
+        assert_eq!(relevant_tools("我有哪些未完成任务？"), vec!["list_tasks"]);
+        assert_eq!(relevant_tools("今天几号？"), vec!["current_date"]);
+        assert_eq!(
+            relevant_tools("帮我创建一个任务：明天检查登录页"),
+            vec!["create_task"]
+        );
+    }
+
+    #[test]
+    fn planned_tool_args_extract_real_query_and_expression() {
+        let search = planned_tool_args("search_knowledge", "在知识库里搜一下 Workbench 相关资料");
+        assert_eq!(search["query"], "Workbench 相关资料");
+        let calc = planned_tool_args("calculate", "算一下 (249*0.8)-15 等于多少？只给结果");
+        assert_eq!(calc["expression"], "(249*0.8)-15");
     }
 
     #[test]
