@@ -12,6 +12,7 @@ import { dict as logs } from "./logs";
 import { dict as today } from "./today";
 import { dict as review } from "./review";
 import { dict as mini } from "./mini";
+import { dict as assistant } from "./assistant";
 
 /**
  * 三语词典对齐门禁。
@@ -33,6 +34,7 @@ const MODULES = {
   today,
   review,
   mini,
+  assistant,
 };
 
 const LANGS = ["en", "zh", "ja"] as const;

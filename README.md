@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/badge/version-1.0.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.md#system-requirements)
-[![Tests](https://img.shields.io/badge/tests-643%20unit%20%2B%20198%20backend%20%2B%2030%20e2e-8b5cf6)](#quality)
+[![Tests](https://img.shields.io/badge/tests-650%20unit%20%2B%20209%20backend%20%2B%2030%20e2e-8b5cf6)](#quality)
 
 ![Workbench](docs/screenshots/01-overview.png)
 
@@ -28,8 +28,14 @@ AI session spend into one window. No account, no cloud, no telemetry.
 - **Keep local knowledge close.** Mount Markdown folders in place and search
   titles, body, tags and project links. The same context is available to MCP
   clients over stdio, with writes off by default.
-- **Stay in control.** Data lives on this device. The only outbound request is
-  the optional probe of a local opencode server.
+- **Ask a local model.** An optional assistant talks to MiniCPM5-2B on
+  `127.0.0.1:18082` and answers with real task, port, cost and knowledge data.
+  It calls tools before answering and can create a task only when the existing
+  AI write switch is on. No model weights ship with the app; bring your own
+  llama.cpp/Ollama endpoint.
+- **Stay in control.** Data lives on this device. The only outbound requests are
+  the optional probe of a local opencode server and the optional local model
+  endpoint you configure (loopback only).
 
 ## Run it
 
@@ -55,6 +61,22 @@ workbench ports           # listening ports with the owning pid
 workbench cost --days 7   # AI session spend
 workbench serve           # web UI and HTTP API
 ```
+
+### Local assistant (optional)
+
+The assistant page needs an OpenAI-compatible endpoint on loopback. With
+llama.cpp and the Q4_K_M GGUF:
+
+```bash
+llama-server -m MiniCPM5-2B-Q4_K_M.gguf \
+  --host 127.0.0.1 --port 18082 -c 8192 --jinja --parallel 1
+```
+
+Then open **Assistant** in the app. Defaults: `http://127.0.0.1:18082/v1`,
+model `minicpm5-2b`, thinking off. Remote hosts, credentials in the URL and
+query strings are rejected. The same routes are available over HTTP:
+`GET/PUT /api/assistant/config`, `POST /api/assistant/status`,
+`POST /api/assistant/chat` (writes need `x-workbench-write: 1`).
 
 ## A look inside
 

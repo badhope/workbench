@@ -1,4 +1,5 @@
 pub mod ai;
+pub mod assistant;
 pub mod cli;
 pub mod commands;
 pub mod cost_store;
@@ -305,6 +306,11 @@ pub fn run() {
             commands::ai_set_writes,
             commands::ai_actions,
             commands::ai_undo,
+            // ── 本地模型助手 ──
+            commands::assistant_config,
+            commands::assistant_save_config,
+            commands::assistant_status,
+            commands::assistant_chat,
         ])
         .run(tauri::generate_context!())
         .expect("运行工作台应用失败");

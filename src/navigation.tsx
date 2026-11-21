@@ -1,6 +1,7 @@
 import {
   BarChart3,
   BookOpen,
+  Bot,
   Coins,
   Cpu,
   FileText,
@@ -52,6 +53,12 @@ export const PAGES = [
     icon: BookOpen,
     group: "work",
     load: () => import("./pages/Knowledge"),
+  },
+  {
+    key: "assistant",
+    icon: Bot,
+    group: "tools",
+    load: () => import("./pages/Assistant"),
   },
   { key: "review", icon: BarChart3, group: "work", load: () => import("./pages/Review") },
   {

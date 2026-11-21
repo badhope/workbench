@@ -9,6 +9,9 @@ use ts_rs::{Config, TS};
 use workbench_lib::ai::{
     AiProcess, OpencodeSession, SessionDetail, SessionFile, SessionFilePreview,
 };
+use workbench_lib::assistant::{
+    AssistantConfig, AssistantReply, AssistantStatus, AssistantStep, AssistantUsage, ChatMessage,
+};
 use workbench_lib::commands::{
     BackupPoint, BackupResult, DiskInfo, OpencodeSessionsResult, PricingView, RestoreResult,
     ScanCostResult, SystemInfo,
@@ -68,4 +71,10 @@ fn export_ts_bindings() {
     RestoreResult::export_all(&cfg).unwrap();
     DiagnosticCheck::export_all(&cfg).unwrap();
     DiagnosticsReport::export_all(&cfg).unwrap();
+    AssistantConfig::export_all(&cfg).unwrap();
+    AssistantStatus::export_all(&cfg).unwrap();
+    ChatMessage::export_all(&cfg).unwrap();
+    AssistantStep::export_all(&cfg).unwrap();
+    AssistantUsage::export_all(&cfg).unwrap();
+    AssistantReply::export_all(&cfg).unwrap();
 }

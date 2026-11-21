@@ -15,6 +15,13 @@ export type { SessionDetail } from "./generated/SessionDetail";
 export type { SessionFile } from "./generated/SessionFile";
 export type { SessionFilePreview } from "./generated/SessionFilePreview";
 
+export type { AssistantConfig } from "./generated/AssistantConfig";
+export type { AssistantStatus } from "./generated/AssistantStatus";
+export type { ChatMessage } from "./generated/ChatMessage";
+export type { AssistantStep } from "./generated/AssistantStep";
+export type { AssistantUsage } from "./generated/AssistantUsage";
+export type { AssistantReply } from "./generated/AssistantReply";
+
 export type { ProcInfo } from "./generated/ProcInfo";
 export type { PortEntry } from "./generated/PortEntry";
 export type { DevServer } from "./generated/DevServer";

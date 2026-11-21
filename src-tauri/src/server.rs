@@ -268,6 +268,13 @@ pub fn router(state: AppState, opts: &ServeOptions) -> Router {
         .route("/ai/config", get(ai_config).post(ai_set_writes))
         .route("/ai/actions", get(ai_actions))
         .route("/ai/actions/undo", post(ai_undo))
+        // ── 本地模型助手（MiniCPM5-2B） ──
+        .route(
+            "/assistant/config",
+            get(assistant_config).put(assistant_save_config),
+        )
+        .route("/assistant/status", post(assistant_status))
+        .route("/assistant/chat", post(assistant_chat))
         // API 自己的 fallback：未知 /api/* 必须在进入静态站点回落之前就变成
         // 404 JSON。否则有 dist 时 ServeDir 会把 /api/nope 当成 SPA 路由，
         // 返回 200 + index.html，脚本消费者拿到 HTML 才报 Unexpected token <。
@@ -1588,4 +1595,122 @@ mod http_tests {
         assert_eq!(root_path.status(), StatusCode::OK);
         std::fs::remove_dir_all(root.as_path()).ok();
     }
+
+    /// 助手配置在 HTTP 侧必须可读可写；写要带同源 + 写令牌，读不需要。
+    /// status 用不可达端口，验证失败被正常序列化成 `ok:false` 而不是 500。
+    #[tokio::test]
+    async fn assistant_config_roundtrip_and_unreachable_status() {
+        let root = temp_root("assistant");
+        let app = app_for(&root);
+
+        let res = app
+            .clone()
+            .oneshot(
+                Request::get("/api/assistant/config")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let mut cfg = body_json(res).await;
+        assert_eq!(cfg["model"], "minicpm5-2b");
+        cfg["temperature"] = serde_json::json!(0.1);
+
+        let res = app
+            .clone()
+            .oneshot(
+                Request::put("/api/assistant/config")
+                    .header("content-type", "application/json")
+                    .header("x-workbench-write", "1")
+                    .body(Body::from(serde_json::to_vec(&cfg).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(body_json(res).await["temperature"], 0.1);
+
+        // 写令牌缺失必须 4xx，不能默默改配置。
+        let res = app
+            .clone()
+            .oneshot(
+                Request::put("/api/assistant/config")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&cfg).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(res.status().is_client_error());
+
+        cfg["base_url"] = serde_json::json!("http://127.0.0.1:1/v1");
+        let res = app
+            .oneshot(
+                Request::post("/api/assistant/status")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&cfg).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(body_json(res).await["ok"], false);
+        std::fs::remove_dir_all(root.as_path()).ok();
+    }
+}
+
+// ── 本地模型助手 ───────────────────────────────────────────
+//
+// 与 IPC 共用 `assistant` 的同一套实现：这里只做 JSON 编解码与错误映射。
+// 配置/对话都需要写头：助手能创建任务（走 ai.json 的同一开关），
+// 不能让一个跨站请求替用户发起。
+
+async fn assistant_config(
+    State(st): State<AppState>,
+) -> ApiResult<crate::assistant::AssistantConfig> {
+    let root = st.root.clone();
+    ok(blocking(move || crate::assistant::load_config(&root)).await?)
+}
+
+async fn assistant_save_config(
+    State(st): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(config): Json<crate::assistant::AssistantConfig>,
+) -> ApiResult<crate::assistant::AssistantConfig> {
+    require_same_origin(&headers)?;
+    require_write_header(&headers)?;
+    let root = st.root.clone();
+    ok(blocking(move || crate::assistant::save_config(&root, config)).await?)
+}
+
+async fn assistant_status(
+    Json(config): Json<crate::assistant::AssistantConfig>,
+) -> ApiResult<crate::assistant::AssistantStatus> {
+    let config = blocking(move || crate::assistant::normalize_config(config)).await?;
+    ok(blocking_value(move || crate::assistant::status(&config)).await?)
+}
+
+#[derive(Deserialize)]
+struct AssistantChatBody {
+    messages: Vec<crate::assistant::ChatMessage>,
+    config: Option<crate::assistant::AssistantConfig>,
+}
+
+async fn assistant_chat(
+    State(st): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<AssistantChatBody>,
+) -> ApiResult<crate::assistant::AssistantReply> {
+    require_same_origin(&headers)?;
+    require_write_header(&headers)?;
+    let root = st.root.clone();
+    let config = match body.config {
+        Some(config) => blocking(move || crate::assistant::normalize_config(config)).await?,
+        None => {
+            let root = root.clone();
+            blocking(move || crate::assistant::load_config(&root)).await?
+        }
+    };
+    ok(blocking(move || crate::assistant::chat(&root, &config, body.messages)).await?)
 }

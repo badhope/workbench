@@ -37,6 +37,10 @@ import type {
   KnowledgeDoc,
   AiConfig,
   AiAction,
+  AssistantConfig,
+  AssistantStatus,
+  AssistantReply,
+  ChatMessage,
 } from "../types";
 
 /** 是否运行在 Tauri 桌面壳内（有 IPC、托盘、置顶等原生能力）。 */
@@ -509,4 +513,49 @@ export async function dataFilePath(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+// ── 本地模型助手（MiniCPM5-2B） ─────────────────────────────
+//
+// 与 Rust `assistant` 模块一一对应。浏览器端只在 `serve` 后端下可用；
+// 纯静态 demo 直接给错误码，页面翻译成「需要桌面端」，而不是一个 404。
+
+export async function assistantConfig(): Promise<AssistantConfig> {
+  if (isTauri()) return invoke<AssistantConfig>("assistant_config");
+  if (!isBackend()) throw new Error("ASSISTANT_DESKTOP_ONLY");
+  return httpJson<AssistantConfig>("/api/assistant/config");
+}
+
+export async function assistantSaveConfig(
+  config: AssistantConfig
+): Promise<AssistantConfig> {
+  if (isTauri()) return invoke<AssistantConfig>("assistant_save_config", { config });
+  if (!isBackend()) throw new Error("ASSISTANT_DESKTOP_ONLY");
+  return httpJson<AssistantConfig>("/api/assistant/config", {
+    method: "PUT",
+    body: config,
+    write: true,
+  });
+}
+
+export async function assistantStatus(config: AssistantConfig): Promise<AssistantStatus> {
+  if (isTauri()) return invoke<AssistantStatus>("assistant_status", { config });
+  if (!isBackend()) throw new Error("ASSISTANT_DESKTOP_ONLY");
+  return httpJson<AssistantStatus>("/api/assistant/status", {
+    method: "POST",
+    body: config,
+  });
+}
+
+export async function assistantChat(
+  messages: ChatMessage[],
+  config: AssistantConfig
+): Promise<AssistantReply> {
+  if (isTauri()) return invoke<AssistantReply>("assistant_chat", { messages, config });
+  if (!isBackend()) throw new Error("ASSISTANT_DESKTOP_ONLY");
+  return httpJson<AssistantReply>("/api/assistant/chat", {
+    method: "POST",
+    body: { messages, config },
+    write: true,
+  });
 }

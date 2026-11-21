@@ -1862,3 +1862,62 @@ pub async fn ai_undo(app: AppHandle, id: String) -> Result<crate::services::ai::
         .await
         .map_err(|e| format!("任务执行失败: {e}"))?
 }
+
+// ── 本地模型助手（MiniCPM5-2B） ─────────────────────────────
+//
+// 四个命令都走 `spawn_blocking`：模型调用是阻塞 HTTP，不能占住 Tauri 的
+// 异步线程；配置读写是磁盘 I/O，也不该在 async 上下文里直接做。
+
+#[tauri::command(async)]
+pub async fn assistant_config(app: AppHandle) -> Result<crate::assistant::AssistantConfig, String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || crate::assistant::load_config(&root))
+        .await
+        .map_err(|e| format!("读取模型配置失败: {e}"))?
+}
+
+#[tauri::command(async)]
+pub async fn assistant_save_config(
+    app: AppHandle,
+    config: crate::assistant::AssistantConfig,
+) -> Result<crate::assistant::AssistantConfig, String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || crate::assistant::save_config(&root, config))
+        .await
+        .map_err(|e| format!("保存模型配置失败: {e}"))?
+}
+
+#[tauri::command(async)]
+pub async fn assistant_status(
+    app: AppHandle,
+    config: Option<crate::assistant::AssistantConfig>,
+) -> Result<crate::assistant::AssistantStatus, String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let config = match config {
+            Some(config) => crate::assistant::normalize_config(config)?,
+            None => crate::assistant::load_config(&root)?,
+        };
+        Ok::<_, String>(crate::assistant::status(&config))
+    })
+    .await
+    .map_err(|e| format!("检测模型服务失败: {e}"))?
+}
+
+#[tauri::command(async)]
+pub async fn assistant_chat(
+    app: AppHandle,
+    messages: Vec<crate::assistant::ChatMessage>,
+    config: Option<crate::assistant::AssistantConfig>,
+) -> Result<crate::assistant::AssistantReply, String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let config = match config {
+            Some(config) => crate::assistant::normalize_config(config)?,
+            None => crate::assistant::load_config(&root)?,
+        };
+        crate::assistant::chat(&root, &config, messages)
+    })
+    .await
+    .map_err(|e| format!("助手执行失败: {e}"))?
+}

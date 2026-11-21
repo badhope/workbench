@@ -79,6 +79,35 @@ describe("命令名与参数", () => {
     expect(invokeMock).toHaveBeenLastCalledWith("git_branch", { dir: "C:\\proj" });
   });
 
+  it("本地模型助手：配置、探测、对话的命令名与参数形状", async () => {
+    // 全局 setup 已注入 __TAURI_INTERNALS__；这里不要再删，否则后续用例
+    // 会落到 HTTP 分支并因为相对 URL 报 Invalid URL。
+    {
+      const config = {
+        base_url: "http://127.0.0.1:18082/v1",
+        model: "minicpm5-2b",
+        temperature: 0.2,
+        max_tokens: 1024,
+        thinking: false,
+      };
+      await api.assistantConfig();
+      expect(invokeMock).toHaveBeenLastCalledWith("assistant_config");
+
+      await api.assistantSaveConfig(config);
+      expect(invokeMock).toHaveBeenLastCalledWith("assistant_save_config", { config });
+
+      await api.assistantStatus(config);
+      expect(invokeMock).toHaveBeenLastCalledWith("assistant_status", { config });
+
+      const messages = [{ role: "user", content: "今天先做什么？" }];
+      await api.assistantChat(messages, config);
+      expect(invokeMock).toHaveBeenLastCalledWith("assistant_chat", {
+        messages,
+        config,
+      });
+    }
+  });
+
   it("知识库：命令名、参数与只读边界", async () => {
     const status = {
       sources: [],
