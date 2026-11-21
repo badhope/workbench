@@ -267,10 +267,13 @@ jobs:
           $installer = Get-ChildItem release-assets/*-setup.exe | Select-Object -First 1
           $dir = Join-Path $env:RUNNER_TEMP "wb-smoke"
           Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
-          & $installer.FullName /S /D=$dir
-          if ($LASTEXITCODE -ne 0) { Write-Error "安装器退出码 $LASTEXITCODE"; exit 1 }
-          $exe = Get-ChildItem $dir -Recurse -Filter "workbench.exe" | Select-Object -First 1
-          if (-not $exe) { Write-Error "安装目录里找不到 workbench.exe"; Get-ChildItem $dir -Recurse | Out-String | Write-Host; exit 1 }
+          $p = Start-Process -FilePath $installer.FullName -ArgumentList @("/S", "/D=$dir") -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Write-Error "安装器退出码 $($p.ExitCode)"; exit 1 }
+          Start-Sleep -Seconds 2
+          # NSIS 的 /D 在静默安装下不保证落到指定目录；从实际安装位置找。
+          $roots = @($dir, $env:LOCALAPPDATA, $env:ProgramFiles)
+          $exe = Get-ChildItem -Path $roots -Recurse -Filter "workbench.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $exe) { Write-Error "安装后找不到 workbench.exe"; Get-ChildItem -Path $roots -Directory -ErrorAction SilentlyContinue | Select-Object FullName | Out-String | Write-Host; exit 1 }
           $out = & $exe.FullName --version
           Write-Host "NSIS: $out"
           if ($LASTEXITCODE -ne 0) { Write-Error "workbench --version 退出码 $LASTEXITCODE"; exit 1 }
