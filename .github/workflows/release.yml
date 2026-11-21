@@ -274,10 +274,16 @@ jobs:
           $roots = @($dir, $env:LOCALAPPDATA, $env:ProgramFiles)
           $exe = Get-ChildItem -Path $roots -Recurse -Filter "workbench.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $exe) { Write-Error "安装后找不到 workbench.exe"; Get-ChildItem -Path $roots -Directory -ErrorAction SilentlyContinue | Select-Object FullName | Out-String | Write-Host; exit 1 }
-          $out = & $exe.FullName --version
-          Write-Host "NSIS: $out"
-          if ($LASTEXITCODE -ne 0) { Write-Error "workbench --version 退出码 $LASTEXITCODE"; exit 1 }
-          if ("$out" -notmatch [regex]::Escape($version)) { Write-Error "版本不符：$out"; exit 1 }
+          # Windows 是 GUI 子系统，--version 的 stdout 不会回到 PowerShell。
+          # 改为核对 exe 版本资源 + 真启动 8 秒不退出，这才是安装包可用性。
+          $fileVersion = $exe.VersionInfo.ProductVersion
+          Write-Host "NSIS: $($exe.FullName) version=$fileVersion"
+          if ("$fileVersion" -notmatch [regex]::Escape($version)) { Write-Error "版本不符：$fileVersion"; exit 1 }
+          $proc = Start-Process -FilePath $exe.FullName -WorkingDirectory $exe.DirectoryName -PassThru
+          Start-Sleep -Seconds 8
+          if ($proc.HasExited) { Write-Error "安装后启动即退出，退出码 $($proc.ExitCode)"; exit 1 }
+          Write-Host "NSIS: launched pid $($proc.Id)"
+          Stop-Process -Id $proc.Id -Force
 
       - name: Smoke test package (macOS)
         if: matrix.os == 'macos-latest'
