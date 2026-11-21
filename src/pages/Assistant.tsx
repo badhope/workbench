@@ -8,6 +8,9 @@ import {
 } from "react";
 import {
   Bot,
+  Check,
+  ChevronDown,
+  RefreshCw,
   Send,
   Settings2,
   Square,
@@ -66,6 +69,8 @@ export default function Assistant() {
   const [config, setConfig] = useState<AssistantConfig>(DEFAULT_ASSISTANT_CONFIG);
   const [draft, setDraft] = useState<AssistantConfig>(DEFAULT_ASSISTANT_CONFIG);
   const [status, setStatus] = useState<AssistantStatus | null>(null);
+  const [models, setModels] = useState<string[]>([]);
+  const [modelOpen, setModelOpen] = useState(false);
   const [checking, setChecking] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [backendMissing, setBackendMissing] = useState(false);
@@ -73,23 +78,32 @@ export default function Assistant() {
   const endRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLTextAreaElement>(null);
 
-  const probe = useCallback(async (cfg: AssistantConfig) => {
-    setChecking(true);
-    try {
-      setStatus(await assistantStatus(cfg));
-    } catch (e) {
-      setStatus({
-        ok: false,
-        base_url: cfg.base_url,
-        model: cfg.model,
-        latency_ms: 0,
-        models: [],
-        error: String(e),
-      });
-    } finally {
-      setChecking(false);
-    }
-  }, []);
+  const probe = useCallback(
+    async (cfg: AssistantConfig) => {
+      setChecking(true);
+      try {
+        const next = await assistantStatus(cfg);
+        setStatus(next);
+        setModels(next.models);
+        if (next.ok && next.models.length > 0) {
+          setToast(t("assistant.modelsFound", { count: next.models.length }));
+        }
+      } catch (e) {
+        setStatus({
+          ok: false,
+          base_url: cfg.base_url,
+          model: cfg.model,
+          latency_ms: 0,
+          models: [],
+          error: String(e),
+        });
+        setModels([]);
+      } finally {
+        setChecking(false);
+      }
+    },
+    [setToast, t]
+  );
 
   useEffect(() => {
     let alive = true;
@@ -253,7 +267,9 @@ export default function Assistant() {
       const saved = await assistantSaveConfig(draft);
       setConfig(saved);
       setDraft(saved);
-      setStatus(await assistantStatus(saved));
+      const next = await assistantStatus(saved);
+      setStatus(next);
+      setModels(next.models);
       setToast(t("assistant.saved"));
     } catch (e) {
       setToast(t("assistant.saveFailed", { err: String(e) }));
@@ -330,16 +346,90 @@ export default function Assistant() {
                 aria-label={t("assistant.endpoint")}
                 className={inputCls}
                 value={draft.base_url}
-                onChange={(e) => setDraft({ ...draft, base_url: e.target.value })}
+                onChange={(e) => {
+                  setModels([]);
+                  setModelOpen(false);
+                  setDraft({ ...draft, base_url: e.target.value });
+                }}
+              />
+            </Field>
+            <Field label={t("assistant.apiKey")}>
+              <input
+                aria-label={t("assistant.apiKey")}
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                className={inputCls}
+                placeholder="sk-…"
+                value={draft.api_key ?? ""}
+                onChange={(e) => {
+                  setModels([]);
+                  setModelOpen(false);
+                  setDraft({ ...draft, api_key: e.target.value });
+                }}
               />
             </Field>
             <Field label={t("assistant.model")}>
-              <input
-                aria-label={t("assistant.model")}
-                className={inputCls}
-                value={draft.model}
-                onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-              />
+              <div className="flex items-stretch gap-1.5">
+                {models.length > 0 ? (
+                  <div className="relative min-w-0 flex-1">
+                    <button
+                      type="button"
+                      aria-label={t("assistant.model")}
+                      aria-haspopup="listbox"
+                      aria-expanded={modelOpen}
+                      className={`${inputCls} flex items-center justify-between gap-2 text-left`}
+                      onClick={() => setModelOpen((open) => !open)}
+                    >
+                      <span className="truncate">{draft.model}</span>
+                      <ChevronDown size={13} className="shrink-0 text-faint" />
+                    </button>
+                    {modelOpen && (
+                      <div
+                        role="listbox"
+                        aria-label={t("assistant.modelList")}
+                        className="absolute z-30 mt-1 max-h-60 w-full overflow-auto rounded-[var(--radius-btn)] border border-line bg-panel py-1 shadow-xl"
+                      >
+                        {models.map((name) => (
+                          <button
+                            key={name}
+                            type="button"
+                            role="option"
+                            aria-selected={name === draft.model}
+                            className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[12px] hover:bg-panel2 ${
+                              name === draft.model ? "text-accent" : "text-text"
+                            }`}
+                            onClick={() => {
+                              setDraft({ ...draft, model: name });
+                              setModelOpen(false);
+                            }}
+                          >
+                            <span className="truncate">{name}</span>
+                            {name === draft.model && <Check size={12} />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <input
+                    aria-label={t("assistant.model")}
+                    className={`${inputCls} min-w-0 flex-1`}
+                    value={draft.model}
+                    onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+                  />
+                )}
+                <Btn
+                  title={t("assistant.fetchModels")}
+                  onClick={() => {
+                    setModelOpen(false);
+                    void probe(draft);
+                  }}
+                  disabled={checking}
+                >
+                  <RefreshCw size={13} />
+                </Btn>
+              </div>
             </Field>
             <Field label={t("assistant.temperature")}>
               <input

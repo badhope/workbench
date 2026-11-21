@@ -14,6 +14,7 @@ import type { AssistantConfig } from "../types";
 export const DEFAULT_ASSISTANT_CONFIG: AssistantConfig = {
   base_url: "http://127.0.0.1:18082/v1",
   model: "minicpm5-2b",
+  api_key: "",
   temperature: 0.2,
   max_tokens: 1024,
   thinking: false,

@@ -1,10 +1,10 @@
 //! 本地模型助手：把工作台上下文交给本机 OpenAI 兼容服务。
 //!
 //! 设计约束（与产品定位一致）：
-//! - **只连回环地址**：模型服务必须跑在同一台机器上（127.0.0.1 / localhost / ::1）。
-//!   这里不是可配置项，而是硬校验：助手能读任务、端口、成本与知识库，
-//!   允许把 base_url 指向公网等于给远端一个免认证的数据出口。
-//! - **不内置密钥、不落盘**：本地服务通常不需要 Key；即便需要，也只放在请求头里。
+//! - **默认只连回环地址**：本地模型服务跑在同一台机器上（127.0.0.1 / localhost / ::1）。
+//!   用户显式配置公网 OpenAI 兼容网关时，必须使用 HTTPS；避免把 Key 明文发出去。
+//! - **密钥只用于请求头**：API Key 随 Authorization: Bearer 发送，不拼进 URL、不进日志；
+//!   落盘文件收紧到 0600。
 //! - **工具调用有上限**：最多 4 轮、单条结果截断到 3000 字符，超限明确报错，
 //!   不让一个 2B 模型把界面拖到无响应。
 //! - **写入复用现有闸门**：创建任务走 `services::ai::task_create`，
@@ -58,6 +58,11 @@ pub struct AssistantConfig {
     pub base_url: String,
     #[serde(default = "default_model")]
     pub model: String,
+    /// 兼容 OpenAI 的 API Key。本地服务可留空；公网网关填 Bearer Key。
+    /// 仅随请求头发送，不拼进 URL；界面用密码框展示，截图里看不到明文。
+    #[serde(default)]
+    #[ts(optional)]
+    pub api_key: Option<String>,
     #[serde(default = "default_temperature")]
     pub temperature: f32,
     #[serde(default = "default_max_tokens")]
@@ -98,6 +103,7 @@ impl Default for AssistantConfig {
         Self {
             base_url: default_base_url(),
             model: default_model(),
+            api_key: None,
             temperature: default_temperature(),
             max_tokens: default_max_tokens(),
             thinking: false,
@@ -342,8 +348,23 @@ pub fn load_config(root: &DataRoot) -> Result<AssistantConfig, String> {
 
 pub fn save_config(root: &DataRoot, config: AssistantConfig) -> Result<AssistantConfig, String> {
     let normalized = normalize_config(config)?;
-    json_store::write_json_atomic(&root.join(CONFIG_FILE), &normalized)?;
+    let path = root.join(CONFIG_FILE);
+    json_store::write_json_atomic(&path, &normalized)?;
+    restrict_config_permissions(&path)?;
     Ok(normalized)
+}
+
+/// 配置文件里有 API Key：Unix 下把权限收紧到 0600（Windows 由用户目录 ACL 兜底）。
+fn restrict_config_permissions(path: &std::path::Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| format!("设置模型配置权限失败: {e}"))?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
 }
 
 /// 校验并规范化配置：端点必须是回环地址，参数必须落在可用区间。
@@ -357,6 +378,18 @@ pub fn normalize_config(mut config: AssistantConfig) -> Result<AssistantConfig, 
         return Err("模型名包含控制字符".to_string());
     }
     config.model = model.to_string();
+    let api_key = config.api_key.as_deref().unwrap_or("").trim();
+    if api_key.chars().count() > 512 {
+        return Err("API Key 过长（最多 512 字）".to_string());
+    }
+    if api_key.chars().any(|c| c.is_control()) {
+        return Err("API Key 包含控制字符".to_string());
+    }
+    config.api_key = if api_key.is_empty() {
+        None
+    } else {
+        Some(api_key.to_string())
+    };
     if !config.temperature.is_finite() || !(0.0..=2.0).contains(&config.temperature) {
         return Err("temperature 必须在 0 到 2 之间".to_string());
     }
@@ -394,9 +427,11 @@ pub fn normalize_base_url(raw: &str) -> Result<String, String> {
         .host_str()
         .map(|h| h.trim_matches(['[', ']']).to_ascii_lowercase())
         .ok_or_else(|| "模型地址缺少主机名".to_string())?;
-    if !matches!(host.as_str(), "127.0.0.1" | "localhost" | "::1") {
+    let loopback = matches!(host.as_str(), "127.0.0.1" | "localhost" | "::1");
+    // 远程网关必须走 HTTPS：API Key 在 Authorization 头里，明文 HTTP 会直接泄露。
+    if !loopback && scheme != "https" {
         return Err(format!(
-            "只允许连接本机模型服务（127.0.0.1 / localhost / ::1），拒绝 {host}"
+            "远程模型地址必须使用 https://（{host} 是公网/局域网地址，拒绝明文传输 Key）"
         ));
     }
     let host_part = if host == "::1" {
@@ -417,6 +452,17 @@ pub fn normalize_base_url(raw: &str) -> Result<String, String> {
 
 fn endpoint(base: &str, suffix: &str) -> String {
     format!("{}/{}", base.trim_end_matches('/'), suffix)
+}
+
+/// 有 Key 时统一加 `Authorization: Bearer …`；本地无 Key 服务保持原样。
+fn with_auth(
+    request: reqwest::blocking::RequestBuilder,
+    config: &AssistantConfig,
+) -> reqwest::blocking::RequestBuilder {
+    match config.api_key.as_deref() {
+        Some(key) if !key.is_empty() => request.bearer_auth(key),
+        _ => request,
+    }
 }
 
 fn client() -> Result<reqwest::blocking::Client, String> {
@@ -455,7 +501,11 @@ pub fn status(config: &AssistantConfig) -> AssistantStatus {
             return status;
         }
     };
-    let result = client.get(endpoint(&config.base_url, "models")).send();
+    let result = with_auth(
+        client.get(endpoint(&config.base_url, "models")),
+        &config,
+    )
+    .send();
     let result = match result {
         Ok(resp) if resp.status().is_success() => resp.json::<Value>(),
         Ok(resp) => Err(resp.error_for_status().unwrap_err()),
@@ -910,11 +960,13 @@ fn stream_completion(
         body["tools"] = tool_specs();
         body["tool_choice"] = Value::String("auto".into());
     }
-    let response = client
-        .post(endpoint(&config.base_url, "chat/completions"))
-        .json(&body)
-        .send()
-        .map_err(|e| format!("模型请求失败: {e}"))?;
+    let response = with_auth(
+        client.post(endpoint(&config.base_url, "chat/completions")),
+        config,
+    )
+    .json(&body)
+    .send()
+    .map_err(|e| format!("模型请求失败: {e}"))?;
     if !response.status().is_success() {
         let status = response.status();
         let text = response.text().unwrap_or_default();
@@ -1790,13 +1842,17 @@ mod tests {
     }
 
     #[test]
-    fn rejects_remote_endpoints() {
+    fn remote_endpoints_require_https() {
         let err = normalize_base_url("http://example.com/v1").unwrap_err();
-        assert!(err.contains("只允许连接本机"), "{err}");
+        assert!(err.contains("必须使用 https"), "{err}");
         let err = normalize_base_url("http://127.0.0.1.evil.com/v1").unwrap_err();
-        assert!(err.contains("只允许连接本机"), "{err}");
+        assert!(err.contains("必须使用 https"), "{err}");
         let err = normalize_base_url("ftp://127.0.0.1/v1").unwrap_err();
         assert!(err.contains("http"), "{err}");
+        assert_eq!(
+            normalize_base_url("https://api.qs.al/v1").unwrap(),
+            "https://api.qs.al/v1"
+        );
     }
 
     #[test]

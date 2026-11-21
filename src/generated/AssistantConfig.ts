@@ -4,7 +4,12 @@ export type AssistantConfig = {
 /**
  * OpenAI 兼容根地址，例如 `http://127.0.0.1:18082/v1`。
  */
-base_url: string, model: string, temperature: number, max_tokens: number, 
+base_url: string, model: string, 
+/**
+ * 兼容 OpenAI 的 API Key。本地服务可留空；公网网关填 Bearer Key。
+ * 仅随请求头发送，不拼进 URL；界面用密码框展示，截图里看不到明文。
+ */
+api_key?: string, temperature: number, max_tokens: number, 
 /**
  * 是否让模型先输出思考过程。默认关闭：2B 在 CPU 上思考几十秒才能说正文，
  * 工作台的问答不需要这么长的链路；打开后最大输出 token 要相应调高。

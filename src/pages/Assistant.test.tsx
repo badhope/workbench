@@ -109,3 +109,41 @@ it("服务不可达时给出未连接与启动提示，不假装能用", async (
   await userEvent.click(screen.getByTitle("模型设置"));
   expect(screen.getByText(/先在终端启动本地服务/)).toBeInTheDocument();
 });
+
+it("API Key 可输入，拉取模型后从下拉列表选择并保存", async () => {
+  api.assistantStatus.mockResolvedValue({
+    ok: true,
+    base_url: "https://api.qs.al/v1",
+    model: "glm-5.3-flash",
+    latency_ms: 20,
+    models: ["deepseek-v4.1-flash", "glm-5.3-flash", "kimi-k3"],
+    error: "",
+  });
+
+  render(<Assistant />);
+  await screen.findByText("已连接");
+  await userEvent.click(screen.getByTitle("模型设置"));
+
+  const key = screen.getByLabelText("API 密钥");
+  const endpoint = screen.getByLabelText("服务地址");
+  await userEvent.clear(endpoint);
+  await userEvent.type(endpoint, "https://api.qs.al/v1");
+  expect(key).toHaveAttribute("type", "password");
+  await userEvent.clear(key);
+  await userEvent.type(key, "vg-test-key");
+
+  await userEvent.click(screen.getByRole("button", { name: "检测连接" }));
+  const picker = await screen.findByRole("button", { name: "模型名" });
+  await userEvent.click(picker);
+  await userEvent.click(screen.getByRole("option", { name: "glm-5.3-flash" }));
+  expect(picker).toHaveTextContent("glm-5.3-flash");
+
+  await userEvent.click(screen.getByRole("button", { name: "保存" }));
+  expect(api.assistantSaveConfig).toHaveBeenCalledWith(
+    expect.objectContaining({
+      base_url: "https://api.qs.al/v1",
+      model: "glm-5.3-flash",
+      api_key: "vg-test-key",
+    })
+  );
+});
