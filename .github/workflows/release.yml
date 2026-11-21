@@ -237,6 +237,65 @@ jobs:
             fi
           done
 
+      # 安装包不是「构建成功」就算完：这里把最终产物装/解出来，跑一次
+      # --version，确认真实入口能启动且版本正确。Windows/macOS 的图形环境
+      # 不适合开窗口，但 --version 在 Tauri 初始化前返回，足以证明包没坏。
+      - name: Smoke test package (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          tmp="$(mktemp -d)"
+          deb="$(ls release-assets/*.deb | head -1)"
+          dpkg-deb -x "$deb" "$tmp/deb"
+          test -x "$tmp/deb/usr/bin/workbench" || { echo "::error::deb 内缺少可执行 workbench"; exit 1; }
+          out="$("$tmp/deb/usr/bin/workbench" --version)"
+          echo "deb: $out"
+          grep -q "$version" <<<"$out" || { echo "::error::deb 版本不符：$out"; exit 1; }
+          appimage="$(ls release-assets/*.AppImage | head -1)"
+          chmod +x "$appimage"
+          out="$(APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --version)"
+          echo "AppImage: $out"
+          grep -q "$version" <<<"$out" || { echo "::error::AppImage 版本不符：$out"; exit 1; }
+
+      - name: Smoke test package (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $installer = Get-ChildItem release-assets/*-setup.exe | Select-Object -First 1
+          $dir = Join-Path $env:RUNNER_TEMP "wb-smoke"
+          Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+          & $installer.FullName /S /D=$dir
+          if ($LASTEXITCODE -ne 0) { Write-Error "安装器退出码 $LASTEXITCODE"; exit 1 }
+          $exe = Get-ChildItem $dir -Recurse -Filter "workbench.exe" | Select-Object -First 1
+          if (-not $exe) { Write-Error "安装目录里找不到 workbench.exe"; Get-ChildItem $dir -Recurse | Out-String | Write-Host; exit 1 }
+          $out = & $exe.FullName --version
+          Write-Host "NSIS: $out"
+          if ($LASTEXITCODE -ne 0) { Write-Error "workbench --version 退出码 $LASTEXITCODE"; exit 1 }
+          if ("$out" -notmatch [regex]::Escape($version)) { Write-Error "版本不符：$out"; exit 1 }
+
+      - name: Smoke test package (macOS)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          dmg="$(ls release-assets/*.dmg | head -1)"
+          mount="$RUNNER_TEMP/wb-dmg"
+          rm -rf "$mount"
+          mkdir -p "$mount"
+          cleanup() { hdiutil detach "$mount" -quiet -force >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          hdiutil attach "$dmg" -mountpoint "$mount" -nobrowse -quiet
+          app="$(find "$mount" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$app" || { echo "::error::DMG 内没有 .app"; exit 1; }
+          exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
+          out="$("$app/Contents/MacOS/$exe" --version)"
+          echo "DMG: $out"
+          grep -q "$version" <<<"$out" || { echo "::error::DMG 版本不符：$out"; exit 1; }
+
       - name: Verify Windows signature (when configured)
         if: matrix.os == 'windows-latest' && env.HAS_WINDOWS_CERT == 'true'
         shell: pwsh

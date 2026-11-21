@@ -47,8 +47,9 @@ const MAX_HISTORY: usize = 16;
 const MAX_HISTORY_CHARS: usize = 4000;
 /// 用户主动停止时的统一错误串，命令层据此发 `stopped` 而不是 `error`。
 pub const STOPPED: &str = "已停止生成";
-/// 单次 HTTP 请求上限：2B 在 CPU 上生成 1k token 可能要几十秒。
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
+/// 单次 HTTP 请求上限。2B 在 CPU 上最慢约 7 token/s，4096 token 需要约 10 分钟；
+/// 120 秒会把正常长文误判成超时。用户主动停止由 `cancel` 标志负责，不依赖这个上限。
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(600);
 
 #[derive(Serialize, Deserialize, Clone, Debug, ts_rs::TS)]
 pub struct AssistantConfig {
@@ -595,6 +596,78 @@ fn tool_specs() -> Value {
     ])
 }
 
+/// 本轮是否需要工具声明。
+///
+/// 8 个工具的 JSON Schema 在 2B 模型上约占 600–800 prompt token，纯聊天/写作
+/// 却完全用不到。只在问题命中任务、端口、成本、知识库、算术或日期意图时才
+/// 发送工具，让普通问答的首字延迟少一半左右。
+fn needs_tools(text: &str) -> bool {
+    const HINTS: &[&str] = &[
+        "任务",
+        "待办",
+        "项目",
+        "端口",
+        "进程",
+        "服务",
+        "成本",
+        "花费",
+        "预算",
+        "知识库",
+        "笔记",
+        "搜",
+        "算",
+        "折扣",
+        "百分",
+        "今天",
+        "明天",
+        "后天",
+        "周",
+        "日期",
+        "截止",
+        "逾期",
+        "创建",
+        "新建",
+        "添加",
+        "记一个",
+        "提醒",
+        "优先",
+        "完成",
+        "安排",
+        "概况",
+        "总览",
+        "多少",
+        "几号",
+        "星期",
+        "占用",
+        "task",
+        "todo",
+        "project",
+        "port",
+        "process",
+        "cost",
+        "budget",
+        "spend",
+        "token",
+        "model",
+        "knowledge",
+        "note",
+        "search",
+        "calculate",
+        "today",
+        "tomorrow",
+        "date",
+        "due",
+        "create",
+        "remind",
+        "summary",
+        "how much",
+    ];
+    let lower = text.to_lowercase();
+    HINTS.iter().any(|hint| lower.contains(hint))
+        || (lower.chars().any(|c| c.is_ascii_digit())
+            && lower.chars().any(|c| "+-*/%×÷".contains(c)))
+}
+
 fn system_prompt(root: &DataRoot) -> String {
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
     let mut facts = String::from("无法读取任务数据。");
@@ -678,6 +751,7 @@ pub fn chat_stream(
         .map(|m| m.content.clone())
         .unwrap_or_default();
     let client = client()?;
+    let with_tools = needs_tools(&last_user);
     let mut payload_messages: Vec<Value> = vec![json!({
         "role": "system",
         "content": system_prompt(root),
@@ -701,7 +775,7 @@ pub fn chat_stream(
             &client,
             &config,
             &payload_messages,
-            true,
+            with_tools,
             cancel,
             &mut usage,
             on_event,
@@ -2019,6 +2093,16 @@ mod tests {
         };
         assert!(start_service(&root, cfg).is_err());
         assert!(!stop_service().unwrap());
+    }
+
+    #[test]
+    fn tool_declarations_are_skipped_for_plain_chat() {
+        assert!(!needs_tools("写一段海边日落描写，直接写正文。"));
+        assert!(!needs_tools("你好，介绍一下你自己"));
+        assert!(needs_tools("今天最该先处理什么？"));
+        assert!(needs_tools("本月 AI 花费多少？"));
+        assert!(needs_tools("249*0.8 等于多少"));
+        assert!(needs_tools("帮我创建一个任务：明天检查登录页"));
     }
 
     #[test]

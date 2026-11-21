@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/badge/version-1.0.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.md#system-requirements)
-[![Tests](https://img.shields.io/badge/tests-657%20unit%20%2B%20218%20backend%20%2B%2030%20e2e-8b5cf6)](#quality)
+[![Tests](https://img.shields.io/badge/tests-657%20unit%20%2B%20219%20backend%20%2B%2030%20e2e-8b5cf6)](#quality)
 
 ![Workbench](docs/screenshots/01-overview.png)
 

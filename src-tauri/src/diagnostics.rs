@@ -269,10 +269,15 @@ pub fn collect(app_version: &str, data_dir: &Path) -> DiagnosticsReport {
 /// 崩溃钩子把它写进 `crash.log`（见 logging_setup），这里读回来展示。
 /// 只报告是否存在与最后一行摘要，不把整个堆栈塞进 UI 列表。
 fn crash_log_check(data_dir: &Path) -> Option<DiagnosticCheck> {
-    let candidates = [
-        data_dir.join("crash.log"),
-        std::env::temp_dir().join(format!("{}.crash.log", crate::paths::APP_IDENTIFIER)),
-    ];
+    let global = std::env::temp_dir().join(format!("{}.crash.log", crate::paths::APP_IDENTIFIER));
+    crash_log_check_with_global(data_dir, &global)
+}
+
+/// 与 `crash_log_check` 相同，但把「全局崩溃文件」显式传入。
+/// 生产路径用系统临时目录；单测传一个确定不存在的路径，避免测试受本机
+/// 上一次真实崩溃残留影响（那会让“无崩溃”用例假失败）。
+fn crash_log_check_with_global(data_dir: &Path, global: &Path) -> Option<DiagnosticCheck> {
+    let candidates = [data_dir.join("crash.log"), global.to_path_buf()];
     for path in candidates {
         let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
@@ -348,7 +353,8 @@ mod crash_tests {
     fn no_crash_file_means_no_check() {
         let dir = std::env::temp_dir().join(format!("wb-nocrash-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        assert!(crash_log_check(&dir).is_none());
+        let absent = dir.join("definitely-no-global-crash.log");
+        assert!(crash_log_check_with_global(&dir, &absent).is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
