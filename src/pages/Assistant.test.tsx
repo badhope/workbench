@@ -75,6 +75,25 @@ it("探活后展示已连接，并能用建议问题完成一轮对话", async (
   expect(screen.getByText("20 输入 / 10 输出 token")).toBeInTheDocument();
 });
 
+it("生成中可以停止，停止请求带同一个 request id", async () => {
+  let release: (() => void) | undefined;
+  api.assistantChatStream.mockImplementationOnce(
+    async () =>
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      })
+  );
+  render(<Assistant />);
+  await screen.findByText("已连接");
+  await userEvent.click(screen.getByRole("button", { name: "今天最该先处理什么？" }));
+  const stop = await screen.findByRole("button", { name: "停止" });
+  const requestId = api.assistantChatStream.mock.calls.at(-1)?.[2];
+  await userEvent.click(stop);
+  expect(api.assistantCancel).toHaveBeenCalledWith(requestId);
+  await screen.findByText(/已停止生成/);
+  release?.();
+});
+
 it("服务不可达时给出未连接与启动提示，不假装能用", async () => {
   api.assistantStatus.mockResolvedValue({
     ok: false,

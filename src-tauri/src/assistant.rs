@@ -579,7 +579,7 @@ fn tool_specs() -> Value {
             "type": "function",
             "function": {
                 "name": "create_task",
-                "description": "创建一条任务。只有用户在「知识库 → AI 接入」开启写入后才会成功。",
+                "description": "创建一条任务。用户明确说“创建/新建/加/记一个任务”时必须调用本工具，不要用 list_tasks 代替，也不要只把标题复述成回答。只有用户在「知识库 → AI 接入」开启写入后才会成功。",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -645,7 +645,8 @@ fn system_prompt(root: &DataRoot) -> String {
          4. 不要输出大段 Markdown；列清单时用短横线，每行一条。\n\
          5. 创建任务前必须确认标题来自用户原话；写入关闭时告诉用户去「知识库 → AI 接入」开启。\n\
          6. 任何算术（价格、折扣、百分比、差额）都必须调用 calculate，把结果照抄进回答，不要心算。\n\
-         7. 涉及今天、明天、周五、几号、是否逾期时，必须先调用 current_date，不要凭记忆猜日期。"
+         7. 涉及今天、明天、周五、几号、是否逾期时，必须先调用 current_date，不要凭记忆猜日期。
+         8. 用户明确要求创建、新建、添加、记录一个任务时，必须调用 create_task；不要只复述任务，也不要用 list_tasks 代替创建。标题只写要做的事，截止日先用 current_date 换算成 YYYY-MM-DD。"
     )
 }
 
@@ -670,6 +671,12 @@ pub fn chat_stream(
 ) -> Result<AssistantReply, String> {
     let config = normalize_config(config.clone())?;
     let history = normalize_history(messages)?;
+    let last_user = history
+        .iter()
+        .rev()
+        .find(|m| m.role == "user")
+        .map(|m| m.content.clone())
+        .unwrap_or_default();
     let client = client()?;
     let mut payload_messages: Vec<Value> = vec![json!({
         "role": "system",
@@ -741,7 +748,10 @@ pub fn chat_stream(
                 return Err(STOPPED.to_string());
             }
             tool_calls_total += 1;
-            let (id, name, arguments) = parse_tool_call(call)?;
+            let (id, name, mut arguments) = parse_tool_call(call)?;
+            if name == "create_task" {
+                arguments = fill_create_task_due(&arguments, &last_user);
+            }
             let (result, ok) = match execute_tool(root, &name, &arguments) {
                 Ok(text) => (truncate_chars(&text, MAX_TOOL_RESULT_CHARS), true),
                 Err(e) => (
@@ -1489,6 +1499,81 @@ fn normalize_due(raw: &str) -> Result<String, String> {
         .map_err(|_| format!("due 必须是 YYYY-MM-DD，收到: {raw}"))
 }
 
+/// 2B 经常调用 `current_date` 却忘记把日期塞进 `create_task` 的 `due`。
+/// 用户说“今天/明天/后天/周X”时，由后端按同一台机器的本地日期补上，
+/// 避免任务落库后丢掉截止日；模型已给 due 则一律不改。
+fn infer_due_from_text(text: &str, today: chrono::NaiveDate) -> Option<String> {
+    use chrono::Datelike;
+    let text = text.to_lowercase();
+    if text.contains("大后天") {
+        return Some(
+            (today + chrono::Duration::days(3))
+                .format("%Y-%m-%d")
+                .to_string(),
+        );
+    }
+    if text.contains("后天") {
+        return Some(
+            (today + chrono::Duration::days(2))
+                .format("%Y-%m-%d")
+                .to_string(),
+        );
+    }
+    if text.contains("明天") || text.contains("tomorrow") {
+        return Some(
+            (today + chrono::Duration::days(1))
+                .format("%Y-%m-%d")
+                .to_string(),
+        );
+    }
+    if text.contains("今天") || text.contains("today") {
+        return Some(today.format("%Y-%m-%d").to_string());
+    }
+    // “下周”可能指下一整周，不在这里猜；只处理“周五/星期五”这种最近一次。
+    if text.contains("下周") || text.contains("上周") {
+        return None;
+    }
+    let weekdays: [(i64, &[&str]); 7] = [
+        (0, &["周一", "星期一"]),
+        (1, &["周二", "星期二"]),
+        (2, &["周三", "星期三"]),
+        (3, &["周四", "星期四"]),
+        (4, &["周五", "星期五"]),
+        (5, &["周六", "星期六"]),
+        (6, &["周日", "周天", "星期日", "星期天"]),
+    ];
+    for (idx, names) in weekdays {
+        if names.iter().any(|n| text.contains(n)) {
+            let current = today.weekday().num_days_from_monday() as i64;
+            let mut ahead = (idx - current).rem_euclid(7);
+            if ahead == 0 {
+                ahead = 7; // “周五”在周五当天说，按下一个周五算
+            }
+            return Some(
+                (today + chrono::Duration::days(ahead))
+                    .format("%Y-%m-%d")
+                    .to_string(),
+            );
+        }
+    }
+    None
+}
+
+fn fill_create_task_due(raw_args: &str, user_text: &str) -> String {
+    let Ok(mut value) = serde_json::from_str::<serde_json::Value>(raw_args) else {
+        return raw_args.to_string();
+    };
+    if value.get("due").is_some_and(|v| !v.is_null()) {
+        return raw_args.to_string();
+    }
+    let today = chrono::Local::now().date_naive();
+    let Some(due) = infer_due_from_text(user_text, today) else {
+        return raw_args.to_string();
+    };
+    value["due"] = serde_json::Value::String(due);
+    serde_json::to_string(&value).unwrap_or_else(|_| raw_args.to_string())
+}
+
 /// 按字符截断，保证中文不会被切成半个 UTF-8 序列。
 pub fn truncate_chars(text: &str, max: usize) -> String {
     if text.chars().count() <= max {
@@ -1725,6 +1810,29 @@ mod tests {
     }
 
     #[test]
+    fn relative_due_is_filled_without_overwriting_model_value() {
+        use chrono::NaiveDate;
+        let base = NaiveDate::from_ymd_opt(2026, 11, 21).unwrap(); // 周六
+        assert_eq!(infer_due_from_text("明天检查", base).unwrap(), "2026-11-22");
+        assert_eq!(infer_due_from_text("后天检查", base).unwrap(), "2026-11-23");
+        assert_eq!(infer_due_from_text("今天检查", base).unwrap(), "2026-11-21");
+        assert_eq!(infer_due_from_text("周五检查", base).unwrap(), "2026-11-27");
+        assert_eq!(infer_due_from_text("下周一检查", base), None);
+
+        let today = chrono::Local::now().date_naive();
+        let args = fill_create_task_due(r#"{"title":"x"}"#, "明天检查登录页");
+        let value: serde_json::Value = serde_json::from_str(&args).unwrap();
+        assert_eq!(
+            value["due"].as_str().unwrap(),
+            (today + chrono::Duration::days(1))
+                .format("%Y-%m-%d")
+                .to_string()
+        );
+        let explicit = r#"{"title":"x","due":"2026-12-01"}"#;
+        assert_eq!(fill_create_task_due(explicit, "明天检查"), explicit);
+    }
+
+    #[test]
     fn task_title_strips_instruction_and_metadata() {
         assert_eq!(
             normalize_task_title("请帮我创建任务：修复登录页报错，优先级高，属于项目 p-login")
@@ -1805,6 +1913,7 @@ mod tests {
         let root = temp_root("service");
         assert!(start_service(&root, AssistantConfig::default()).is_err());
         let cfg = AssistantConfig {
+            base_url: "http://127.0.0.1:18099/v1".into(),
             server_bin: "/nonexistent/llama-server".into(),
             model_path: "/nonexistent/model.gguf".into(),
             ..AssistantConfig::default()
