@@ -39,7 +39,7 @@ export const dict = {
     "app.title.logs": "Logs",
     "app.title.knowledge": "Search local Markdown notes and link them to projects.",
     "app.title.assistant":
-      "Chat with the local MiniCPM5-2B about tasks, ports, cost and notes.",
+      "Chat with your model about tasks, ports, cost and notes.",
     "app.title.costs": "Cost ledger",
     "app.mode.desktop": "Desktop · data stored locally",
     "app.mode.browser": "Browser preview · demo data",
@@ -206,7 +206,7 @@ export const dict = {
     "app.title.settings": "设置",
     "app.title.logs": "应用日志",
     "app.title.knowledge": "搜索本地 Markdown 笔记，并关联到项目。",
-    "app.title.assistant": "和本机 MiniCPM5-2B 聊任务、端口、成本与笔记。",
+    "app.title.assistant": "和你的模型聊任务、端口、成本与笔记。",
     "app.title.costs": "成本账本",
     "app.mode.desktop": "桌面模式 · 数据存本机",
     "app.mode.browser": "浏览器预览 · 演示数据",
@@ -369,7 +369,7 @@ export const dict = {
     "app.title.logs": "ログ",
     "app.title.knowledge": "ローカル Markdown を検索し、プロジェクトに関連付けます。",
     "app.title.assistant":
-      "ローカル MiniCPM5-2B とタスク・ポート・コスト・ノートを話します。",
+      "モデルとタスク・ポート・コスト・ノートを話します。",
     "app.title.costs": "コスト台帳",
     "app.mode.desktop": "デスクトップ · データはローカル保存",
     "app.mode.browser": "ブラウザプレビュー · デモデータ",
