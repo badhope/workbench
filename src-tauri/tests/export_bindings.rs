@@ -10,7 +10,8 @@ use workbench_lib::ai::{
     AiProcess, OpencodeSession, SessionDetail, SessionFile, SessionFilePreview,
 };
 use workbench_lib::assistant::{
-    AssistantConfig, AssistantReply, AssistantStatus, AssistantStep, AssistantUsage, ChatMessage,
+    AssistantConfig, AssistantEvent, AssistantReply, AssistantStatus, AssistantStep,
+    AssistantUsage, ChatMessage,
 };
 use workbench_lib::commands::{
     BackupPoint, BackupResult, DiskInfo, OpencodeSessionsResult, PricingView, RestoreResult,
@@ -77,4 +78,5 @@ fn export_ts_bindings() {
     AssistantStep::export_all(&cfg).unwrap();
     AssistantUsage::export_all(&cfg).unwrap();
     AssistantReply::export_all(&cfg).unwrap();
+    AssistantEvent::export_all(&cfg).unwrap();
 }

@@ -19,6 +19,11 @@ use crate::runtime;
 use crate::services::ai::{self as ai_service, TaskCreateArgs};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, HashMap};
+use std::io::{BufRead, BufReader};
+use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 /// 默认端点：本机 llama.cpp / Ollama 一类 OpenAI 兼容服务的常见起点。
@@ -37,6 +42,11 @@ const MAX_TOOL_RESULT_CHARS: usize = 3000;
 const MAX_MESSAGE_CHARS: usize = 4000;
 /// 送进模型的历史消息条数上限。
 const MAX_HISTORY: usize = 16;
+/// 历史消息总字符预算。16 条 × 4000 字会远超 8k 上下文；
+/// 这个预算保证系统提示 + 工具声明 + 历史 + 输出仍能塞进 8192 token。
+const MAX_HISTORY_CHARS: usize = 4000;
+/// 用户主动停止时的统一错误串，命令层据此发 `stopped` 而不是 `error`。
+pub const STOPPED: &str = "已停止生成";
 /// 单次 HTTP 请求上限：2B 在 CPU 上生成 1k token 可能要几十秒。
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 
@@ -55,6 +65,15 @@ pub struct AssistantConfig {
     /// 工作台的问答不需要这么长的链路；打开后最大输出 token 要相应调高。
     #[serde(default)]
     pub thinking: bool,
+    /// 可选的 llama-server 可执行文件路径；留空则只能手动起服务。
+    #[serde(default)]
+    pub server_bin: String,
+    /// 可选的 GGUF 模型路径；与 `server_bin` 一起用于应用内启动。
+    #[serde(default)]
+    pub model_path: String,
+    /// 应用内启动时的上下文长度。
+    #[serde(default = "default_context_size")]
+    pub context_size: u32,
 }
 
 fn default_base_url() -> String {
@@ -69,6 +88,9 @@ fn default_temperature() -> f32 {
 fn default_max_tokens() -> u32 {
     1024
 }
+fn default_context_size() -> u32 {
+    8192
+}
 
 impl Default for AssistantConfig {
     fn default() -> Self {
@@ -78,6 +100,9 @@ impl Default for AssistantConfig {
             temperature: default_temperature(),
             max_tokens: default_max_tokens(),
             thinking: false,
+            server_bin: String::new(),
+            model_path: String::new(),
+            context_size: default_context_size(),
         }
     }
 }
@@ -124,6 +149,191 @@ pub struct AssistantReply {
     pub model: String,
 }
 
+/// 流式事件：`delta` 增量正文，`step` 工具完成，`done` 最终回复，
+/// `error` 失败，`stopped` 用户取消。前端只按 `kind` 分派。
+#[derive(Serialize, Clone, Debug, ts_rs::TS)]
+pub struct AssistantEvent {
+    pub kind: String,
+    pub text: String,
+    pub step: Option<AssistantStep>,
+    pub reply: Option<AssistantReply>,
+}
+
+impl AssistantEvent {
+    pub fn delta(text: impl Into<String>) -> Self {
+        Self {
+            kind: "delta".into(),
+            text: text.into(),
+            step: None,
+            reply: None,
+        }
+    }
+    pub fn step(step: AssistantStep) -> Self {
+        Self {
+            kind: "step".into(),
+            text: String::new(),
+            step: Some(step),
+            reply: None,
+        }
+    }
+    pub fn done(reply: AssistantReply) -> Self {
+        Self {
+            kind: "done".into(),
+            text: String::new(),
+            step: None,
+            reply: Some(reply),
+        }
+    }
+    pub fn error(message: impl Into<String>) -> Self {
+        Self {
+            kind: "error".into(),
+            text: message.into(),
+            step: None,
+            reply: None,
+        }
+    }
+    pub fn stopped() -> Self {
+        Self {
+            kind: "stopped".into(),
+            text: STOPPED.into(),
+            step: None,
+            reply: None,
+        }
+    }
+}
+
+static CANCELS: OnceLock<Mutex<HashMap<String, Arc<AtomicBool>>>> = OnceLock::new();
+
+fn cancel_map() -> &'static Mutex<HashMap<String, Arc<AtomicBool>>> {
+    CANCELS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// 登记一次流式请求的取消旗标；同一 id 覆盖旧值。
+pub fn register_cancel(request_id: &str) -> Arc<AtomicBool> {
+    let flag = Arc::new(AtomicBool::new(false));
+    if !request_id.is_empty() {
+        if let Ok(mut map) = cancel_map().lock() {
+            map.insert(request_id.to_string(), flag.clone());
+        }
+    }
+    flag
+}
+
+pub fn release_cancel(request_id: &str) {
+    if !request_id.is_empty() {
+        if let Ok(mut map) = cancel_map().lock() {
+            map.remove(request_id);
+        }
+    }
+}
+
+/// 由前端「停止」按钮调用；只置位，不等待。
+pub fn cancel(request_id: &str) {
+    if let Ok(map) = cancel_map().lock() {
+        if let Some(flag) = map.get(request_id) {
+            flag.store(true, Ordering::Relaxed);
+        }
+    }
+}
+
+static SERVICE_CHILD: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
+
+fn service_child() -> &'static Mutex<Option<Child>> {
+    SERVICE_CHILD.get_or_init(|| Mutex::new(None))
+}
+
+/// 应用内启动 llama-server：只使用用户显式填写的本地可执行文件与 GGUF，
+/// 不下载、不联网、不执行模型名拼出来的命令。
+pub fn start_service(root: &DataRoot, config: AssistantConfig) -> Result<AssistantStatus, String> {
+    let config = normalize_config(config)?;
+    if config.server_bin.is_empty() || config.model_path.is_empty() {
+        return Err("请先在模型设置里填写 llama-server 路径和 GGUF 模型路径".to_string());
+    }
+    let current = status(&config);
+    if current.ok {
+        return Ok(current);
+    }
+    let bin = std::path::Path::new(&config.server_bin);
+    let model = std::path::Path::new(&config.model_path);
+    if !bin.is_file() {
+        return Err(format!("找不到 llama-server: {}", config.server_bin));
+    }
+    if !model.is_file() {
+        return Err(format!("找不到模型文件: {}", config.model_path));
+    }
+    let port = reqwest::Url::parse(&config.base_url)
+        .ok()
+        .and_then(|u| u.port_or_known_default())
+        .unwrap_or(18082);
+    let log_path = root.join("assistant-service.log");
+    let stdout = std::fs::File::create(&log_path)
+        .map_err(|e| format!("无法创建服务日志 {}: {e}", log_path.display()))?;
+    let stderr = stdout
+        .try_clone()
+        .map_err(|e| format!("无法复制服务日志句柄: {e}"))?;
+    let mut guard = service_child()
+        .lock()
+        .map_err(|_| "服务状态锁被污染".to_string())?;
+    if let Some(child) = guard.as_mut() {
+        if child.try_wait().ok().flatten().is_none() {
+            return Err("应用内启动的模型服务已经在运行".to_string());
+        }
+    }
+    let child = Command::new(bin)
+        .arg("-m")
+        .arg(model)
+        .arg("--host")
+        .arg("127.0.0.1")
+        .arg("--port")
+        .arg(port.to_string())
+        .arg("-c")
+        .arg(config.context_size.to_string())
+        .arg("--jinja")
+        .arg("--parallel")
+        .arg("1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(stdout))
+        .stderr(Stdio::from(stderr))
+        .spawn()
+        .map_err(|e| format!("启动 llama-server 失败: {e}"))?;
+    *guard = Some(child);
+
+    let started = Instant::now();
+    loop {
+        if started.elapsed() > Duration::from_secs(90) {
+            drop(guard);
+            let _ = stop_service();
+            return Err("模型服务 90 秒内没有就绪，请查看 assistant-service.log".to_string());
+        }
+        std::thread::sleep(Duration::from_secs(1));
+        let current = status(&config);
+        if current.ok {
+            return Ok(current);
+        }
+        if let Some(child) = guard.as_mut() {
+            if let Ok(Some(exit)) = child.try_wait() {
+                *guard = None;
+                return Err(format!(
+                    "模型服务启动后退出了（{exit}），请查看 {}",
+                    log_path.display()
+                ));
+            }
+        }
+    }
+}
+
+pub fn stop_service() -> Result<bool, String> {
+    let mut guard = service_child()
+        .lock()
+        .map_err(|_| "服务状态锁被污染".to_string())?;
+    let Some(mut child) = guard.take() else {
+        return Ok(false);
+    };
+    child.kill().map_err(|e| format!("停止模型服务失败: {e}"))?;
+    let _ = child.wait();
+    Ok(true)
+}
+
 pub fn load_config(root: &DataRoot) -> Result<AssistantConfig, String> {
     let raw = json_store::read_json::<AssistantConfig>(&root.join(CONFIG_FILE))?;
     Ok(raw.unwrap_or_default())
@@ -152,6 +362,11 @@ pub fn normalize_config(mut config: AssistantConfig) -> Result<AssistantConfig, 
     if !(64..=4096).contains(&config.max_tokens) {
         return Err("max_tokens 必须在 64 到 4096 之间".to_string());
     }
+    if !(512..=32768).contains(&config.context_size) {
+        return Err("context_size 必须在 512 到 32768 之间".to_string());
+    }
+    config.server_bin = config.server_bin.trim().to_string();
+    config.model_path = config.model_path.trim().to_string();
     Ok(config)
 }
 
@@ -341,6 +556,28 @@ fn tool_specs() -> Value {
         {
             "type": "function",
             "function": {
+                "name": "calculate",
+                "description": "计算四则运算、折扣、百分比、括号。任何算术都必须先调用它，不要心算。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "expression": {"type": "string", "description": "只含数字、+ - * / 和括号，例如 (249*0.8)-15"}
+                    },
+                    "required": ["expression"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "current_date",
+                "description": "返回这台机器的今天日期与星期。涉及今天、明天、周五、到期日时必须先调用它。",
+                "parameters": {"type": "object", "properties": {}, "required": []}
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "create_task",
                 "description": "创建一条任务。只有用户在「知识库 → AI 接入」开启写入后才会成功。",
                 "parameters": {
@@ -406,7 +643,9 @@ fn system_prompt(root: &DataRoot) -> String {
          2. 涉及具体任务、端口、成本明细、知识库内容时，先调用工具，再回答。\n\
          3. 用用户的语言回答，默认中文。先给结论，再给最多两条可执行建议，六句话以内。\n\
          4. 不要输出大段 Markdown；列清单时用短横线，每行一条。\n\
-         5. 创建任务前必须确认标题来自用户原话；写入关闭时告诉用户去「知识库 → AI 接入」开启。"
+         5. 创建任务前必须确认标题来自用户原话；写入关闭时告诉用户去「知识库 → AI 接入」开启。\n\
+         6. 任何算术（价格、折扣、百分比、差额）都必须调用 calculate，把结果照抄进回答，不要心算。\n\
+         7. 涉及今天、明天、周五、几号、是否逾期时，必须先调用 current_date，不要凭记忆猜日期。"
     )
 }
 
@@ -415,6 +654,19 @@ pub fn chat(
     root: &DataRoot,
     config: &AssistantConfig,
     messages: Vec<ChatMessage>,
+) -> Result<AssistantReply, String> {
+    let cancel = AtomicBool::new(false);
+    chat_stream(root, config, messages, &cancel, &mut |_| {})
+}
+
+/// 与 `chat` 相同，但把正文增量与工具步骤通过 `on_event` 推给调用方。
+/// `cancel` 每个 SSE 分片检查一次；置位后最多再等当前一行。
+pub fn chat_stream(
+    root: &DataRoot,
+    config: &AssistantConfig,
+    messages: Vec<ChatMessage>,
+    cancel: &AtomicBool,
+    on_event: &mut dyn FnMut(AssistantEvent),
 ) -> Result<AssistantReply, String> {
     let config = normalize_config(config.clone())?;
     let history = normalize_history(messages)?;
@@ -435,71 +687,43 @@ pub fn chat(
     let mut tool_calls_total = 0usize;
 
     for _ in 0..=MAX_STEPS {
-        let body = json!({
-            "model": config.model.clone(),
-            "messages": payload_messages.clone(),
-            "tools": tool_specs(),
-            "tool_choice": "auto",
-            "temperature": config.temperature,
-            "max_tokens": config.max_tokens,
-            "stream": false,
-            // llama.cpp / Ollama 的 OpenAI 兼容端点支持这个开关；不支持的
-            // 服务会忽略它。MiniCPM5 系模板默认会先思考，这里显式关掉，
-            // 否则 2B 模型在 CPU 上会把 token 全花在思考里。
-            "chat_template_kwargs": { "enable_thinking": config.thinking },
-        });
-        let response = client
-            .post(endpoint(&config.base_url, "chat/completions"))
-            .json(&body)
-            .send()
-            .map_err(|e| format!("模型请求失败: {e}"))?;
-        if !response.status().is_success() {
-            let status = response.status();
-            let text = response.text().unwrap_or_default();
-            return Err(format!(
-                "模型返回 {status}: {}",
-                text.chars().take(300).collect::<String>()
-            ));
+        if cancel.load(Ordering::Relaxed) {
+            return Err(STOPPED.to_string());
         }
-        let json: Value = response
-            .json()
-            .map_err(|e| format!("模型响应不是合法 JSON: {e}"))?;
-        add_usage(&mut usage, &json);
-        let message = json
-            .get("choices")
-            .and_then(|c| c.get(0))
-            .and_then(|c| c.get("message"))
-            .ok_or_else(|| "模型响应缺少 choices[0].message".to_string())?;
-        let mut content = message
-            .get("content")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        if content.is_empty() {
-            // 有些模板把正文写进 reasoning_content；宁可展示它，也不要回一个空泡。
-            content = message
-                .get("reasoning_content")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .trim()
-                .to_string();
-        }
-        let calls = message
-            .get("tool_calls")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
+        let (content, calls) = stream_completion(
+            &client,
+            &config,
+            &payload_messages,
+            true,
+            cancel,
+            &mut usage,
+            on_event,
+        )?;
         if calls.is_empty() {
-            if content.is_empty() {
+            let content = if content.trim().is_empty() {
+                final_summary(
+                    &client,
+                    &config,
+                    &payload_messages,
+                    &steps,
+                    cancel,
+                    &mut usage,
+                    on_event,
+                )?
+            } else {
+                content
+            };
+            if content.trim().is_empty() {
                 return Err("模型没有返回内容".to_string());
             }
-            return Ok(AssistantReply {
+            let reply = AssistantReply {
                 content,
                 steps,
                 usage,
                 model: config.model,
-            });
+            };
+            on_event(AssistantEvent::done(reply.clone()));
+            return Ok(reply);
         }
         if tool_calls_total + calls.len() > MAX_TOOL_CALLS {
             return Err(format!(
@@ -513,6 +737,9 @@ pub fn chat(
             "tool_calls": calls.clone(),
         }));
         for call in &calls {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(STOPPED.to_string());
+            }
             tool_calls_total += 1;
             let (id, name, arguments) = parse_tool_call(call)?;
             let (result, ok) = match execute_tool(root, &name, &arguments) {
@@ -522,12 +749,14 @@ pub fn chat(
                     false,
                 ),
             };
-            steps.push(AssistantStep {
+            let step = AssistantStep {
                 tool: name.clone(),
                 arguments: arguments.clone(),
                 result: result.clone(),
                 ok,
-            });
+            };
+            steps.push(step.clone());
+            on_event(AssistantEvent::step(step));
             payload_messages.push(json!({
                 "role": "tool",
                 "tool_call_id": id,
@@ -538,6 +767,217 @@ pub fn chat(
     Err(format!(
         "模型连续调用工具超过 {MAX_STEPS} 轮，已停止。可以把问题拆小一点再问。"
     ))
+}
+
+/// 模型在拿到工具结果后偶尔会再调一次工具、正文为空。这里做一次
+/// 「禁止工具」的收尾总结；仍失败就用工具原始结果兜底，绝不回空泡。
+fn final_summary(
+    client: &reqwest::blocking::Client,
+    config: &AssistantConfig,
+    payload: &[Value],
+    steps: &[AssistantStep],
+    cancel: &AtomicBool,
+    usage: &mut AssistantUsage,
+    on_event: &mut dyn FnMut(AssistantEvent),
+) -> Result<String, String> {
+    let mut messages = payload.to_vec();
+    messages.push(json!({
+        "role": "user",
+        "content": "请根据上面的工具结果，用中文简洁回答我最初的问题。不要再调用工具，也不要再查数据。"
+    }));
+    if let Ok((content, _)) =
+        stream_completion(client, config, &messages, false, cancel, usage, on_event)
+    {
+        if !content.trim().is_empty() {
+            return Ok(content);
+        }
+    }
+    if let Some(last) = steps.last() {
+        return Ok(format!(
+            "工具 {} 已返回结果，但模型没有生成总结。原始结果：\n{}",
+            last.tool,
+            truncate_chars(&last.result, 800)
+        ));
+    }
+    Err("模型没有返回内容".to_string())
+}
+
+/// 一次模型调用。`stream=true` 时解析 SSE，把正文增量交给 `on_event`；
+/// 服务端忽略 stream 返回整段 JSON 时走兼容分支。
+fn stream_completion(
+    client: &reqwest::blocking::Client,
+    config: &AssistantConfig,
+    messages: &[Value],
+    with_tools: bool,
+    cancel: &AtomicBool,
+    usage: &mut AssistantUsage,
+    on_event: &mut dyn FnMut(AssistantEvent),
+) -> Result<(String, Vec<Value>), String> {
+    let mut body = json!({
+        "model": config.model.clone(),
+        "messages": messages,
+        "temperature": config.temperature,
+        "max_tokens": config.max_tokens,
+        "stream": true,
+        "stream_options": { "include_usage": true },
+        "chat_template_kwargs": { "enable_thinking": config.thinking },
+    });
+    if with_tools {
+        body["tools"] = tool_specs();
+        body["tool_choice"] = Value::String("auto".into());
+    }
+    let response = client
+        .post(endpoint(&config.base_url, "chat/completions"))
+        .json(&body)
+        .send()
+        .map_err(|e| format!("模型请求失败: {e}"))?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().unwrap_or_default();
+        return Err(format!(
+            "模型返回 {status}: {}",
+            text.chars().take(300).collect::<String>()
+        ));
+    }
+
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if !content_type.contains("text/event-stream") {
+        // 有些服务忽略 stream:true，直接回一整段 JSON。
+        let json: Value = response
+            .json()
+            .map_err(|e| format!("模型响应不是合法 JSON: {e}"))?;
+        add_usage(usage, &json);
+        let message = json
+            .get("choices")
+            .and_then(|c| c.get(0))
+            .and_then(|c| c.get("message"))
+            .ok_or_else(|| "模型响应缺少 choices[0].message".to_string())?;
+        let content = message_content(message);
+        let calls = message
+            .get("tool_calls")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        if !content.trim().is_empty() {
+            on_event(AssistantEvent::delta(content.clone()));
+        }
+        return Ok((content, calls));
+    }
+
+    let reader = BufReader::new(response);
+    let mut content = String::new();
+    let mut reasoning = String::new();
+    let mut calls: BTreeMap<usize, ToolCallAcc> = BTreeMap::new();
+    for line in reader.lines() {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(STOPPED.to_string());
+        }
+        let line = line.map_err(|e| format!("读取模型流失败: {e}"))?;
+        let Some(data) = line.trim_end().strip_prefix("data:") else {
+            continue;
+        };
+        let data = data.trim();
+        if data == "[DONE]" {
+            break;
+        }
+        let Ok(chunk) = serde_json::from_str::<Value>(data) else {
+            continue;
+        };
+        add_usage(usage, &chunk);
+        let Some(choice) = chunk.get("choices").and_then(|c| c.get(0)) else {
+            continue;
+        };
+        let Some(delta) = choice.get("delta").or_else(|| choice.get("message")) else {
+            continue;
+        };
+        if let Some(text) = delta.get("content").and_then(Value::as_str) {
+            if !text.is_empty() {
+                content.push_str(text);
+                on_event(AssistantEvent::delta(text));
+            }
+        }
+        if let Some(text) = delta.get("reasoning_content").and_then(Value::as_str) {
+            reasoning.push_str(text);
+        }
+        if let Some(items) = delta.get("tool_calls").and_then(Value::as_array) {
+            for item in items {
+                merge_tool_delta(&mut calls, item);
+            }
+        }
+    }
+    if content.trim().is_empty() && !reasoning.trim().is_empty() {
+        content = reasoning;
+        on_event(AssistantEvent::delta(content.clone()));
+    }
+    let calls = calls
+        .into_iter()
+        .filter_map(|(_, call)| {
+            if call.name.is_empty() {
+                None
+            } else {
+                Some(json!({
+                    "id": if call.id.is_empty() { "call_unknown" } else { &call.id },
+                    "type": "function",
+                    "function": {"name": call.name, "arguments": call.arguments},
+                }))
+            }
+        })
+        .collect();
+    Ok((content, calls))
+}
+
+#[derive(Default)]
+struct ToolCallAcc {
+    id: String,
+    name: String,
+    arguments: String,
+}
+
+fn merge_tool_delta(calls: &mut BTreeMap<usize, ToolCallAcc>, item: &Value) {
+    let index = item.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let entry = calls.entry(index).or_default();
+    if let Some(id) = item
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    {
+        entry.id = id.to_string();
+    }
+    let Some(function) = item.get("function") else {
+        return;
+    };
+    if let Some(name) = function.get("name").and_then(Value::as_str) {
+        entry.name = name.to_string();
+    }
+    match function.get("arguments") {
+        Some(Value::String(fragment)) => entry.arguments.push_str(fragment),
+        Some(value @ Value::Object(_)) => entry.arguments = value.to_string(),
+        Some(Value::Null) | None => {}
+        Some(other) => entry.arguments.push_str(&other.to_string()),
+    }
+}
+
+fn message_content(message: &Value) -> String {
+    let content = message
+        .get("content")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if content.is_empty() {
+        return message
+            .get("reasoning_content")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim()
+            .to_string();
+    }
+    content
 }
 
 fn add_usage(usage: &mut AssistantUsage, body: &Value) {
@@ -570,7 +1010,22 @@ fn normalize_history(messages: Vec<ChatMessage>) -> Result<Vec<ChatMessage>, Str
             content: content.to_string(),
         });
     }
-    let tail: Vec<ChatMessage> = out.split_off(out.len().saturating_sub(MAX_HISTORY));
+    // 先按条数、再按总字符预算保留最近的消息；最后一条用户消息必须留下，
+    // 否则模型会答非所问。16 条 × 4000 字的上限对 8k 上下文毫无意义。
+    let mut tail: Vec<ChatMessage> = Vec::new();
+    let mut chars = 0usize;
+    for message in out.into_iter().rev() {
+        if tail.len() >= MAX_HISTORY {
+            break;
+        }
+        let len = message.content.chars().count();
+        if !tail.is_empty() && chars + len > MAX_HISTORY_CHARS {
+            break;
+        }
+        chars += len;
+        tail.push(message);
+    }
+    tail.reverse();
     let Some(last) = tail.last() else {
         return Err("请先输入内容".to_string());
     };
@@ -620,6 +1075,8 @@ fn execute_tool(root: &DataRoot, name: &str, raw_args: &str) -> Result<String, S
         "list_ports" => tool_list_ports(&args),
         "cost_summary" => tool_cost_summary(root),
         "search_knowledge" => tool_search_knowledge(root, &args),
+        "calculate" => tool_calculate(&args),
+        "current_date" => Ok(tool_current_date()),
         "create_task" => tool_create_task(root, &args),
         other => Err(format!("未知工具: {other}")),
     }
@@ -786,13 +1243,14 @@ fn tool_create_task(root: &DataRoot, args: &Value) -> Result<String, String> {
         return Err("写入未开启：请用户在「知识库 → AI 接入」打开写入开关".to_string());
     }
     let title = arg_str(args, "title").ok_or_else(|| "create_task 需要 title".to_string())?;
+    let due = arg_str(args, "due").map(normalize_due).transpose()?;
     let action = ai_service::task_create(
         root,
         TaskCreateArgs {
             title: title.to_string(),
             status: Some("todo".to_string()),
             priority: arg_str(args, "priority").map(str::to_string),
-            due: arg_str(args, "due").map(str::to_string),
+            due,
             project_id: arg_str(args, "project_id").map(str::to_string),
             tags: Vec::new(),
             next_step: None,
@@ -806,6 +1264,173 @@ fn tool_create_task(root: &DataRoot, args: &Value) -> Result<String, String> {
         "undo": format!("ai_undo({})", action.id),
     })
     .to_string())
+}
+
+/// 四则运算工具。只允许数字、小数点、+ - * /、括号和空格；
+/// 手写递归下降，不引入 eval 类逻辑。
+fn tool_calculate(args: &Value) -> Result<String, String> {
+    let expression =
+        arg_str(args, "expression").ok_or_else(|| "calculate 需要 expression".to_string())?;
+    if expression.chars().count() > 200 {
+        return Err("表达式太长（上限 200 字符）".to_string());
+    }
+    let value = CalcParser::new(expression).parse()?;
+    if !value.is_finite() {
+        return Err("计算结果不是有限数字".to_string());
+    }
+    let text = if (value - value.round()).abs() < 1e-9 {
+        format!("{}", value.round() as i64)
+    } else {
+        let mut s = format!("{value:.6}");
+        while s.ends_with('0') {
+            s.pop();
+        }
+        if s.ends_with('.') {
+            s.pop();
+        }
+        s
+    };
+    Ok(json!({"expression": expression, "result": value, "text": text}).to_string())
+}
+
+fn tool_current_date() -> String {
+    use chrono::Datelike;
+    let now = chrono::Local::now();
+    let weekday_cn = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+        [now.weekday().num_days_from_sunday() as usize];
+    json!({
+        "date": now.format("%Y-%m-%d").to_string(),
+        "weekday": now.format("%A").to_string(),
+        "weekday_cn": weekday_cn,
+        "time": now.format("%H:%M").to_string(),
+    })
+    .to_string()
+}
+
+struct CalcParser<'a> {
+    bytes: &'a [u8],
+    pos: usize,
+}
+
+impl<'a> CalcParser<'a> {
+    fn new(input: &'a str) -> Self {
+        Self {
+            bytes: input.as_bytes(),
+            pos: 0,
+        }
+    }
+    fn parse(mut self) -> Result<f64, String> {
+        if self.bytes.iter().any(|b| {
+            !matches!(
+                *b,
+                b'0'..=b'9' | b'.' | b'+' | b'-' | b'*' | b'/' | b'(' | b')' | b' '
+            )
+        }) {
+            return Err("表达式只能包含数字、+ - * / 和括号".to_string());
+        }
+        let value = self.expr()?;
+        self.ws();
+        if self.pos != self.bytes.len() {
+            return Err("表达式末尾有多余字符".to_string());
+        }
+        Ok(value)
+    }
+    fn ws(&mut self) {
+        while self.pos < self.bytes.len() && self.bytes[self.pos].is_ascii_whitespace() {
+            self.pos += 1;
+        }
+    }
+    fn peek(&mut self) -> Option<u8> {
+        self.ws();
+        self.bytes.get(self.pos).copied()
+    }
+    fn expr(&mut self) -> Result<f64, String> {
+        let mut value = self.term()?;
+        loop {
+            match self.peek() {
+                Some(b'+') => {
+                    self.pos += 1;
+                    value += self.term()?;
+                }
+                Some(b'-') => {
+                    self.pos += 1;
+                    value -= self.term()?;
+                }
+                _ => return Ok(value),
+            }
+        }
+    }
+    fn term(&mut self) -> Result<f64, String> {
+        let mut value = self.unary()?;
+        loop {
+            match self.peek() {
+                Some(b'*') => {
+                    self.pos += 1;
+                    value *= self.unary()?;
+                }
+                Some(b'/') => {
+                    self.pos += 1;
+                    let divisor = self.unary()?;
+                    if divisor == 0.0 {
+                        return Err("不能除以 0".to_string());
+                    }
+                    value /= divisor;
+                }
+                _ => return Ok(value),
+            }
+        }
+    }
+    fn unary(&mut self) -> Result<f64, String> {
+        match self.peek() {
+            Some(b'+') => {
+                self.pos += 1;
+                self.unary()
+            }
+            Some(b'-') => {
+                self.pos += 1;
+                Ok(-self.unary()?)
+            }
+            Some(b'(') => {
+                self.pos += 1;
+                let value = self.expr()?;
+                if self.peek() != Some(b')') {
+                    return Err("括号没有闭合".to_string());
+                }
+                self.pos += 1;
+                Ok(value)
+            }
+            _ => self.number(),
+        }
+    }
+    fn number(&mut self) -> Result<f64, String> {
+        self.ws();
+        let start = self.pos;
+        let mut dot = false;
+        while let Some(b) = self.bytes.get(self.pos) {
+            if b.is_ascii_digit() {
+                self.pos += 1;
+            } else if *b == b'.' && !dot {
+                dot = true;
+                self.pos += 1;
+            } else {
+                break;
+            }
+        }
+        if start == self.pos || self.bytes[start] == b'.' {
+            return Err("表达式缺少数值".to_string());
+        }
+        let text = &self.bytes[start..self.pos];
+        std::str::from_utf8(text)
+            .ok()
+            .and_then(|s| s.parse::<f64>().ok())
+            .ok_or_else(|| "数字格式不正确".to_string())
+    }
+}
+
+fn normalize_due(raw: &str) -> Result<String, String> {
+    chrono::NaiveDate::parse_from_str(raw.trim(), "%Y-%m-%d")
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .map_err(|_| format!("due 必须是 YYYY-MM-DD，收到: {raw}"))
 }
 
 /// 按字符截断，保证中文不会被切成半个 UTF-8 序列。
@@ -1020,5 +1645,117 @@ mod tests {
         let status = status(&cfg);
         assert!(!status.ok);
         assert!(!status.error.is_empty());
+    }
+
+    #[test]
+    fn calculator_handles_precedence_and_decimals() {
+        let root = temp_root("calc");
+        let raw = execute_tool(&root, "calculate", r#"{"expression":"(249*0.8)-15"}"#).unwrap();
+        let value: Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(value["result"], 184.2);
+        assert_eq!(value["text"], "184.2");
+
+        let raw = execute_tool(&root, "calculate", r#"{"expression":"2+3*4"}"#).unwrap();
+        let value: Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(value["result"], 14.0);
+        assert!(execute_tool(&root, "calculate", r#"{"expression":"1/0"}"#).is_err());
+        assert!(execute_tool(&root, "calculate", r#"{"expression":"1+($)"}"#).is_err());
+    }
+
+    #[test]
+    fn create_task_rejects_malformed_due_date() {
+        assert!(normalize_due("2026-11-21").is_ok());
+        assert!(normalize_due("2026-13-01").is_err());
+        assert!(normalize_due("明天").is_err());
+    }
+
+    /// 需要本机 18082 模型；验证 SSE 解析、增量拼装与 done 事件一致。
+    #[test]
+    #[ignore = "需要本机 18082 上的 MiniCPM5-2B 服务"]
+    fn live_stream_emits_deltas_and_done() {
+        let root = temp_root("stream");
+        seed_tasks(&root);
+        let mut events: Vec<AssistantEvent> = Vec::new();
+        let cancel = AtomicBool::new(false);
+        let reply = chat_stream(
+            &root,
+            &AssistantConfig::default(),
+            vec![ChatMessage {
+                role: "user".into(),
+                content: "用一句话介绍你自己。".into(),
+            }],
+            &cancel,
+            &mut |event| events.push(event),
+        )
+        .unwrap();
+        let deltas: String = events
+            .iter()
+            .filter(|e| e.kind == "delta")
+            .map(|e| e.text.as_str())
+            .collect();
+        assert!(!deltas.is_empty(), "没有收到任何 delta");
+        assert_eq!(deltas.trim(), reply.content.trim());
+        assert!(events.iter().any(|e| e.kind == "done"));
+    }
+
+    /// 真实拉起/停止一次 llama-server；需要环境变量提供二进制与 GGUF，默认跳过。
+    #[test]
+    #[ignore]
+    fn service_lifecycle_real_binary() {
+        let (Ok(bin), Ok(model)) = (
+            std::env::var("WORKBENCH_TEST_LLAMA_BIN"),
+            std::env::var("WORKBENCH_TEST_GGUF"),
+        ) else {
+            eprintln!("skip: WORKBENCH_TEST_LLAMA_BIN/WORKBENCH_TEST_GGUF 未设置");
+            return;
+        };
+        let root = temp_root("service-live");
+        let cfg = AssistantConfig {
+            base_url: "http://127.0.0.1:18084/v1".into(),
+            model: "minicpm5-2b".into(),
+            context_size: 4096,
+            server_bin: bin,
+            model_path: model,
+            ..AssistantConfig::default()
+        };
+        let started = start_service(&root, cfg.clone()).expect("服务应能启动");
+        assert!(started.ok);
+        assert!(root.join("assistant-service.log").is_file());
+        assert!(stop_service().unwrap(), "应停掉应用内启动的子进程");
+        let after = status(&cfg);
+        assert!(!after.ok);
+    }
+
+    #[test]
+    fn start_service_requires_binary_and_model_paths() {
+        let root = temp_root("service");
+        assert!(start_service(&root, AssistantConfig::default()).is_err());
+        let cfg = AssistantConfig {
+            server_bin: "/nonexistent/llama-server".into(),
+            model_path: "/nonexistent/model.gguf".into(),
+            ..AssistantConfig::default()
+        };
+        assert!(start_service(&root, cfg).is_err());
+        assert!(!stop_service().unwrap());
+    }
+
+    #[test]
+    fn history_is_trimmed_by_char_budget() {
+        let mut messages = Vec::new();
+        for i in 0..21 {
+            messages.push(ChatMessage {
+                role: if i % 2 == 0 {
+                    "user".into()
+                } else {
+                    "assistant".into()
+                },
+                content: "字".repeat(300),
+            });
+        }
+        let trimmed = normalize_history(messages).unwrap();
+        let total: usize = trimmed.iter().map(|m| m.content.chars().count()).sum();
+        assert!(total <= MAX_HISTORY_CHARS);
+        assert!(trimmed.len() < 21);
+        assert_eq!(trimmed.last().unwrap().role, "user");
     }
 }

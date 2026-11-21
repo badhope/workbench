@@ -10,6 +10,7 @@ import {
   Bot,
   Send,
   Settings2,
+  Square,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -17,17 +18,22 @@ import {
 } from "lucide-react";
 import { Badge, Btn, Card, Field, Spinner, inputCls } from "../ui";
 import { useT } from "../lib/i18n";
+import { isDesktop } from "../lib/transport";
 import { useStore } from "../lib/store";
 import {
   ASSISTANT_DESKTOP_ONLY,
   DEFAULT_ASSISTANT_CONFIG,
-  assistantChat,
+  assistantCancel,
+  assistantChatStream,
   assistantConfig,
   assistantSaveConfig,
+  assistantStartService,
   assistantStatus,
+  assistantStopService,
 } from "../lib/assistant";
 import type {
   AssistantConfig,
+  AssistantEvent,
   AssistantStatus,
   AssistantStep,
   AssistantUsage,
@@ -53,6 +59,9 @@ export default function Assistant() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const requestIdRef = useRef("");
+  const stopRequestedRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [config, setConfig] = useState<AssistantConfig>(DEFAULT_ASSISTANT_CONFIG);
   const [draft, setDraft] = useState<AssistantConfig>(DEFAULT_ASSISTANT_CONFIG);
@@ -117,44 +126,124 @@ export default function Assistant() {
     return () => clearInterval(timer);
   }, [busy]);
 
+  function patchLast(patch: (turn: Turn) => Partial<Turn>) {
+    setTurns((prev) =>
+      prev.map((turn, index) =>
+        index === prev.length - 1 ? { ...turn, ...patch(turn) } : turn
+      )
+    );
+  }
+
   async function send(text?: string) {
     const content = (text ?? input).trim();
     if (!content || busy || backendMissing) return;
     setElapsed(0);
+    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    requestIdRef.current = requestId;
+    stopRequestedRef.current = false;
     const history: Turn[] = [...turns, { role: "user", content }];
-    setTurns(history);
+    // 先放一个空的助手气泡，随后所有增量都 patch 它；用户能立刻看到
+    // “已发出 + 正在生成”，而不是等完整回复回来才整段跳出。
+    setTurns([...history, { role: "assistant", content: "" }]);
     setInput("");
     setBusy(true);
+    const abort = new AbortController();
+    abortRef.current = abort;
+    let streamFailed = false;
     try {
-      const reply = await assistantChat(
+      await assistantChatStream(
         history.map(({ role, content }) => ({ role, content })),
-        config
-      );
-      setTurns((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: reply.content,
-          steps: reply.steps,
-          usage: reply.usage,
+        config,
+        requestId,
+        (event: AssistantEvent) => {
+          if (stopRequestedRef.current || requestIdRef.current !== requestId) return;
+          if (event.kind === "delta") {
+            patchLast((turn) => ({ content: turn.content + event.text }));
+          } else if (event.kind === "step" && event.step) {
+            const step = event.step;
+            patchLast((turn) => ({
+              steps: [...(turn.steps ?? []), step],
+            }));
+          } else if (event.kind === "done" && event.reply) {
+            const reply = event.reply;
+            patchLast(() => ({
+              content: reply.content,
+              steps: reply.steps,
+              usage: reply.usage,
+            }));
+          } else if (event.kind === "stopped") {
+            patchLast((turn) => ({
+              content: turn.content || t("assistant.stopped"),
+            }));
+          } else if (event.kind === "error") {
+            streamFailed = true;
+            patchLast(() => ({
+              content: `${event.text}\n${t("assistant.retryHint")}`,
+              error: true,
+            }));
+          }
         },
-      ]);
+        abort.signal
+      );
     } catch (e) {
-      const message = String(e);
-      if (message.includes(ASSISTANT_DESKTOP_ONLY)) {
-        setBackendMissing(true);
-      } else {
-        setTurns((prev) => [
-          ...prev,
-          {
-            role: "assistant",
+      if (!stopRequestedRef.current && !streamFailed) {
+        const message = String(e);
+        if (message.includes(ASSISTANT_DESKTOP_ONLY)) {
+          setBackendMissing(true);
+        } else {
+          patchLast(() => ({
             content: `${message}\n${t("assistant.retryHint")}`,
             error: true,
-          },
-        ]);
+          }));
+        }
       }
     } finally {
-      setBusy(false);
+      if (requestIdRef.current === requestId) {
+        setBusy(false);
+        requestIdRef.current = "";
+        abortRef.current = null;
+      }
+    }
+  }
+
+  function stop() {
+    stopRequestedRef.current = true;
+    const requestId = requestIdRef.current;
+    abortRef.current?.abort();
+    if (requestId) void assistantCancel(requestId);
+    setBusy(false);
+    patchLast((turn) => ({
+      content: turn.content || t("assistant.stopped"),
+    }));
+  }
+
+  async function serviceStart() {
+    setChecking(true);
+    try {
+      const saved = await assistantSaveConfig(draft);
+      setConfig(saved);
+      setDraft(saved);
+      const next = await assistantStartService(saved);
+      setStatus(next);
+      if (next.ok) setToast(t("assistant.serviceStarted"));
+      else setToast(next.error || t("assistant.serviceFailed"));
+    } catch (e) {
+      setToast(t("assistant.serviceFailed", { err: String(e) }));
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function serviceStop() {
+    setChecking(true);
+    try {
+      const stopped = await assistantStopService();
+      setStatus(await assistantStatus(config));
+      setToast(t(stopped ? "assistant.serviceStopped" : "assistant.serviceNotRunning"));
+    } catch (e) {
+      setToast(t("assistant.serviceFailed", { err: String(e) }));
+    } finally {
+      setChecking(false);
     }
   }
 
@@ -280,7 +369,49 @@ export default function Assistant() {
                 }
               />
             </Field>
+            <Field label={t("assistant.serverBin")}>
+              <input
+                aria-label={t("assistant.serverBin")}
+                className={inputCls}
+                placeholder="/path/to/llama-server"
+                value={draft.server_bin}
+                onChange={(e) => setDraft({ ...draft, server_bin: e.target.value })}
+              />
+            </Field>
+            <Field label={t("assistant.modelPath")}>
+              <input
+                aria-label={t("assistant.modelPath")}
+                className={inputCls}
+                placeholder="/path/to/MiniCPM5-2B-Q4_K_M.gguf"
+                value={draft.model_path}
+                onChange={(e) => setDraft({ ...draft, model_path: e.target.value })}
+              />
+            </Field>
+            <Field label={t("assistant.contextSize")}>
+              <input
+                aria-label={t("assistant.contextSize")}
+                type="number"
+                step="1024"
+                min="512"
+                max="32768"
+                className={inputCls}
+                value={draft.context_size}
+                onChange={(e) =>
+                  setDraft({ ...draft, context_size: Number(e.target.value) })
+                }
+              />
+            </Field>
           </div>
+          {isDesktop() && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Btn onClick={() => void serviceStart()} disabled={checking}>
+                {t("assistant.startService")}
+              </Btn>
+              <Btn onClick={() => void serviceStop()} disabled={checking}>
+                {t("assistant.stopService")}
+              </Btn>
+            </div>
+          )}
           <label className="flex items-center gap-2 text-xs text-muted">
             <input
               type="checkbox"
@@ -351,13 +482,19 @@ export default function Assistant() {
           />
           <div className="mt-2 flex items-center justify-between gap-3">
             <span className="text-[11px] text-faint">{t("assistant.pageSub")}</span>
-            <Btn
-              variant="primary"
-              onClick={() => void send()}
-              disabled={busy || backendMissing || !input.trim()}
-            >
-              <Send size={13} /> {t("assistant.send")}
-            </Btn>
+            {busy ? (
+              <Btn variant="danger" onClick={stop}>
+                <Square size={13} /> {t("assistant.stop")}
+              </Btn>
+            ) : (
+              <Btn
+                variant="primary"
+                onClick={() => void send()}
+                disabled={backendMissing || !input.trim()}
+              >
+                <Send size={13} /> {t("assistant.send")}
+              </Btn>
+            )}
           </div>
         </div>
       </div>

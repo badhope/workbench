@@ -1,6 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { classifyOpenTarget } from "./openTarget";
-import { currentTransport, httpJson } from "./transport";
+import { apiPath, currentTransport, httpJson } from "./transport";
 import { t } from "./i18n";
 import {
   demoKnowledgeRead,
@@ -40,6 +40,7 @@ import type {
   AssistantConfig,
   AssistantStatus,
   AssistantReply,
+  AssistantEvent,
   ChatMessage,
 } from "../types";
 
@@ -545,6 +546,98 @@ export async function assistantStatus(config: AssistantConfig): Promise<Assistan
     method: "POST",
     body: config,
   });
+}
+
+export async function assistantChatStream(
+  messages: ChatMessage[],
+  config: AssistantConfig,
+  requestId: string,
+  onEvent: (event: AssistantEvent) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  if (isTauri()) {
+    const channel = new Channel<AssistantEvent>();
+    channel.onmessage = onEvent;
+    try {
+      await invoke("assistant_chat_stream", {
+        messages,
+        config,
+        requestId,
+        onEvent: channel,
+      });
+    } finally {
+      channel.onmessage = () => {};
+    }
+    return;
+  }
+  if (!isBackend()) throw new Error("ASSISTANT_DESKTOP_ONLY");
+  const res = await fetch(apiPath("/api/assistant/chat/stream"), {
+    method: "POST",
+    headers: {
+      accept: "text/event-stream",
+      "content-type": "application/json",
+      "x-workbench-write": "1",
+    },
+    body: JSON.stringify({ messages, config, request_id: requestId }),
+    signal,
+  });
+  if (!res.ok) {
+    const text = (await res.text()).slice(0, 300);
+    throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+  }
+  if (!res.body) throw new Error("浏览器不支持流式响应");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  const handleLine = (line: string) => {
+    const trimmed = line.trimStart();
+    const data = trimmed.startsWith("data:") ? trimmed.slice(5).trim() : "";
+    if (!data) return;
+    try {
+      onEvent(JSON.parse(data) as AssistantEvent);
+    } catch {
+      // 坏帧跳过；服务端保证每行是完整 JSON。
+    }
+  };
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) handleLine(line);
+  }
+  buffer += decoder.decode();
+  if (buffer) handleLine(buffer);
+}
+
+/** 应用内启动 llama-server；仅桌面端可用，路径来自模型设置。 */
+export async function assistantStartService(
+  config: AssistantConfig
+): Promise<AssistantStatus> {
+  if (isTauri()) return invoke<AssistantStatus>("assistant_start_service", { config });
+  throw new Error("ASSISTANT_DESKTOP_ONLY");
+}
+
+/** 只停止应用内启动的服务，不碰用户自己起的进程。 */
+export async function assistantStopService(): Promise<boolean> {
+  if (isTauri()) return invoke<boolean>("assistant_stop_service");
+  throw new Error("ASSISTANT_DESKTOP_ONLY");
+}
+
+/** 取消桌面端流式请求；HTTP 端由调用方直接丢弃响应。 */
+export async function assistantCancel(requestId: string): Promise<void> {
+  if (isTauri()) {
+    await invoke("assistant_cancel", { requestId });
+    return;
+  }
+  if (isBackend()) {
+    await httpJson("/api/assistant/cancel", {
+      method: "POST",
+      body: { request_id: requestId },
+      write: true,
+    });
+  }
 }
 
 export async function assistantChat(

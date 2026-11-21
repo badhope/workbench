@@ -21,6 +21,7 @@ export type { ChatMessage } from "./generated/ChatMessage";
 export type { AssistantStep } from "./generated/AssistantStep";
 export type { AssistantUsage } from "./generated/AssistantUsage";
 export type { AssistantReply } from "./generated/AssistantReply";
+export type { AssistantEvent } from "./generated/AssistantEvent";
 
 export type { ProcInfo } from "./generated/ProcInfo";
 export type { PortEntry } from "./generated/PortEntry";

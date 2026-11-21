@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/badge/version-1.0.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.md#system-requirements)
-[![Tests](https://img.shields.io/badge/tests-650%20unit%20%2B%20209%20backend%20%2B%2030%20e2e-8b5cf6)](#quality)
+[![Tests](https://img.shields.io/badge/tests-650%20unit%20%2B%20214%20backend%20%2B%2030%20e2e-8b5cf6)](#quality)
 
 ![Workbench](docs/screenshots/01-overview.png)
 
@@ -74,9 +74,16 @@ llama-server -m MiniCPM5-2B-Q4_K_M.gguf \
 
 Then open **Assistant** in the app. Defaults: `http://127.0.0.1:18082/v1`,
 model `minicpm5-2b`, thinking off. Remote hosts, credentials in the URL and
-query strings are rejected. The same routes are available over HTTP:
+query strings are rejected. Fill in the `llama-server` and GGUF paths under
+model settings to start/stop the service from the app; only processes started
+there are stopped there.
+
+Answers stream token by token and can be stopped mid-flight. The model gets
+`calculate` and `current_date` tools so arithmetic and “today/tomorrow” are
+computed instead of guessed. The same routes are available over HTTP:
 `GET/PUT /api/assistant/config`, `POST /api/assistant/status`,
-`POST /api/assistant/chat` (writes need `x-workbench-write: 1`).
+`POST /api/assistant/chat`, `POST /api/assistant/chat/stream`,
+`POST /api/assistant/cancel` (writes need `x-workbench-write: 1`).
 
 ## A look inside
 

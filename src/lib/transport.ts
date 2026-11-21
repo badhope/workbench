@@ -25,6 +25,11 @@ const listeners = new Set<() => void>();
 /** API 基址。同源部署时为空串；可用 `VITE_API_BASE` 指到别的端口。 */
 const API_BASE = (import.meta.env?.VITE_API_BASE as string | undefined) ?? "";
 
+/** 给需要自己 `fetch` 的调用方（SSE）用的路径拼接。 */
+export function apiPath(path: string): string {
+  return `${API_BASE}${path}`;
+}
+
 function detectTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }

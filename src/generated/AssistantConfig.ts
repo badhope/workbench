@@ -9,4 +9,16 @@ base_url: string, model: string, temperature: number, max_tokens: number,
  * 是否让模型先输出思考过程。默认关闭：2B 在 CPU 上思考几十秒才能说正文，
  * 工作台的问答不需要这么长的链路；打开后最大输出 token 要相应调高。
  */
-thinking: boolean, };
+thinking: boolean, 
+/**
+ * 可选的 llama-server 可执行文件路径；留空则只能手动起服务。
+ */
+server_bin: string, 
+/**
+ * 可选的 GGUF 模型路径；与 `server_bin` 一起用于应用内启动。
+ */
+model_path: string, 
+/**
+ * 应用内启动时的上下文长度。
+ */
+context_size: number, };

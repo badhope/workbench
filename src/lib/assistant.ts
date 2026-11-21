@@ -1,8 +1,12 @@
 import {
+  assistantCancel,
   assistantChat,
+  assistantChatStream,
   assistantConfig,
+  assistantStartService,
   assistantSaveConfig,
   assistantStatus,
+  assistantStopService,
 } from "./api";
 import type { AssistantConfig } from "../types";
 
@@ -13,9 +17,21 @@ export const DEFAULT_ASSISTANT_CONFIG: AssistantConfig = {
   temperature: 0.2,
   max_tokens: 1024,
   thinking: false,
+  server_bin: "",
+  model_path: "",
+  context_size: 8192,
 };
 
 /** 纯静态 demo（既无 IPC 也无 HTTP 后端）的错误码，由页面翻译成可读提示。 */
 export const ASSISTANT_DESKTOP_ONLY = "ASSISTANT_DESKTOP_ONLY";
 
-export { assistantChat, assistantConfig, assistantSaveConfig, assistantStatus };
+export {
+  assistantCancel,
+  assistantChat,
+  assistantChatStream,
+  assistantConfig,
+  assistantStartService,
+  assistantSaveConfig,
+  assistantStatus,
+  assistantStopService,
+};

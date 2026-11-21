@@ -14,6 +14,10 @@ const api = vi.hoisted(() => ({
   assistantSaveConfig: vi.fn(),
   assistantStatus: vi.fn(),
   assistantChat: vi.fn(),
+  assistantChatStream: vi.fn(),
+  assistantCancel: vi.fn(),
+  assistantStartService: vi.fn(),
+  assistantStopService: vi.fn(),
 }));
 
 vi.mock("../lib/api", () => api);
@@ -33,8 +37,22 @@ beforeEach(() => {
   api.assistantChat.mockResolvedValue({
     content: "先处理登录页的报错，它今天到期。",
     steps: [],
-    usage: { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 },
+    usage: { prompt_tokens: 20, completion_tokens: 10 },
     model: "minicpm5-2b",
+  });
+  api.assistantChatStream.mockImplementation(async (_messages, _config, _id, onEvent) => {
+    onEvent({ kind: "delta", text: "先处理登录页的报错", step: null, reply: null });
+    onEvent({
+      kind: "done",
+      text: "",
+      step: null,
+      reply: {
+        content: "先处理登录页的报错，它今天到期。",
+        steps: [],
+        usage: { prompt_tokens: 20, completion_tokens: 10 },
+        model: "minicpm5-2b",
+      },
+    });
   });
 });
 
@@ -47,9 +65,12 @@ it("探活后展示已连接，并能用建议问题完成一轮对话", async (
   await userEvent.click(screen.getByRole("button", { name: "今天最该先处理什么？" }));
 
   await screen.findByText("先处理登录页的报错，它今天到期。");
-  expect(api.assistantChat).toHaveBeenCalledWith(
+  expect(api.assistantChatStream).toHaveBeenCalledWith(
     [{ role: "user", content: "今天最该先处理什么？" }],
-    DEFAULT_ASSISTANT_CONFIG
+    DEFAULT_ASSISTANT_CONFIG,
+    expect.any(String),
+    expect.any(Function),
+    expect.anything()
   );
   expect(screen.getByText("20 输入 / 10 输出 token")).toBeInTheDocument();
 });
@@ -67,5 +88,5 @@ it("服务不可达时给出未连接与启动提示，不假装能用", async (
   render(<Assistant />);
   await screen.findByText("未连接");
   await userEvent.click(screen.getByTitle("模型设置"));
-  expect(screen.getByText(/llama-server/)).toBeInTheDocument();
+  expect(screen.getByText(/先在终端启动本地服务/)).toBeInTheDocument();
 });

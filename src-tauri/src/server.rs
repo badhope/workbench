@@ -24,11 +24,14 @@ use std::sync::Arc;
 
 use axum::extract::{DefaultBodyLimit, OriginalUri, Path as AxumPath, Query, State};
 use axum::http::{header, StatusCode};
+use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
@@ -275,6 +278,8 @@ pub fn router(state: AppState, opts: &ServeOptions) -> Router {
         )
         .route("/assistant/status", post(assistant_status))
         .route("/assistant/chat", post(assistant_chat))
+        .route("/assistant/chat/stream", post(assistant_chat_stream))
+        .route("/assistant/cancel", post(assistant_cancel))
         // API 自己的 fallback：未知 /api/* 必须在进入静态站点回落之前就变成
         // 404 JSON。否则有 dist 时 ServeDir 会把 /api/nope 当成 SPA 路由，
         // 返回 200 + index.html，脚本消费者拿到 HTML 才报 Unexpected token <。
@@ -1658,6 +1663,44 @@ mod http_tests {
         assert_eq!(body_json(res).await["ok"], false);
         std::fs::remove_dir_all(root.as_path()).ok();
     }
+
+    /// SSE 路由：不可达模型也要以 200 + error 事件结束，不能挂住连接。
+    #[tokio::test]
+    async fn assistant_stream_returns_error_event() {
+        let root = temp_root("assistant-stream");
+        let app = app_for(&root);
+        let body = serde_json::json!({
+            "messages": [{"role": "user", "content": "你好"}],
+            "request_id": "test-stream",
+            "config": {
+                "base_url": "http://127.0.0.1:1/v1",
+                "model": "minicpm5-2b",
+                "temperature": 0.2,
+                "max_tokens": 64,
+                "thinking": false
+            }
+        });
+        let res = app
+            .oneshot(
+                Request::post("/api/assistant/chat/stream")
+                    .header("content-type", "application/json")
+                    .header("x-workbench-write", "1")
+                    .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(
+            text.contains("\"kind\":\"error\""),
+            "没有 error 事件: {text}"
+        );
+        std::fs::remove_dir_all(root.as_path()).ok();
+    }
 }
 
 // ── 本地模型助手 ───────────────────────────────────────────
@@ -1695,6 +1738,13 @@ async fn assistant_status(
 struct AssistantChatBody {
     messages: Vec<crate::assistant::ChatMessage>,
     config: Option<crate::assistant::AssistantConfig>,
+    #[serde(default)]
+    request_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct AssistantCancelBody {
+    request_id: String,
 }
 
 async fn assistant_chat(
@@ -1713,4 +1763,61 @@ async fn assistant_chat(
         }
     };
     ok(blocking(move || crate::assistant::chat(&root, &config, body.messages)).await?)
+}
+
+/// SSE 版对话：桌面和网页共用同一条流式实现。
+/// 浏览器断开连接后 `tx` 发送失败，阻塞线程会在下一个事件处自然结束；
+/// 显式停止走 `/api/assistant/cancel`。
+async fn assistant_chat_stream(
+    State(st): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<AssistantChatBody>,
+) -> Result<Response, ApiError> {
+    require_same_origin(&headers)?;
+    require_write_header(&headers)?;
+    let root = st.root.clone();
+    let config = match body.config {
+        Some(config) => blocking(move || crate::assistant::normalize_config(config)).await?,
+        None => {
+            let root = root.clone();
+            blocking(move || crate::assistant::load_config(&root)).await?
+        }
+    };
+    let request_id = body.request_id.unwrap_or_default();
+    let (tx, rx) = tokio::sync::mpsc::channel::<crate::assistant::AssistantEvent>(64);
+    let messages = body.messages;
+    let cancel = crate::assistant::register_cancel(&request_id);
+    tokio::task::spawn_blocking(move || {
+        let result =
+            crate::assistant::chat_stream(&root, &config, messages, &cancel, &mut |event| {
+                let _ = tx.blocking_send(event);
+            });
+        crate::assistant::release_cancel(&request_id);
+        match result {
+            Ok(_) => {}
+            Err(e) if e == crate::assistant::STOPPED => {
+                let _ = tx.blocking_send(crate::assistant::AssistantEvent::stopped());
+            }
+            Err(e) => {
+                let _ = tx.blocking_send(crate::assistant::AssistantEvent::error(e));
+            }
+        }
+    });
+
+    let stream = ReceiverStream::new(rx).map(|event| {
+        let data = serde_json::to_string(&event).unwrap_or_else(|_| "{}".to_string());
+        Ok::<_, std::convert::Infallible>(Event::default().data(data))
+    });
+    Ok(Sse::new(stream)
+        .keep_alive(KeepAlive::default())
+        .into_response())
+}
+
+async fn assistant_cancel(
+    headers: axum::http::HeaderMap,
+    Json(body): Json<AssistantCancelBody>,
+) -> ApiResult<serde_json::Value> {
+    require_same_origin(&headers)?;
+    crate::assistant::cancel(&body.request_id);
+    ok(json!({"ok": true}))
 }

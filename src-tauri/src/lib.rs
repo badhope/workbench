@@ -311,6 +311,10 @@ pub fn run() {
             commands::assistant_save_config,
             commands::assistant_status,
             commands::assistant_chat,
+            commands::assistant_chat_stream,
+            commands::assistant_cancel,
+            commands::assistant_start_service,
+            commands::assistant_stop_service,
         ])
         .run(tauri::generate_context!())
         .expect("运行工作台应用失败");

@@ -1905,6 +1905,73 @@ pub async fn assistant_status(
 }
 
 #[tauri::command(async)]
+pub async fn assistant_chat_stream(
+    app: AppHandle,
+    messages: Vec<crate::assistant::ChatMessage>,
+    config: Option<crate::assistant::AssistantConfig>,
+    request_id: String,
+    on_event: tauri::ipc::Channel<crate::assistant::AssistantEvent>,
+) -> Result<(), String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let config = match config {
+            Some(config) => crate::assistant::normalize_config(config)?,
+            None => crate::assistant::load_config(&root)?,
+        };
+        let cancel = crate::assistant::register_cancel(&request_id);
+        let channel = on_event.clone();
+        let result =
+            crate::assistant::chat_stream(&root, &config, messages, &cancel, &mut |event| {
+                let _ = channel.send(event);
+            });
+        crate::assistant::release_cancel(&request_id);
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) if e == crate::assistant::STOPPED => {
+                let _ = on_event.send(crate::assistant::AssistantEvent::stopped());
+                Ok(())
+            }
+            Err(e) => {
+                let _ = on_event.send(crate::assistant::AssistantEvent::error(e.clone()));
+                Err(e)
+            }
+        }
+    })
+    .await
+    .map_err(|e| format!("助手执行失败: {e}"))?
+}
+
+#[tauri::command(async)]
+pub async fn assistant_cancel(request_id: String) {
+    crate::assistant::cancel(&request_id);
+}
+
+#[tauri::command(async)]
+pub async fn assistant_start_service(
+    app: AppHandle,
+    config: Option<crate::assistant::AssistantConfig>,
+) -> Result<crate::assistant::AssistantStatus, String> {
+    let root = data_root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let config = match config {
+            Some(config) => crate::assistant::normalize_config(config)?,
+            None => crate::assistant::load_config(&root)?,
+        };
+        crate::assistant::save_config(&root, config.clone())?;
+        crate::assistant::start_service(&root, config)
+    })
+    .await
+    .map_err(|e| format!("启动模型服务失败: {e}"))?
+}
+
+#[tauri::command(async)]
+pub async fn assistant_stop_service() -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(crate::assistant::stop_service)
+        .await
+        .map_err(|e| format!("停止模型服务失败: {e}"))?
+}
+
+#[tauri::command(async)]
 pub async fn assistant_chat(
     app: AppHandle,
     messages: Vec<crate::assistant::ChatMessage>,

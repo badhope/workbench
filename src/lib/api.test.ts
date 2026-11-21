@@ -89,6 +89,9 @@ describe("命令名与参数", () => {
         temperature: 0.2,
         max_tokens: 1024,
         thinking: false,
+        server_bin: "",
+        model_path: "",
+        context_size: 8192,
       };
       await api.assistantConfig();
       expect(invokeMock).toHaveBeenLastCalledWith("assistant_config");
@@ -104,6 +107,11 @@ describe("命令名与参数", () => {
       expect(invokeMock).toHaveBeenLastCalledWith("assistant_chat", {
         messages,
         config,
+      });
+
+      await api.assistantCancel("req-1");
+      expect(invokeMock).toHaveBeenLastCalledWith("assistant_cancel", {
+        requestId: "req-1",
       });
     }
   });
