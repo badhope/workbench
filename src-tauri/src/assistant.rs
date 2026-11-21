@@ -583,7 +583,7 @@ fn tool_specs() -> Value {
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "title": {"type": "string", "description": "任务标题，必须具体"},
+                        "title": {"type": "string", "description": "任务标题，只写要做的事；不要写“请帮我”“创建任务”，也不要把优先级/项目/截止日塞进标题"},
                         "priority": {"type": "string", "enum": ["low", "normal", "high"]},
                         "due": {"type": "string", "description": "截止日 YYYY-MM-DD，可省略"},
                         "project_id": {"type": "string", "description": "所属项目 id，可省略"}
@@ -915,8 +915,8 @@ fn stream_completion(
         on_event(AssistantEvent::delta(content.clone()));
     }
     let calls = calls
-        .into_iter()
-        .filter_map(|(_, call)| {
+        .into_values()
+        .filter_map(|call| {
             if call.name.is_empty() {
                 None
             } else {
@@ -1238,11 +1238,67 @@ fn tool_search_knowledge(root: &DataRoot, args: &Value) -> Result<String, String
     Ok(json!({ "query": query, "count": rows.len(), "hits": rows }).to_string())
 }
 
+/// 2B 常把整段指令塞进 `title`：去掉“请帮我/创建任务”等外壳，
+/// 以及“，优先级高/属于项目 X”这类本该落在独立字段的尾注。
+/// 这不是 JSON Schema 的替代，只是把最常见的脏输入挡在落库前。
+fn normalize_task_title(raw: &str) -> Result<String, String> {
+    let mut title = raw
+        .trim()
+        .trim_matches(['"', '“', '”', '\'', '「', '」'])
+        .trim();
+    for prefix in [
+        "请帮我创建一个任务：",
+        "请帮我创建任务：",
+        "帮我创建一个任务：",
+        "帮我创建任务：",
+        "创建任务：",
+        "新建任务：",
+        "任务：",
+        "请帮我",
+        "帮我",
+        "麻烦",
+    ] {
+        if let Some(rest) = title.strip_prefix(prefix) {
+            title = rest.trim();
+            break;
+        }
+    }
+    let meta = [
+        "优先级",
+        "属于项目",
+        "项目 id",
+        "项目id",
+        "截止",
+        "到期",
+        "due",
+        "priority",
+    ];
+    for sep in ['，', ',', '；', ';'] {
+        if let Some((head, tail)) = title.split_once(sep) {
+            let lower = tail.to_ascii_lowercase();
+            if !head.trim().is_empty() && meta.iter().any(|m| lower.contains(m)) {
+                title = head.trim();
+                break;
+            }
+        }
+    }
+    let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
+    if title.is_empty() {
+        return Err("create_task 的 title 不能为空".to_string());
+    }
+    if title.chars().count() > 120 {
+        return Err("create_task 的 title 太长（上限 120 字符）".to_string());
+    }
+    Ok(title)
+}
+
 fn tool_create_task(root: &DataRoot, args: &Value) -> Result<String, String> {
     if !ai_service::allow_writes(root)? {
         return Err("写入未开启：请用户在「知识库 → AI 接入」打开写入开关".to_string());
     }
-    let title = arg_str(args, "title").ok_or_else(|| "create_task 需要 title".to_string())?;
+    let title = normalize_task_title(
+        arg_str(args, "title").ok_or_else(|| "create_task 需要 title".to_string())?,
+    )?;
     let due = arg_str(args, "due").map(normalize_due).transpose()?;
     let action = ai_service::task_create(
         root,
@@ -1542,14 +1598,20 @@ mod tests {
 
     #[test]
     fn config_bounds_are_enforced() {
-        let mut cfg = AssistantConfig::default();
-        cfg.temperature = 3.0;
+        let cfg = AssistantConfig {
+            temperature: 3.0,
+            ..Default::default()
+        };
         assert!(normalize_config(cfg).is_err());
-        let mut cfg = AssistantConfig::default();
-        cfg.max_tokens = 10;
+        let cfg = AssistantConfig {
+            max_tokens: 10,
+            ..Default::default()
+        };
         assert!(normalize_config(cfg).is_err());
-        let mut cfg = AssistantConfig::default();
-        cfg.model = "  ".into();
+        let cfg = AssistantConfig {
+            model: "  ".into(),
+            ..Default::default()
+        };
         assert!(normalize_config(cfg).is_err());
     }
 
@@ -1660,6 +1722,18 @@ mod tests {
         assert_eq!(value["result"], 14.0);
         assert!(execute_tool(&root, "calculate", r#"{"expression":"1/0"}"#).is_err());
         assert!(execute_tool(&root, "calculate", r#"{"expression":"1+($)"}"#).is_err());
+    }
+
+    #[test]
+    fn task_title_strips_instruction_and_metadata() {
+        assert_eq!(
+            normalize_task_title("请帮我创建任务：修复登录页报错，优先级高，属于项目 p-login")
+                .unwrap(),
+            "修复登录页报错"
+        );
+        assert_eq!(normalize_task_title("  写周报  ").unwrap(), "写周报");
+        assert!(normalize_task_title("   ").is_err());
+        assert!(normalize_task_title(&"长".repeat(121)).is_err());
     }
 
     #[test]

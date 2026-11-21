@@ -10,6 +10,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const invokeMock = vi.fn(async (..._args: unknown[]) => undefined as unknown);
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...a: unknown[]) => invokeMock(...a),
+  Channel: class {
+    onmessage: (event: unknown) => void = () => {};
+  },
 }));
 
 // 桌面端分支会动态 import 这两个插件；在 jsdom 里它们会去调 IPC。
@@ -113,7 +116,53 @@ describe("命令名与参数", () => {
       expect(invokeMock).toHaveBeenLastCalledWith("assistant_cancel", {
         requestId: "req-1",
       });
+
+      await api.assistantStartService(config);
+      expect(invokeMock).toHaveBeenLastCalledWith("assistant_start_service", { config });
+      await api.assistantStopService();
+      expect(invokeMock).toHaveBeenLastCalledWith("assistant_stop_service");
     }
+  });
+
+  it("助手流式：Channel 事件按序送达，结束后解绑", async () => {
+    const config = {
+      base_url: "http://127.0.0.1:18082/v1",
+      model: "minicpm5-2b",
+      temperature: 0.2,
+      max_tokens: 1024,
+      thinking: false,
+      server_bin: "",
+      model_path: "",
+      context_size: 8192,
+    };
+    const received: unknown[] = [];
+    let channel: { onmessage: (event: unknown) => void } | undefined;
+    invokeMock.mockImplementationOnce(async (_cmd, args) => {
+      const payload = args as { onEvent: { onmessage: (event: unknown) => void } };
+      channel = payload.onEvent;
+      payload.onEvent.onmessage({ kind: "delta", text: "你" });
+      payload.onEvent.onmessage({ kind: "done", text: "" });
+      return undefined;
+    });
+    await api.assistantChatStream(
+      [{ role: "user", content: "hi" }],
+      config,
+      "req-stream",
+      (event) => received.push(event)
+    );
+    expect(invokeMock).toHaveBeenLastCalledWith("assistant_chat_stream", {
+      messages: [{ role: "user", content: "hi" }],
+      config,
+      requestId: "req-stream",
+      onEvent: expect.anything(),
+    });
+    expect(received).toEqual([
+      { kind: "delta", text: "你" },
+      { kind: "done", text: "" },
+    ]);
+    // 收尾必须解绑，防止迟到的帧再 patch 已结束的气泡。
+    channel?.onmessage({ kind: "delta", text: "迟到" });
+    expect(received).toHaveLength(2);
   });
 
   it("知识库：命令名、参数与只读边界", async () => {
@@ -549,5 +598,187 @@ describe("HTTP 传输分支", () => {
     expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("/api/system");
     await api.diskInfo();
     expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("/api/disks");
+  });
+
+  it("助手流式：解析 SSE 增量、跳过坏帧并处理末尾缓冲", async () => {
+    const encoder = new TextEncoder();
+    const chunks = [
+      'data: {"kind":"delta","text":"你"}\n\nevent: ping\n\n',
+      'data: {"kind":"step","text":"","step":{"tool":"calculate"}}\n\ndata: {bad}\n\n',
+      // 故意不带结尾换行：验证 decoder 收尾时 buffer 仍会被消费。
+      'data: {"kind":"done","text":"好"}',
+    ];
+    let cursor = 0;
+    const reader = {
+      read: async () =>
+        cursor < chunks.length
+          ? { done: false, value: encoder.encode(chunks[cursor++]) }
+          : { done: true, value: undefined },
+    };
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      body: { getReader: () => reader },
+    });
+    const events: unknown[] = [];
+    const config = {
+      base_url: "http://127.0.0.1:18082/v1",
+      model: "minicpm5-2b",
+      temperature: 0.2,
+      max_tokens: 1024,
+      thinking: false,
+      server_bin: "",
+      model_path: "",
+      context_size: 8192,
+    };
+    await api.assistantChatStream(
+      [{ role: "user", content: "算一下" }],
+      config,
+      "req-http",
+      (event) => events.push(event)
+    );
+    const [url, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
+    expect(url).toBe("/api/assistant/chat/stream");
+    expect(init.method).toBe("POST");
+    const headers = init.headers as Record<string, string>;
+    expect(headers.accept).toBe("text/event-stream");
+    expect(headers["x-workbench-write"]).toBe("1");
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      request_id: "req-http",
+      messages: [{ role: "user", content: "算一下" }],
+    });
+    expect(events).toEqual([
+      { kind: "delta", text: "你" },
+      { kind: "step", text: "", step: { tool: "calculate" } },
+      { kind: "done", text: "好" },
+    ]);
+  });
+
+  it("助手流式：HTTP 错误与无 body 明确抛出，取消走 POST", async () => {
+    const config = {
+      base_url: "http://127.0.0.1:18082/v1",
+      model: "minicpm5-2b",
+      temperature: 0.2,
+      max_tokens: 1024,
+      thinking: false,
+      server_bin: "",
+      model_path: "",
+      context_size: 8192,
+    };
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      statusText: "Bad Gateway",
+      text: async () => "upstream down",
+    });
+    await expect(api.assistantChatStream([], config, "r1", () => {})).rejects.toThrow(
+      "HTTP 502: upstream down"
+    );
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      statusText: "Service Unavailable",
+      text: async () => "",
+    });
+    await expect(api.assistantChatStream([], config, "r1b", () => {})).rejects.toThrow(
+      "HTTP 503: Service Unavailable"
+    );
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: null });
+    await expect(api.assistantChatStream([], config, "r2", () => {})).rejects.toThrow(
+      /不支持流式响应/
+    );
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    });
+    await api.assistantCancel("r3");
+    const [url, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
+    expect(url).toBe("/api/assistant/cancel");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({ request_id: "r3" });
+    expect((init.headers as Record<string, string>)["x-workbench-write"]).toBe("1");
+  });
+
+  it("助手服务启停在 Web 模式明确拒绝，不发请求", async () => {
+    const before = fetchMock.mock.calls.length;
+    const config = {
+      base_url: "http://127.0.0.1:18082/v1",
+      model: "minicpm5-2b",
+      temperature: 0.2,
+      max_tokens: 1024,
+      thinking: false,
+      server_bin: "",
+      model_path: "",
+      context_size: 8192,
+    };
+    await expect(api.assistantStartService(config)).rejects.toThrow(
+      "ASSISTANT_DESKTOP_ONLY"
+    );
+    await expect(api.assistantStopService()).rejects.toThrow("ASSISTANT_DESKTOP_ONLY");
+    expect(fetchMock.mock.calls.length).toBe(before);
+  });
+
+  it("助手普通对话在 Web 模式走 POST /api/assistant/chat", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ content: "好", steps: [], usage: null }),
+    });
+    const config = {
+      base_url: "http://127.0.0.1:18082/v1",
+      model: "minicpm5-2b",
+      temperature: 0.2,
+      max_tokens: 1024,
+      thinking: false,
+      server_bin: "",
+      model_path: "",
+      context_size: 8192,
+    };
+    const reply = await api.assistantChat([{ role: "user", content: "hi" }], config);
+    expect(reply.content).toBe("好");
+    const [url, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
+    expect(url).toBe("/api/assistant/chat");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect((init.headers as Record<string, string>)["x-workbench-write"]).toBe("1");
+  });
+});
+
+describe("助手在纯静态 demo 模式", () => {
+  beforeEach(async () => {
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    (await import("./transport")).__resetTransportForTests();
+  });
+
+  afterEach(() => {
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+  });
+
+  it("所有助手入口都明确拒绝，流式与取消不偷偷发请求", async () => {
+    const config = {
+      base_url: "http://127.0.0.1:18082/v1",
+      model: "minicpm5-2b",
+      temperature: 0.2,
+      max_tokens: 1024,
+      thinking: false,
+      server_bin: "",
+      model_path: "",
+      context_size: 8192,
+    };
+    await expect(api.assistantConfig()).rejects.toThrow("ASSISTANT_DESKTOP_ONLY");
+    await expect(api.assistantSaveConfig(config)).rejects.toThrow(
+      "ASSISTANT_DESKTOP_ONLY"
+    );
+    await expect(api.assistantStatus(config)).rejects.toThrow("ASSISTANT_DESKTOP_ONLY");
+    await expect(api.assistantChat([], config)).rejects.toThrow("ASSISTANT_DESKTOP_ONLY");
+    await expect(api.assistantChatStream([], config, "demo", () => {})).rejects.toThrow(
+      "ASSISTANT_DESKTOP_ONLY"
+    );
+    // cancel 在 demo 下是静默 no-op，不抛错也不发请求。
+    await expect(api.assistantCancel("demo")).resolves.toBeUndefined();
   });
 });
