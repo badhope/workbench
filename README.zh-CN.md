@@ -21,7 +21,9 @@
 
 ## 运行
 
-从 [GitHub Releases](https://github.com/X33834/workbench/releases) 下载安装包，国内也可以用 [Gitee](https://gitee.com/badhope/workbench/releases) 或 [GitCode](https://gitcode.com/badhope/workbench/releases)。Windows 提供 NSIS，Linux 提供 `.deb` 和 AppImage，macOS 提供 DMG。
+从 [GitHub Releases](https://github.com/X33834/workbench/releases) 下载安装包。Windows 提供 NSIS，Linux 提供 `.deb` 和 AppImage，macOS 提供 DMG。
+
+Gitee 和 GitCode 镜像也放了同样的离线安装包：[Gitee 下载目录](https://gitee.com/badhope/workbench/tree/main/downloads/v1.0.0) · [GitCode 下载目录](https://gitcode.com/badhope/workbench/tree/main/downloads/v1.0.0)。
 
 ```bash
 npm ci

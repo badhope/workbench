@@ -21,7 +21,9 @@ A local-first desktop workbench for the machine you actually work on. It keeps t
 
 ## Run it
 
-Download a build from [GitHub Releases](https://github.com/X33834/workbench/releases), or use the [Gitee](https://gitee.com/badhope/workbench/releases) and [GitCode](https://gitcode.com/badhope/workbench/releases) mirrors. Windows ships NSIS, Linux ships `.deb` and AppImage, macOS ships a DMG.
+Download a build from [GitHub Releases](https://github.com/X33834/workbench/releases). Windows ships NSIS, Linux ships `.deb` and AppImage, macOS ships a DMG.
+
+The Gitee and GitCode mirrors also keep the same installers offline: [Gitee downloads](https://gitee.com/badhope/workbench/tree/main/downloads/v1.0.0) · [GitCode downloads](https://gitcode.com/badhope/workbench/tree/main/downloads/v1.0.0).
 
 ```bash
 npm ci
