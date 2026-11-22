@@ -120,6 +120,38 @@ it("生成中可以停止，停止请求带同一个 request id", async () => {
   release?.();
 });
 
+it("成本工具结果按美元显示，不把 USD 标成人民币", async () => {
+  api.assistantChatStream.mockImplementationOnce(
+    async (_messages, _config, _id, onEvent) => {
+      onEvent({
+        kind: "done",
+        text: "",
+        step: null,
+        reply: {
+          content: "本月成本是 $12.34。",
+          steps: [
+            {
+              tool: "cost_summary",
+              arguments: "{}",
+              result: JSON.stringify({ month_cost: 12.34 }),
+              ok: true,
+            },
+          ],
+          usage: { prompt_tokens: 10, completion_tokens: 6 },
+          model: "glm-5.3-flash",
+        },
+      });
+    }
+  );
+
+  render(<Assistant />);
+  await screen.findByText("已连接");
+  await userEvent.click(screen.getByRole("button", { name: "今天最该先处理什么？" }));
+
+  await screen.findByText(/本月 \$12\.34/);
+  expect(screen.queryByText(/¥/)).not.toBeInTheDocument();
+});
+
 it("服务不可达时给出未连接与启动提示，不假装能用", async () => {
   api.assistantStatus.mockResolvedValue({
     ok: false,
@@ -133,7 +165,7 @@ it("服务不可达时给出未连接与启动提示，不假装能用", async (
   render(<Assistant />);
   await screen.findByText("未连接");
   await userEvent.click(screen.getByTitle("模型设置"));
-  expect(screen.getByText(/先在终端启动本地服务/)).toBeInTheDocument();
+  expect(screen.getByText(/先启动 OpenAI 兼容服务/)).toBeInTheDocument();
 });
 
 it("API Key 可输入，拉取模型后从下拉列表选择并保存", async () => {

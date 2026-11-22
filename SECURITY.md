@@ -47,6 +47,7 @@ typical web apps. Measures already implemented:
 | Content security policy | `tauri.conf.json` sets `self` defaults and scripts; it also permits inline styles, data/blob images, data fonts, IPC connections, and localhost:5173 frame sources |
 | Data integrity | JSON writes use atomic replacement; on parse failure the file is preserved as `*.corrupt-<timestamp>` before erroring — data is never silently dropped |
 | Dangerous operations | killing PID 0/4 and critical system processes is rejected outright; the frontend asks for confirmation |
+| HTTP server | `workbench serve` binds `127.0.0.1` by default and has no user authentication. Binding a non-loopback address with `--host` exposes task/project data and write endpoints to the network; put it behind an authenticated reverse proxy, or keep it on loopback |
 | Dependencies | CI runs `npm ci`, then `npm audit --omit=dev --audit-level=high` against the public registry (mirrors do not implement the audit API); Dependabot is configured for npm, Cargo, and GitHub Actions updates |
 
 ## After disclosure

@@ -33,7 +33,7 @@ export const dict = {
     "assistant.saved": "Model settings saved",
     "assistant.saveFailed": "Save failed: {err}",
     "assistant.startHint":
-      "Start the local service first: llama-server -m MiniCPM5-2B-Q4_K_M.gguf --port 18082 --jinja",
+      "Start an OpenAI-compatible endpoint (default: llama-server -m MiniCPM5-2B-Q4_K_M.gguf --port 18082 --jinja), or fill in a remote HTTPS gateway above.",
     "assistant.desktopOnly":
       "The assistant needs the desktop app or a local HTTP backend.",
     "assistant.emptyTitle": "Ask about this machine",
@@ -71,7 +71,7 @@ export const dict = {
     "assistant.toolName.create_task": "Create task",
     "assistant.toolName.workbench_context": "Workspace overview",
     "assistant.resultPorts": "{count} listeners",
-    "assistant.resultCost": "This month ¥{cost}",
+    "assistant.resultCost": "This month {cost}",
     "assistant.resultTasks": "{count} open",
     "assistant.resultKnowledge": "{count} hits",
     "assistant.resultCalculated": "Result {value}",
@@ -126,7 +126,7 @@ export const dict = {
     "assistant.saved": "模型设置已保存",
     "assistant.saveFailed": "保存失败：{err}",
     "assistant.startHint":
-      "先在终端启动本地服务：llama-server -m MiniCPM5-2B-Q4_K_M.gguf --port 18082 --jinja",
+      "先启动 OpenAI 兼容服务（默认：llama-server -m MiniCPM5-2B-Q4_K_M.gguf --port 18082 --jinja），或在上方填远程 HTTPS 网关。",
     "assistant.desktopOnly": "助手需要桌面端或本地 HTTP 后端。",
     "assistant.emptyTitle": "问这台机器上的事",
     "assistant.emptyHint": "任务、端口、花费、笔记，助手会先查再答。",
@@ -162,7 +162,7 @@ export const dict = {
     "assistant.toolName.create_task": "创建任务",
     "assistant.toolName.workbench_context": "工作台概况",
     "assistant.resultPorts": "监听 {count} 条",
-    "assistant.resultCost": "本月 ¥{cost}",
+    "assistant.resultCost": "本月 {cost}",
     "assistant.resultTasks": "{count} 条未完成",
     "assistant.resultKnowledge": "{count} 条命中",
     "assistant.resultCalculated": "结果 {value}",
@@ -217,7 +217,7 @@ export const dict = {
     "assistant.saved": "モデル設定を保存しました",
     "assistant.saveFailed": "保存に失敗: {err}",
     "assistant.startHint":
-      "先にローカルサービスを起動: llama-server -m MiniCPM5-2B-Q4_K_M.gguf --port 18082 --jinja",
+      "OpenAI 互換のエンドポイントを起動してください（既定: llama-server -m MiniCPM5-2B-Q4_K_M.gguf --port 18082 --jinja）。上欄にリモート HTTPS ゲートウェイを入力することもできます。",
     "assistant.desktopOnly":
       "アシスタントはデスクトップ版またはローカル HTTP が必要です。",
     "assistant.emptyTitle": "このマシンのことを聞く",
@@ -254,7 +254,7 @@ export const dict = {
     "assistant.toolName.create_task": "タスク作成",
     "assistant.toolName.workbench_context": "ワークスペース概要",
     "assistant.resultPorts": "リスナー {count} 件",
-    "assistant.resultCost": "今月 ¥{cost}",
+    "assistant.resultCost": "今月 {cost}",
     "assistant.resultTasks": "未完了 {count} 件",
     "assistant.resultKnowledge": "ヒット {count} 件",
     "assistant.resultCalculated": "結果 {value}",

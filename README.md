@@ -5,14 +5,15 @@
 [![Version](https://img.shields.io/badge/version-1.0.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.md#system-requirements)
-[![Tests](https://img.shields.io/badge/tests-657%20unit%20%2B%20219%20backend%20%2B%2030%20e2e-8b5cf6)](#quality)
+[![Tests](https://img.shields.io/badge/tests-660%20unit%20%2B%20222%20backend%20%2B%2030%20e2e-8b5cf6)](#quality)
 
 ![Workbench](docs/screenshots/01-overview.png)
 
 **A local-first workbench for the machine you actually work on.**
 
 It brings today's tasks, project progress, listening ports, running processes and
-AI session spend into one window. No account, no cloud, no telemetry.
+AI session spend into one window. No Workbench account, no telemetry; your data
+stays local, and only the model endpoint you choose can leave the machine.
 
 ## Why Workbench
 
@@ -28,14 +29,17 @@ AI session spend into one window. No account, no cloud, no telemetry.
 - **Keep local knowledge close.** Mount Markdown folders in place and search
   titles, body, tags and project links. The same context is available to MCP
   clients over stdio, with writes off by default.
-- **Ask a local model.** An optional assistant talks to MiniCPM5-2B on
-  `127.0.0.1:18082` and answers with real task, port, cost and knowledge data.
+- **Ask your model.** An optional assistant talks to an OpenAI-compatible
+  endpoint (MiniCPM5-2B on `127.0.0.1:18082` by default, or a remote HTTPS
+  gateway with a Bearer key) and answers with real task, port, cost and
+  knowledge data.
   It calls tools before answering and can create a task only when the existing
   AI write switch is on. No model weights ship with the app; bring your own
   llama.cpp/Ollama endpoint.
 - **Stay in control.** Data lives on this device. The only outbound requests are
-  the optional probe of a local opencode server and the optional local model
-  endpoint you configure (loopback only).
+  the optional probe of a local opencode server and the optional model endpoint
+  you configure. Remote model gateways must use HTTPS; the key travels only in
+  the Authorization header.
 
 ## Run it
 
@@ -64,8 +68,9 @@ workbench serve           # web UI and HTTP API
 
 ### Local assistant (optional)
 
-The assistant page needs an OpenAI-compatible endpoint on loopback. With
-llama.cpp and the Q4_K_M GGUF:
+The assistant page accepts any OpenAI-compatible endpoint. The default is a
+loopback server; a remote gateway is allowed only over HTTPS, and its Bearer
+key is kept in the request header. With llama.cpp and the Q4_K_M GGUF:
 
 ```bash
 llama-server -m MiniCPM5-2B-Q4_K_M.gguf \
@@ -73,10 +78,10 @@ llama-server -m MiniCPM5-2B-Q4_K_M.gguf \
 ```
 
 Then open **Assistant** in the app. Defaults: `http://127.0.0.1:18082/v1`,
-model `minicpm5-2b`, thinking off. Remote hosts, credentials in the URL and
-query strings are rejected. Fill in the `llama-server` and GGUF paths under
-model settings to start/stop the service from the app; only processes started
-there are stopped there.
+model `minicpm5-2b`, thinking off. Credentials in the URL and query strings
+are rejected; plain-HTTP remote hosts are rejected too. Fill in the
+`llama-server` and GGUF paths under model settings to start/stop the service
+from the app; only processes started there are stopped there.
 
 Answers stream token by token and can be stopped mid-flight. The model gets
 `calculate` and `current_date` tools so arithmetic and “today/tomorrow” are

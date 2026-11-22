@@ -367,7 +367,8 @@ fn restrict_config_permissions(path: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
-/// 校验并规范化配置：端点必须是回环地址，参数必须落在可用区间。
+/// 校验并规范化配置：端点必须是可解析的 http(s) 地址；远程地址强制 HTTPS。
+/// 参数必须落在可用区间。
 pub fn normalize_config(mut config: AssistantConfig) -> Result<AssistantConfig, String> {
     config.base_url = normalize_base_url(&config.base_url)?;
     let model = config.model.trim();
@@ -469,6 +470,10 @@ fn client() -> Result<reqwest::blocking::Client, String> {
     reqwest::blocking::Client::builder()
         .timeout(REQUEST_TIMEOUT)
         .connect_timeout(Duration::from_secs(5))
+        // 与 ai.rs 的会话采集一致：不跟随重定向。否则一个 HTTPS 网关可以把
+        // 请求 302 到明文 HTTP 或另一台主机，Bearer Key 与工作台数据的边界
+        // 就由上游决定，而不是由我们决定。
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|e| format!("创建模型客户端失败: {e}"))
 }
@@ -715,6 +720,89 @@ fn needs_tools(text: &str) -> bool {
             && lower.chars().any(|c| "+-*/%×÷".contains(c)))
 }
 
+/// 这句话是不是「让助手现在创建一个任务」。
+///
+/// 不能只看「任务 + 新建/创建」：中文没有形态变化，「我昨天新建了一个任务」
+/// 和「怎么新建任务？」都会命中这两个词。create_task 是写操作，误判的代价
+/// 不是多显示一张卡，而是往用户的真实任务表里塞一条假任务。因此要求同时
+/// 满足三件事：提到任务、出现创建类动词、是祈使/请求语气；并显式排除
+/// 过去时与疑问/教程式表达。
+fn wants_create_task(text: &str) -> bool {
+    let mentions_task = text.contains("任务") || text.contains("待办");
+    if !mentions_task {
+        return false;
+    }
+    let creation_verbs = [
+        "创建",
+        "新建",
+        "添加",
+        "加一个",
+        "加个",
+        "记一个",
+        "记录一个",
+        "记录一下",
+        "建一个",
+        "建个",
+    ];
+    if !creation_verbs.iter().any(|verb| text.contains(verb)) {
+        return false;
+    }
+    // 过去/完成/泛问/教程：这些不是在要求执行写操作。
+    let disqualifiers = [
+        "已经",
+        "昨天",
+        "前天",
+        "上周",
+        "上个月",
+        "去年",
+        "刚才",
+        "刚刚",
+        "之前",
+        "完成了",
+        "建了",
+        "创建了",
+        "加了",
+        "记了",
+        "怎么",
+        "如何",
+        "怎样",
+        "能不能",
+        "可不可以",
+        "是否可以",
+        "要不要",
+        "需不需要",
+        "为什么",
+    ];
+    if disqualifiers.iter().any(|word| text.contains(word)) {
+        return false;
+    }
+
+    // 只在句首或紧跟请求词时才算祈使句。不能「出现请求词就算」：
+    // 「请记住我之前创建任务的经验」也有「请 + 创建 + 任务」，但它不是写指令。
+    let trim = |s: &str| {
+        s.trim_start_matches(|c: char| c.is_whitespace() || "，,：:、。".contains(c))
+            .to_string()
+    };
+    let mut tail = trim(text);
+    for _ in 0..3 {
+        let mut stripped = false;
+        for prefix in [
+            "帮我", "请", "麻烦", "给我", "替我", "我要", "我想", "需要", "记得", "明天", "今天",
+            "后天", "马上", "现在", "立刻", "先", "再",
+        ] {
+            if let Some(rest) = tail.strip_prefix(prefix) {
+                tail = trim(rest);
+                stripped = true;
+                break;
+            }
+        }
+        if !stripped {
+            break;
+        }
+    }
+    creation_verbs.iter().any(|verb| tail.starts_with(verb))
+}
+
 /// 生成式路由：按用户这句话只下发真正相关的工具。
 ///
 /// 8 个完整工具 Schema 一起发给网关时，部分 OpenAI 兼容上游会把
@@ -730,8 +818,7 @@ fn relevant_tools(text: &str) -> Vec<&'static str> {
         }
     };
 
-    if has(&["创建", "新建", "添加", "记一个", "记录一个", "加一个"]) && has(&["任务", "待办"])
-    {
+    if wants_create_task(text) {
         // 截止日由后端从原话推断，不再额外发 current_date，避免网关二选一。
         return vec!["create_task"];
     } else if has(&["任务", "待办"]) {
@@ -1170,6 +1257,11 @@ fn final_summary(
 
 /// 一次模型调用。`stream=true` 时解析 SSE，把正文增量交给 `on_event`；
 /// 服务端忽略 stream 返回整段 JSON 时走兼容分支。
+///
+/// 参数多但不是可合并的同类值：client/config 锁定了传输与采样语义，
+/// messages/tools/force/summary 决定请求形状，cancel/usage/on_event 是运行期副作用。
+/// 拆成结构体只会把同样的字段搬运一遍；用 allow 明示这里的取舍。
+#[allow(clippy::too_many_arguments)]
 fn stream_completion(
     client: &reqwest::blocking::Client,
     config: &AssistantConfig,
@@ -2410,6 +2502,36 @@ mod tests {
             relevant_tools("帮我创建一个任务：明天检查登录页"),
             vec!["create_task"]
         );
+        assert_eq!(
+            relevant_tools("新建任务：明天检查登录页"),
+            vec!["create_task"]
+        );
+        assert_eq!(
+            relevant_tools("给我加个任务：周五交周报"),
+            vec!["create_task"]
+        );
+    }
+
+    #[test]
+    fn past_tense_and_questions_do_not_create_tasks() {
+        // 这两类句子都含「任务 + 新建」，但它们不是写指令：
+        // 一个在陈述历史，一个在问操作方法。误判会真的落一条假任务。
+        assert_eq!(
+            relevant_tools("我上周新建了一个任务，现在已经做完了"),
+            vec!["list_tasks"]
+        );
+        assert_eq!(relevant_tools("怎么新建任务？"), vec!["list_tasks"]);
+        assert_eq!(
+            relevant_tools("请介绍一下如何创建一个任务"),
+            vec!["list_tasks"]
+        );
+        assert!(!wants_create_task("我昨天新建了一个任务"));
+        assert!(!wants_create_task("怎么新建任务？"));
+        assert!(!wants_create_task("请记住我之前创建任务的经验"));
+        assert!(!wants_create_task("帮我查一下之前创建的任务"));
+        assert!(wants_create_task("帮我创建一个任务：明天检查登录页"));
+        assert!(wants_create_task("新建任务：明天检查登录页"));
+        assert!(wants_create_task("给我加个任务：周五交周报"));
     }
 
     #[test]

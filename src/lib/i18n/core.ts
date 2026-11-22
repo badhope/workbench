@@ -38,8 +38,7 @@ export const dict = {
     "app.title.settings": "Settings",
     "app.title.logs": "Logs",
     "app.title.knowledge": "Search local Markdown notes and link them to projects.",
-    "app.title.assistant":
-      "Chat with your model about tasks, ports, cost and notes.",
+    "app.title.assistant": "Chat with your model about tasks, ports, cost and notes.",
     "app.title.costs": "Cost ledger",
     "app.mode.desktop": "Desktop · data stored locally",
     "app.mode.browser": "Browser preview · demo data",
@@ -368,8 +367,7 @@ export const dict = {
     "app.title.settings": "設定",
     "app.title.logs": "ログ",
     "app.title.knowledge": "ローカル Markdown を検索し、プロジェクトに関連付けます。",
-    "app.title.assistant":
-      "モデルとタスク・ポート・コスト・ノートを話します。",
+    "app.title.assistant": "モデルとタスク・ポート・コスト・ノートを話します。",
     "app.title.costs": "コスト台帳",
     "app.mode.desktop": "デスクトップ · データはローカル保存",
     "app.mode.browser": "ブラウザプレビュー · デモデータ",

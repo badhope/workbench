@@ -38,6 +38,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Badge, Btn, Card, Field, Spinner, inputCls } from "../ui";
 import { useT } from "../lib/i18n";
+import { formatUsd } from "../lib/util";
 import { isDesktop } from "../lib/transport";
 import { useStore } from "../lib/store";
 import {
@@ -1022,7 +1023,9 @@ function toolSummary(
     return t("assistant.resultPorts", { count: listening });
   }
   if (step.tool === "cost_summary") {
-    return t("assistant.resultCost", { cost: Number(data.month_cost ?? 0).toFixed(2) });
+    return t("assistant.resultCost", {
+      cost: formatUsd(Number(data.month_cost ?? 0)),
+    });
   }
   if (step.tool === "list_tasks") {
     return t("assistant.resultTasks", { count: Number(data.count ?? 0) });

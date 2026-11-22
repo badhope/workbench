@@ -40,6 +40,10 @@ jobs:
         run: npx tsc --noEmit
       - name: Lint
         run: npm run lint
+      # 依赖方向 / pages 越层引用 / Tauri core 泄漏，这些不会被 eslint 或 tsc
+      # 拦住，必须在 CI 里单独跑；否则本地门禁只是「建议」，合并后照样漂。
+      - name: Module boundaries
+        run: npm run check:modules
       # 供应链门禁：生产依赖出现 >= high 的已知漏洞即失败。
       # 显式钉官方 registry：镜像（如 npmmirror）不实现 audit 接口，
       # 会在“看起来跑过了”的情况下拿不到任何结论。
