@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore, useState } from "react";
 import { isBackend, isTauri, setAlwaysOnTop } from "./api";
 import { currentTransport, subscribeTransport } from "./transport";
 import { useStore } from "./store";
@@ -21,6 +21,15 @@ export function useAppRuntime() {
   const refreshMs = useStore((s) => s.refreshMs);
   const toast = useStore((s) => s.toast);
   const clearToast = useStore((s) => s.clearToast);
+  // 传输探测是异步的：首帧 isBackend() 还是 false，等探测确认是 HTTP 后端后
+  // 必须重新挂上轮询。否则页面会永远停在首屏那一帧，看起来「实时」却不刷新。
+  const [backendReady, setBackendReady] = useState(isBackend());
+
+  useEffect(() => {
+    const sync = () => setBackendReady(isBackend());
+    sync();
+    return subscribeTransport(sync);
+  }, []);
 
   // 首屏：loadAll 内部已串行触发 refreshRuntime / refreshAi
   useEffect(() => {
@@ -38,14 +47,14 @@ export function useAppRuntime() {
   // 轮询：窗口隐藏时暂停（看不见界面时继续采样纯属浪费电）。
   // Web 模式同样需要轮询——它连的是真实后端，数据会变。
   useEffect(() => {
-    if (!isBackend()) return;
+    if (!backendReady) return;
     return pollWhileVisible(refreshRuntime, refreshMs);
-  }, [refreshMs, refreshRuntime]);
+  }, [refreshMs, refreshRuntime, backendReady]);
 
   // 工作数据与运行时采集分开：聚焦/回到可见时补一次，并每 30 秒低频同步。
   // refreshData 内部有未保存保护，不会覆盖本地草稿。
   useEffect(() => {
-    if (!isBackend()) return;
+    if (!backendReady) return;
     const tick = () => {
       if (document.visibilityState === "visible") void refreshData();
     };
@@ -61,7 +70,7 @@ export function useAppRuntime() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [refreshData]);
+  }, [refreshData, backendReady]);
 
   // ESC 关闭 toast
   useEffect(() => {

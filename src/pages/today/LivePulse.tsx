@@ -92,7 +92,7 @@ export function LivePulse() {
     costOverview,
     ais,
     sessions,
-    procs,
+    devs,
     ports,
     sysinfo,
     theme,
@@ -107,7 +107,7 @@ export function LivePulse() {
       costOverview: s.costOverview,
       ais: s.ais,
       sessions: s.sessions,
-      procs: s.procs,
+      devs: s.devs,
       ports: s.ports,
       sysinfo: s.sysinfo,
       theme: s.theme,
@@ -244,7 +244,7 @@ export function LivePulse() {
         </div>
 
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line/50 pt-1.5 text-[9.5px] text-faint">
-          <span>{t("today.services", { count: procs.length })}</span>
+          <span>{t("today.services", { count: devs.length })}</span>
           <span>{t("today.ports", { count: ports.length })}</span>
           <span className="ml-auto text-accent">{t("today.liveRealtime")}</span>
         </div>
