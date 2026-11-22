@@ -75,6 +75,32 @@ it("探活后展示已连接，并能用建议问题完成一轮对话", async (
   expect(screen.getByText("20 输入 / 10 输出 token")).toBeInTheDocument();
 });
 
+it("回答里的 Markdown 强调会渲染，不把星号原样露出", async () => {
+  api.assistantChatStream.mockImplementationOnce(
+    async (_messages, _config, _id, onEvent) => {
+      onEvent({
+        kind: "done",
+        text: "",
+        step: null,
+        reply: {
+          content: "工作台运行在 **7788 端口**。",
+          steps: [],
+          usage: { prompt_tokens: 10, completion_tokens: 6 },
+          model: "glm-5.3-flash",
+        },
+      });
+    }
+  );
+
+  render(<Assistant />);
+  await screen.findByText("已连接");
+  await userEvent.click(screen.getByRole("button", { name: "今天最该先处理什么？" }));
+
+  const emphasis = await screen.findByText("7788 端口");
+  expect(emphasis.tagName).toBe("STRONG");
+  expect(screen.queryByText("**7788 端口**")).not.toBeInTheDocument();
+});
+
 it("生成中可以停止，停止请求带同一个 request id", async () => {
   let release: (() => void) | undefined;
   api.assistantChatStream.mockImplementationOnce(
