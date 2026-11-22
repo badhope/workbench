@@ -118,5 +118,5 @@ include verification notes for the platforms tested.
 
 ## Reporting issues
 
-- Bugs and feature requests go to [Issues](../../issues) (templates provided)
+- Bugs and feature requests go to [Issues](https://github.com/X33834/workbench/issues) (templates provided)
 - Security issues must **not** be filed publicly — see [SECURITY.md](SECURITY.md)

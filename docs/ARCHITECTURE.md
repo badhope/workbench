@@ -310,8 +310,9 @@ release is cut — lives in [ROADMAP.md](ROADMAP.md). Summary:
   language switch (it is built once at startup)
 - **No plugin API and no remote/multi-machine monitoring** — by design.
   A local-only HTTP API *does* exist: `workbench serve` (see below) exposes the
-  same read paths to a browser on the same machine; it binds to loopback only
-  and is not a remote-monitoring story. See [COMPARISON.md](COMPARISON.md) for
+  same read paths to a browser on the same machine. It binds to `127.0.0.1` by
+  default; `--host` can widen it, but there is no authentication, so keep it on
+  loopback or put it behind an authenticated proxy. See [COMPARISON.md](COMPARISON.md) for
   what the missing pieces cost us against Glances and System Informer
 
 ## HTTP mode (`workbench serve`)
@@ -342,9 +343,8 @@ workbench serve --port 7788 --dist dist
 Deliberate limits: no endpoint terminates a process, opens a path, or clears the
 ledger. Those are irreversible and the browser has no trustworthy "user
 confirmed" signal (CSRF, stray clicks, scripted tabs), so they stay in the
-desktop confirmation flow. Everything binds to `127.0.0.1` by default; there is
-no authentication because there is no remote story — put it behind a reverse
-proxy and add auth yourself if you need one.
+desktop confirmation flow. Everything binds to `127.0.0.1` by default. There is no authentication; if you
+widen the listener with `--host`, put it behind a reverse proxy that adds auth.
 
 The frontend picks its transport at startup (`src/lib/transport.ts`):
 `__TAURI_INTERNALS__` → IPC, else `GET /api/health` succeeds → REST, else the

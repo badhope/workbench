@@ -6,7 +6,7 @@
     <title>Workbench — a local-first developer workbench</title>
     <meta
       name="description"
-      content="Today's tasks, project progress, listening ports, running processes and AI session spend in one local window. No account, no cloud, no telemetry."
+      content="Today's tasks, project progress, listening ports, running processes and AI session spend in one local window. No account, no telemetry."
     />
     <meta name="theme-color" content="#0a0f1c" />
     <link rel="icon" type="image/png" href="favicon.png" />
@@ -16,14 +16,14 @@
     <meta property="og:title" content="Workbench — a local-first developer workbench" />
     <meta
       property="og:description"
-      content="Today's tasks, project progress, listening ports, running processes and AI session spend in one local window. No account, no cloud, no telemetry."
+      content="Today's tasks, project progress, listening ports, running processes and AI session spend in one local window. No account, no telemetry."
     />
     <meta property="og:image" content="https://x33834.github.io/workbench/screenshots/01-overview.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Workbench — a local-first developer workbench" />
     <meta
       name="twitter:description"
-      content="Tasks, projects, ports, processes and AI session spend in one local window. No account, no cloud, no telemetry."
+      content="Tasks, projects, ports, processes and AI session spend in one local window. No account, no telemetry."
     />
     <meta name="twitter:image" content="https://x33834.github.io/workbench/screenshots/01-overview.png" />
     <style>
@@ -373,7 +373,7 @@
           <div class="card">
             <div class="ico">🌍</div>
             <h3 data-i18n="f11t">Web mode</h3>
-            <p data-i18n="f11p"><code>workbench serve</code> runs the same backend headless and serves this UI to a browser on the same machine — real process, port and cost data, not a demo. Loopback only, no kill endpoint, no account.</p>
+            <p data-i18n="f11p"><code>workbench serve</code> runs the same backend headless and serves this UI to a browser on the same machine — real process, port and cost data, not a demo. It binds to loopback by default; if you expose it, add authentication. No kill endpoint, no account.</p>
           </div>
           <div class="card">
             <div class="ico">⌨</div>
@@ -398,6 +398,10 @@
           <figure class="shot">
             <img src="screenshots/01-overview.png" alt="Overview: resource trends, disks and process groups" loading="lazy" />
             <figcaption data-i18n="s1">Overview — resource trends, disk usage and process groups</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/27-assistant-en.png" alt="Assistant: ask about tasks, ports, spend and notes" loading="lazy" />
+            <figcaption data-i18n="s15">Assistant — local tools first, model summarizes the real result</figcaption>
           </figure>
           <figure class="shot">
             <img src="screenshots/02-processes.png" alt="Processes: virtual-scrolled process table" loading="lazy" />
@@ -447,9 +451,9 @@
 
         <figure class="video">
           <video controls muted playsinline preload="metadata" poster="screenshots/01-overview.png">
-            <source src="screenshots/workbench-demo.mp4" type="video/mp4" />
+            <source src="screenshots/workbench-tour.mp4" type="video/mp4" />
           </video>
-          <figcaption data-i18n="s11">30-second tour — recorded from the real UI in browser demo mode</figcaption>
+          <figcaption data-i18n="s11">Short UI tour — captured in browser demo mode</figcaption>
         </figure>
       </section>
 
@@ -626,7 +630,7 @@
             "hero.pill": "v1.0.0 · Windows / Linux / macOS · MIT licensed",
             "hero.h1a": "Your machine, your work",
             "hero.h1b": "in one local window",
-            "hero.sub": "Today's tasks, project progress, listening ports, running processes and AI session spend. <strong>All data stays on your device</strong>; nothing is uploaded.",
+            "hero.sub": "Today's tasks, project progress, listening ports, running processes and AI session spend. <strong>All data stays on your device</strong>; only the model endpoint you configure can leave it.",
             "hero.cta1": "Download EXE", "hero.cta2": "All builds",
             "hero.meta": "Windows 10 / 11 (NSIS) · Linux (.deb / AppImage) · macOS (DMG) · no admin rights required",
             "feat.title": "Features",
@@ -641,7 +645,7 @@
             "f7t": "Logs", "f7p": "Built-in log viewer with per-launch rotation, tail reading and auto refresh.",
             "f8t": "Settings", "f8p": "Dark / light themes, refresh interval, budget and alert thresholds, JSON import & export.",
             "f10t": "Command palette", "f10p": "Ctrl/Cmd+K searches every page, process, port, project and task; a port links straight to the process that owns it.",
-            "f11t": "Web mode", "f11p": "<code>workbench serve</code> runs the same backend headless and serves this UI to a browser on the same machine — real process, port and cost data, not a demo. Loopback only, no kill endpoint, no account.",
+            "f11t": "Web mode", "f11p": "<code>workbench serve</code> runs the same backend headless and serves this UI to a browser on the same machine — real process, port and cost data, not a demo. It binds to loopback by default; if you expose it, add authentication. No kill endpoint, no account.",
             "f12t": "Scriptable CLI", "f12p": "<code>ps</code>, <code>ports</code>, <code>diag</code>, <code>cost</code> — all with <code>--json</code>. One binary, no window, safe to put in a pipeline.",
             "f9t": "Privacy first", "f9p": "Everything lands in the local app data directory; CSP locked to self; opened paths go through a backend whitelist.",
             "shots.title": "Screenshots",
@@ -658,7 +662,8 @@
             s8: "Logs — built-in viewer with auto refresh",
             s9: "Process tree — parent/child grouping with per-process listening ports",
             s10: "Command palette (Ctrl/Cmd+K) — pages, processes, ports, projects and tasks in one search",
-            s11: "30-second tour — recorded from the real UI in browser demo mode",
+            s11: "Short UI tour — captured in browser demo mode",
+            s15: "Assistant — local tools first, model summarizes the real result",
             "dl.title": "Download",
             "dl.sub": "Windows NSIS, Linux .deb / AppImage and macOS DMG are built in CI. OS-level signing depends on repository credentials; without it Windows SmartScreen and macOS Gatekeeper will warn.",
             "dl.tag1": "Recommended", "dl.t1": "NSIS installer",
@@ -691,7 +696,7 @@
             q1: 'Windows says "Protected your PC" or "Unknown publisher" — what now?',
             a1: 'If the Release is not code-signed, Windows SmartScreen steps in. Choose "More info" → "Run anyway". You can also build from source. Verify integrity with the SHA-256 published on the Release page.',
             q2: "Will my data be uploaded to the cloud?",
-            a2: 'No. Everything (projects, tasks, the cost ledger, logs) is written to the local app data directory. The app only does two local things: read <code>netstat</code> for ports and read local session files for costs. The only optional network call is probing the local opencode service (default port 4096); on failure it just shows "not detected" and nothing else is affected.',
+            a2: 'No. Everything (projects, tasks, the cost ledger, logs) is written to the local app data directory. The app reads <code>netstat</code> for ports and local session files for costs. Optional network calls are the opencode probe (default port 4096) and the model endpoint you configure; both are documented and can be left unused. There is no telemetry.',
             q3: "How is the cost metering computed? Is it accurate?",
             a3: "It parses the usage fields in local Claude Code / Codex session JSONL files and prices them against 40+ built-in model prices, in three confidence levels: <strong>measured</strong> (real usage reported in the file), <strong>estimated</strong> (no usage — heuristic by character count, can be disabled in Settings), <strong>zero_pricing</strong> (model unrecognized — recorded as free rather than priced with an invented unit). Anthropic cache tokens follow the official semantics (read 0.1×, write 1.25×).",
             q4: "Can killing a process break my system?",
@@ -712,7 +717,7 @@
             "hero.pill": "v1.0.0 · Windows / Linux / macOS · MIT 开源",
             "hero.h1a": "这台机器，手头的活",
             "hero.h1b": "都在一个本地窗口",
-            "hero.sub": "今天要做什么、项目推进到哪、端口被谁占着、进程在跑什么、AI 会话花了多少。<strong>数据只存本机</strong>，不上传任何信息。",
+            "hero.sub": "今天要做什么、项目推进到哪、端口被谁占着、进程在跑什么、AI 会话花了多少。<strong>数据只存本机</strong>；只有你主动配置的模型端点可能离开本机。",
             "hero.cta1": "下载 EXE", "hero.cta2": "所有平台",
             "hero.meta": "Windows 10 / 11（NSIS）· Linux（.deb / AppImage）· macOS（DMG）· 无需管理员权限",
             "feat.title": "功能",
@@ -746,7 +751,8 @@
             s8: "运行日志 — 内置查看器，自动刷新",
             s9: "进程树 — 按父 PID 归组，展开可见子进程与各自的监听端口",
             s10: "命令面板（Ctrl/Cmd+K）— 页面、进程、端口、项目、任务一次搜完",
-            s11: "30 秒演示 — 浏览器演示模式的真实界面录制",
+            s11: "界面巡览 — 浏览器演示模式录制",
+            s15: "助手 — 先用本地工具查，再让模型总结真实结果",
             "dl.title": "下载",
             "dl.sub": "Windows NSIS、Linux .deb / AppImage、macOS DMG 均由 CI 构建。系统级签名取决于仓库凭据；未配置时 Windows SmartScreen 与 macOS Gatekeeper 会提示。",
             "dl.tag1": "推荐", "dl.t1": "NSIS 安装包",
@@ -779,7 +785,7 @@
             q1: "Windows 提示「已保护你的电脑」或「未知发布者」，怎么办？",
             a1: "若该版本未做代码签名，Windows SmartScreen 会有提示。点「更多信息」→「仍要运行」即可。你也可以选择从源码自行构建。校验完整性可用 Release 页面提供的 SHA-256。",
             q2: "会不会把我的数据上传到云端？",
-            a2: "不会。所有数据（项目、任务、成本账本、日志）都写在本机的 app data 目录。应用只在你本机发起两件事：读 <code>netstat</code> 看端口，读本机 session 文件算成本。唯一的可选外连是探测本地的 opencode 服务（默认 4096 端口），失败也只是显示「未检测到」，不影响其它功能。",
+            a2: "不会。所有数据（项目、任务、成本账本、日志）都写在本机的 app data 目录。应用会读 <code>netstat</code> 看端口，读本机 session 文件算成本。可选外连只有两项：探测本地 opencode 服务（默认 4096 端口），以及你主动配置的模型端点。两项都可以不用，也没有遥测。",
             q3: "「成本计量」是怎么算出来的？准不准？",
             a3: "解析本机 Claude Code / Codex 会话 JSONL 文件中的 usage 字段，按内置的 40+ 模型价格计算。分三级可信度：<strong>measured</strong>（文件里有真实 usage 上报）、<strong>estimated</strong>（无 usage，按字符数启发式估算，可在设置里关掉）、<strong>zero_pricing</strong>（型号无法识别，标为不计费而<em>不</em>乱编单价）。Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×）。",
             q4: "杀进程会不会误杀系统关键进程？",
@@ -800,7 +806,7 @@
             "hero.pill": "v1.0.0 · Windows / Linux / macOS · MIT ライセンス",
             "hero.h1a": "このマシンと、目の前の仕事を",
             "hero.h1b": "1 つのローカルウィンドウに",
-            "hero.sub": "今日のタスク、プロジェクトの進捗、待ち受けポート、実行中のプロセス、AI セッションのコスト。<strong>データは端末内にのみ保存</strong>され、アップロードされません。",
+            "hero.sub": "今日のタスク、プロジェクトの進捗、待ち受けポート、実行中のプロセス、AI セッションのコスト。<strong>データは端末内に保存</strong>されます。設定したモデル端点だけが端末の外に出ることがあります。",
             "hero.cta1": "EXE を入手", "hero.cta2": "全プラットフォーム",
             "hero.meta": "Windows 10 / 11（NSIS）· Linux（.deb / AppImage）· macOS（DMG）· 管理者権限不要",
             "feat.title": "機能",
@@ -816,7 +822,7 @@
             "f8t": "設定", "f8p": "ダーク / ライトテーマ、更新間隔、予算とアラートしきい値、JSON インポート & エクスポート。",
             "f10t": "コマンドパレット", "f10p": "Ctrl/Cmd+K でページ・プロセス・ポート・プロジェクト・タスクを横断検索。ポートから所有プロセスへ直接移動できます。",
             "f11t": "Web モード",
-            "f11p": "<code>workbench serve</code> が同じバックエンドをヘッドレスで動かし、この UI を同一マシンのブラウザに配信します。プロセス・ポート・コストは実データで、デモではありません。ループバック限定、終了エンドポイントなし、アカウント不要。",
+            "f11p": "<code>workbench serve</code> が同じバックエンドをヘッドレスで動かし、この UI を同一マシンのブラウザに配信します。プロセス・ポート・コストは実データで、デモではありません。既定ではループバックのみ。外部に公開する場合は認証を追加してください。終了エンドポイントなし、アカウント不要。",
             "f12t": "スクリプト可能な CLI",
             "f12p": "<code>ps</code>、<code>ports</code>、<code>diag</code>、<code>cost</code> はすべて <code>--json</code> 対応。1 つの実行ファイル、ウィンドウなし、パイプラインにそのまま使えます。",
             "f9t": "プライバシー第一", "f9p": "データはすべてローカルの app data ディレクトリへ。CSP は self に固定、パスを開く際はバックエンドのホワイトリストで検証。",
@@ -834,7 +840,8 @@
             s8: "ログ — 内蔵ビューア、自動更新",
             s9: "プロセスツリー — 親 PID でグループ化、子プロセスと待受ポートを表示",
             s10: "コマンドパレット（Ctrl/Cmd+K）— ページ・プロセス・ポート・プロジェクト・タスクを一括検索",
-            s11: "30 秒ツアー — ブラウザのデモモードで実際の UI を録画",
+            s11: "UI ツアー — ブラウザのデモモードで撮影",
+            s15: "アシスタント — ローカルツールで先に調べ、モデルが実データを要約",
             "dl.title": "ダウンロード",
             "dl.sub": "Windows NSIS、Linux .deb / AppImage、macOS DMG を CI でビルドします。OS レベルの署名はリポジトリの資格情報に依存し、未設定の場合は SmartScreen と Gatekeeper が警告します。",
             "dl.tag1": "推奨", "dl.t1": "NSIS インストーラー",
@@ -867,7 +874,7 @@
             q1: "Windows が「PC を保護しました」や「不明な発行元」と表示します",
             a1: "そのバージョンがコード署名されていない場合、Windows SmartScreen が警告します。「詳細情報」→「実行」で続行できます。ソースからビルドすることもできます。整合性の検証には Release ページの SHA-256 をご利用ください。",
             q2: "データをクラウドにアップロードしますか？",
-            a2: "いいえ。すべてのデータ（プロジェクト・タスク・コスト台帳・ログ）はローカルの app data ディレクトリに書き込まれます。アプリがローカルで行うのは <code>netstat</code> でポートを確認することと、ローカルのセッションファイルでコストを計算することだけです。唯一の任意の通信はローカル opencode サービス（既定ポート 4096）の探知で、失敗しても「未検出」と表示されるだけで他への影響はありません。",
+            a2: "いいえ。すべてのデータ（プロジェクト・タスク・コスト台帳・ログ）はローカルの app data ディレクトリに書き込まれます。アプリは <code>netstat</code> でポートを確認し、ローカルのセッションファイルでコストを計算します。任意の通信はローカル opencode サービス（既定ポート 4096）の探知と、設定したモデル端点だけです。どちらも使わない選択ができ、テレメトリーはありません。",
             q3: "コスト計測はどう計算されますか？正確ですか？",
             a3: "ローカルの Claude Code / Codex セッション JSONL 内の usage フィールドを解析し、内蔵の 40+ モデル価格で計算します。信頼度は 3 段階: <strong>measured</strong>（ファイルに実際の usage あり）、<strong>estimated</strong>（usage なし、文字数ヒューリスティック、設定でオフ可）、<strong>zero_pricing</strong>（モデル不明 — 単価を捏造せず無課金として記録）。Anthropic のキャッシュトークンは公式の意味論に従います（読み 0.1 倍、書き 1.25 倍）。",
             q4: "プロセスを殺してもシステムを壊しませんか？",

@@ -1,124 +1,75 @@
 # Workbench
 
-**English** | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
+English | [简体中文](README.zh-CN.md)
 
 [![Version](https://img.shields.io/badge/version-1.0.0-22d3ee)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-34d399)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.md#system-requirements)
-[![Tests](https://img.shields.io/badge/tests-660%20unit%20%2B%20222%20backend%20%2B%2030%20e2e-8b5cf6)](#quality)
+[![CI](https://github.com/X33834/workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/X33834/workbench/actions/workflows/ci.yml)
 
-![Workbench](docs/screenshots/01-overview.png)
+![Workbench overview](docs/screenshots/01-overview.png)
 
-**A local-first workbench for the machine you actually work on.**
+A local-first desktop workbench for the machine you actually work on. It keeps today's tasks, projects, listening ports, running processes, AI session spend, and local notes in one window. No account, no telemetry.
 
-It brings today's tasks, project progress, listening ports, running processes and
-AI session spend into one window. No Workbench account, no telemetry; your data
-stays local, and only the model endpoint you choose can leave the machine.
+## What it does
 
-## Why Workbench
-
-- **Start with today.** The home screen shows what needs attention now: overdue,
-  due today, in progress, blocked and inbox. Projects and tasks carry a goal,
-  progress and a next step, so the day has a shape instead of a list of folders.
-- **Follow a port to its process.** A listening port links to the process that
-  owns it, and a process shows every port it holds. Dev servers are recognised
-  by framework. No guessing which terminal started what.
-- **See what AI work costs.** Local Claude Code and Codex session files are
-  priced into a SQLite ledger, with model breakdown, budgets and a 14-day trend.
-  The files stay where they are.
-- **Keep local knowledge close.** Mount Markdown folders in place and search
-  titles, body, tags and project links. The same context is available to MCP
-  clients over stdio, with writes off by default.
-- **Ask your model.** An optional assistant talks to an OpenAI-compatible
-  endpoint (MiniCPM5-2B on `127.0.0.1:18082` by default, or a remote HTTPS
-  gateway with a Bearer key) and answers with real task, port, cost and
-  knowledge data.
-  It calls tools before answering and can create a task only when the existing
-  AI write switch is on. No model weights ship with the app; bring your own
-  llama.cpp/Ollama endpoint.
-- **Stay in control.** Data lives on this device. The only outbound requests are
-  the optional probe of a local opencode server and the optional model endpoint
-  you configure. Remote model gateways must use HTTPS; the key travels only in
-  the Authorization header.
+- **Today, not a folder tree.** See overdue work, tasks due today, active projects, blockers, and the inbox on one screen.
+- **Follow a port to its process.** Listening ports link to the process that owns them; processes show every port they hold. Dev servers are tagged by framework.
+- **See what AI work costs.** Local Claude Code and Codex session files are priced into a SQLite ledger, with budgets and a model breakdown.
+- **Keep notes close.** Mount Markdown folders in place and search titles, body, tags, and linked projects. The same context is available to MCP clients over stdio.
+- **Ask your own model.** The optional assistant reads live tasks, ports, spend, and notes before answering. It can create tasks only when the write switch is enabled.
 
 ## Run it
 
-Install a build from [GitHub Releases](https://github.com/X33834/workbench/releases); mirrors are also available on [Gitee Releases](https://gitee.com/badhope/workbench/releases) and [GitCode Releases](https://gitcode.com/badhope/workbench/releases). Or run from source. Windows ships NSIS, Linux ships `.deb` and AppImage, macOS ships a DMG. Desktop builds check the signed `latest.json` channel in Settings and verify every update before installing.
+Download a build from [GitHub Releases](https://github.com/X33834/workbench/releases), or use the [Gitee](https://gitee.com/badhope/workbench/releases) and [GitCode](https://gitcode.com/badhope/workbench/releases) mirrors. Windows ships NSIS, Linux ships `.deb` and AppImage, macOS ships a DMG.
 
 ```bash
 npm ci
-npm run tauri dev      # desktop with hot reload
+npm run tauri dev      # desktop app with hot reload
 npm run tauri build    # installers in src-tauri/target/release/bundle/
 ```
 
-The same binary works without a window:
-
-| Mode | Command | What you get |
-| --- | --- | --- |
-| Desktop | install a bundle | Full app: tray, global shortcut, mini window, process actions |
-| Web | `workbench serve` | The local UI and API on `127.0.0.1:7788`; machine state is read-only |
-| CLI | `workbench ps`, `ports`, `diag`, `cost`, `mcp` | Scriptable JSON-friendly output; no window |
+The same binary runs without a window:
 
 ```bash
-workbench ps              # pid, name, cpu, memory, parent, status
-workbench ports           # listening ports with the owning pid
+workbench ps              # processes
+workbench ports           # listening ports and owning PID
 workbench cost --days 7   # AI session spend
-workbench serve           # web UI and HTTP API
+workbench serve           # local web UI and HTTP API
+workbench mcp             # MCP server over stdio
 ```
 
-### Local assistant (optional)
+## Assistant
 
-The assistant page accepts any OpenAI-compatible endpoint. The default is a
-loopback server; a remote gateway is allowed only over HTTPS, and its Bearer
-key is kept in the request header. With llama.cpp and the Q4_K_M GGUF:
-
-```bash
-llama-server -m MiniCPM5-2B-Q4_K_M.gguf \
-  --host 127.0.0.1 --port 18082 -c 8192 --jinja --parallel 1
-```
-
-Then open **Assistant** in the app. Defaults: `http://127.0.0.1:18082/v1`,
-model `minicpm5-2b`, thinking off. Credentials in the URL and query strings
-are rejected; plain-HTTP remote hosts are rejected too. Fill in the
-`llama-server` and GGUF paths under model settings to start/stop the service
-from the app; only processes started there are stopped there.
-
-Answers stream token by token and can be stopped mid-flight. The model gets
-`calculate` and `current_date` tools so arithmetic and “today/tomorrow” are
-computed instead of guessed. The same routes are available over HTTP:
-`GET/PUT /api/assistant/config`, `POST /api/assistant/status`,
-`POST /api/assistant/chat`, `POST /api/assistant/chat/stream`,
-`POST /api/assistant/cancel` (writes need `x-workbench-write: 1`).
+The assistant is optional. Point it at a local OpenAI-compatible server or a remote HTTPS gateway in Settings. It uses deterministic local tools for tasks, ports, costs, dates, arithmetic, and knowledge search, then asks the model to summarize the real results.
 
 ## A look inside
 
-| Processes | Servers & ports |
-| --- | --- |
-| ![Processes](docs/screenshots/02-processes.png) | ![Servers](docs/screenshots/03-servers.png) |
-| Live processes, ports and dev-server tags | Listening ports, established connections and framework detection |
+[▶ Watch the UI tour](docs/screenshots/workbench-tour.mp4)
 
-| Cost ledger | AI sessions |
+| Today | Assistant |
 | --- | --- |
-| ![Cost ledger](docs/screenshots/05-costs.png) | ![AI sessions](docs/screenshots/04-ai-sessions.png) |
-| Budgets, model split and 14-day trend | Local Claude Code / Codex sessions and detected agents |
+| ![Today](docs/screenshots/01-overview.png) | ![Assistant](docs/screenshots/27-assistant-en.png) |
+| What needs attention now | Ask about tasks, ports, spend, and notes |
+
+| Servers & ports | Cost ledger |
+| --- | --- |
+| ![Servers and ports](docs/screenshots/03-servers.png) | ![Cost ledger](docs/screenshots/05-costs.png) |
+| Listening ports and their owners | AI spend by model and budget |
 
 ## Quality
 
-Every release is checked by TypeScript, ESLint, Prettier, Vitest, Rust tests,
-Clippy, Playwright visual tests, `npm audit` and `cargo audit`. The same steps
-run locally through `node scripts/ci-local.mjs` and in
-[GitHub Actions](.github/workflows/ci.yml).
+Every release runs TypeScript, ESLint, Prettier, Vitest, Rust tests, Clippy, Playwright visual checks, `npm audit`, and `cargo audit`. The same steps run locally with `node scripts/ci-local.mjs` and in [GitHub Actions](.github/workflows/ci.yml).
 
 ## Documentation
 
-- [Architecture and reference](docs/ARCHITECTURE.md) ·
-  [简体中文](docs/ARCHITECTURE.zh-CN.md) · [日本語](docs/ARCHITECTURE.ja.md)
-- [How it compares](docs/COMPARISON.md) ·
-  [简体中文](docs/COMPARISON.zh-CN.md) · [日本語](docs/COMPARISON.ja.md)
-- [Roadmap](docs/ROADMAP.md) · [Engineering boundaries (中文)](docs/ENGINEERING.md)
-- [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) ·
-  [Code of conduct](CODE_OF_CONDUCT.md) · [Changelog](CHANGELOG.md)
+- [Documentation index](docs/README.md)
+- [Architecture](docs/ARCHITECTURE.md) · [简体中文](docs/ARCHITECTURE.zh-CN.md)
+- [Comparison](docs/COMPARISON.md) · [简体中文](docs/COMPARISON.zh-CN.md)
+- [Engineering boundaries](docs/ENGINEERING.md) · [Roadmap](docs/ROADMAP.md)
+- [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 ## License
 
 [MIT](LICENSE) © 2026 x1882
+</content>
