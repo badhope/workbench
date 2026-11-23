@@ -31,7 +31,7 @@ chrono = "0.4"
 llm-prices = "=1.4.0"
 ts-rs = { version = "12.0.1", features = ["serde-compat"] }
 axum = "0.8"
-tower-http = { version = "0.6", features = ["fs", "cors", "trace"] }
+tower-http = { version = "0.7", features = ["fs", "cors", "trace"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "sync"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 rust-embed = "8"
