@@ -19,7 +19,7 @@ serde_json = "1"
 # 成本账本改用 SQLite：十万级记录下全量 JSON 读写的瓶颈在解析与 fsync，
 # 而不是磁盘吞吐。bundled 编进静态库，Windows/Linux/macOS 都不需系统 libsqlite3。
 rusqlite = { version = "0.43", features = ["bundled"] }
-sysinfo = "0.39"
+sysinfo = "0.40"
 # 只对本机服务发 HTTP 请求；用系统 TLS（OpenSSL / SChannel / Security.framework）
 # 而不是默认的 rustls+aws-lc：后者要现场编译一整套 BoringSSL，2 核机器上
 # 十几分钟起步，安装包也白白变大。系统 TLS 在三平台都现成可用。
